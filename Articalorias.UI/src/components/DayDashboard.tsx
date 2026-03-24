@@ -301,6 +301,7 @@ function MealsTable({ date, foods, onChanged }: { date: string; foods: FoodEntry
           <table className="w-full text-sm table-fixed">
             <colgroup>
               <col />
+              <col className="w-16" />
               <col className="w-24" />
               <col className="w-16" />
               <col className="w-12" />
@@ -312,6 +313,7 @@ function MealsTable({ date, foods, onChanged }: { date: string; foods: FoodEntry
             <thead>
               <tr className="border-b text-left text-xs text-gray-500">
                 <th className="pb-2 pr-2">Food</th>
+                <th className="pb-2 pr-2 text-right">Qty</th>
                 <th className="pb-2 pr-2">Portion</th>
                 <th className="pb-2 pr-2 text-right">Kcal</th>
                 <th className="pb-2 pr-2 text-right">Prot</th>
@@ -326,6 +328,7 @@ function MealsTable({ date, foods, onChanged }: { date: string; foods: FoodEntry
                 editId === f.foodEntryId && editForm ? (
                   <tr key={f.foodEntryId} className="border-b border-gray-100 bg-indigo-50/30">
                     <td className="py-1.5 pr-2"><input value={editForm.foodName} onChange={(e) => setEditForm({ ...editForm, foodName: e.target.value })} className="w-full rounded border border-gray-200 px-1.5 py-1 text-sm" /></td>
+                    <td className="py-1.5 pr-2"><input type="number" step="0.1" value={editForm.quantity ?? ""} onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value ? +e.target.value : null })} className="w-full rounded border border-gray-200 px-1.5 py-1 text-right text-sm" /></td>
                     <td className="py-1.5 pr-2"><input value={editForm.portionDescription ?? ""} onChange={(e) => setEditForm({ ...editForm, portionDescription: e.target.value })} className="w-full rounded border border-gray-200 px-1.5 py-1 text-sm" /></td>
                     <td className="py-1.5 pr-2"><input type="number" value={editForm.caloriesKcal} onChange={(e) => setEditForm({ ...editForm, caloriesKcal: +e.target.value })} className="w-full rounded border border-gray-200 px-1.5 py-1 text-right text-sm" /></td>
                     <td className="py-1.5 pr-2"><input type="number" value={editForm.proteinGrams} onChange={(e) => setEditForm({ ...editForm, proteinGrams: +e.target.value })} className="w-full rounded border border-gray-200 px-1.5 py-1 text-right text-sm" /></td>
@@ -342,6 +345,7 @@ function MealsTable({ date, foods, onChanged }: { date: string; foods: FoodEntry
                 ) : (
                   <tr key={f.foodEntryId} className="border-b border-gray-100 hover:bg-gray-50/50">
                     <td className="py-1.5 pr-2 font-medium text-gray-800">{f.foodName}</td>
+                    <td className="py-1.5 pr-2 text-right">{f.quantity != null ? fmt(f.quantity, 1) : "-"}</td>
                     <td className="py-1.5 pr-2 text-gray-500">{f.portionDescription ?? "-"}</td>
                     <td className="py-1.5 pr-2 text-right">{fmt(f.caloriesKcal)}</td>
                     <td className="py-1.5 pr-2 text-right">{fmt(f.proteinGrams, 1)}</td>
