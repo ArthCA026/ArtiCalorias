@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="../Articalorias.UI/articalorias.ui.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+  <Project Path="Articalorias.csproj" />
+</Solution>

@@ -1,0 +1,355 @@
+Since you already have the backend/API started, the cleanest path is to create the React UI as a **separate frontend project** and connect it to your API, instead of rebuilding everything inside one combined template. Visual Studio supports React projects directly, and its current React project flow uses **Vite**, which is a good fit here. React’s own docs now recommend using a framework or a build tool like Vite for new apps, and Create React App has been deprecated for new projects. ([Microsoft Learn][1])
+
+## Recommended setup
+
+Use this structure:
+
+* **Solution**
+
+  * `YourApi` → ASP.NET Core backend
+  * `YourApp.UI` → React frontend
+* Backend runs on one local port
+* Frontend runs on another local port
+* Frontend calls backend through HTTP
+* Backend enables **CORS** for the frontend origin during development ([Microsoft Learn][2])
+
+This is the best fit for your system because your backend is already the authority for authentication, calculations, persistence, and OpenAI integration, while the React app is just the client UI. ([Microsoft Learn][3])
+
+# The exact steps to follow
+
+## Phase 1: Create the React project in Visual Studio
+
+In Visual Studio:
+
+1. Open your existing solution.
+2. Right-click the solution.
+3. Choose **Add > New Project**.
+4. Search for **React App**.
+5. Choose the **React App** template.
+6. Pick **TypeScript** instead of JavaScript.
+
+Visual Studio’s React project templates create the project using Vite, and TypeScript is the better choice for a system with many screens, DTOs, forms, and API contracts. ([Microsoft Learn][4])
+
+### What to name it
+
+Use something like:
+
+* `EnergyTracker.UI`
+* `NutritionBalance.UI`
+* `CalorieTracker.UI`
+
+Keep it clearly separate from the API project.
+
+---
+
+## Phase 2: Verify the frontend runs by itself
+
+Before connecting anything to the backend, make sure the React app starts correctly.
+
+What you want to confirm:
+
+* the project restores dependencies
+* the browser opens
+* the default React/Vite page loads
+* the development server runs normally
+
+Vite provides the local development server for React apps and the production build flow, so this is your first frontend sanity check. ([vitejs][5])
+
+---
+
+## Phase 3: Clean the default template
+
+Once the React app runs, clean out the default sample content.
+
+Remove or replace:
+
+* demo logo content
+* counter example
+* sample CSS that came from the starter
+* unused files from the starter page
+
+Your goal is to leave a minimal base UI, not to build features yet.
+
+At the end of this phase, your frontend should have only the essential project skeleton.
+
+---
+
+## Phase 4: Define the frontend folder structure
+
+Before creating screens, organize the UI project.
+
+A practical React structure for your app would be:
+
+* `src/app` → app bootstrapping and providers
+* `src/pages` → page-level screens
+* `src/components` → reusable UI pieces
+* `src/layouts` → main app layout, auth layout
+* `src/services` → API calls
+* `src/types` → DTOs and shared TypeScript types
+* `src/hooks` → reusable React hooks
+* `src/features` → feature-based modules if you want to scale cleanly
+* `src/utils` → helpers and formatters
+* `src/assets` → icons/images
+* `src/styles` → global styling
+
+Do this before building pages, because your app will grow fast.
+
+---
+
+## Phase 5: Decide the UI stack before building screens
+
+You should choose this now, not halfway through.
+
+Decide:
+
+* **TypeScript**: yes
+* **Routing**: yes
+* **Form handling**: yes
+* **HTTP client**: yes
+* **State management**: maybe later, not mandatory on day one
+* **CSS strategy**: Tailwind
+
+For your kind of system, I’d recommend:
+
+* TypeScript
+* React Router
+* a small API service layer
+* a form library
+* either Tailwind or a clean component library
+
+The point is to avoid building random pages with inconsistent structure.
+
+---
+
+## Phase 6: Configure the app shell
+
+Before real pages, define the base app shell:
+
+* page container
+* header/top bar
+* navigation/sidebar if needed
+* content area
+* loading states
+* error states
+
+Your app already has clear major screens:
+
+* Login
+* Onboarding/Profile setup
+* Daily Dashboard
+* Monthly History
+* Profile
+* Activity Catalog
+
+So the layout should be designed around those screens from the start.
+
+---
+
+## Phase 7: Add routing
+
+Next, define the route map for the frontend.
+
+At minimum, plan routes like:
+
+* `/login`
+* `/onboarding`
+* `/today`
+* `/history`
+* `/profile`
+* `/activities`
+
+And later maybe:
+
+* `/history/:date`
+* `/settings`
+
+This step matters because once routing exists, every page can be built inside a stable navigation structure.
+
+---
+
+## Phase 8: Connect the frontend to the backend base URL
+
+Before feature work, define how the frontend will know where the API is.
+
+You want environment-based configuration for:
+
+* local development API URL
+* production API URL
+
+Vite supports environment-based config, and its config/build process is designed for this kind of separation. ([vitejs][6])
+
+At this stage, the goal is simple:
+
+* frontend runs on one port
+* backend runs on another
+* frontend knows the backend base URL
+
+---
+
+## Phase 9: Enable CORS in the backend
+
+Because your React app and ASP.NET Core API run on different origins in development, the backend must allow the frontend origin through CORS. Microsoft’s ASP.NET Core docs explicitly cover this scenario. ([Microsoft Learn][3])
+
+So before doing real API calls, make sure your backend is configured to allow requests from the local React development URL.
+
+This is one of the most common blockers in local frontend-backend integration.
+
+---
+
+## Phase 10: Create the frontend API layer
+
+Do not make direct HTTP requests all over random components.
+
+Instead, define a small service layer such as:
+
+* auth service
+* profile service
+* daily log service
+* food service
+* activity service
+* history service
+
+This keeps your UI maintainable and makes it easier to add auth headers, error handling, and retries later.
+
+Your frontend should talk to the backend only through this layer.
+
+---
+
+## Phase 11: Build the UI in this order
+
+This is the order I recommend.
+
+### 1. Login page
+
+First create the login screen and connect it to the backend auth endpoint.
+
+Goal:
+
+* user can sign in
+* token/session is stored
+* protected pages become accessible
+
+### 2. Protected route handling
+
+Once login works:
+
+* block private pages if not authenticated
+* redirect unauthenticated users to login
+
+### 3. Onboarding / essential profile page
+
+This should appear if required profile data is missing.
+
+Fields you already defined:
+
+* current weight
+* height
+* BMR
+* body fat
+* daily base goal
+* protein goal
+
+### 4. Daily dashboard shell
+
+Build the page structure first, even before all live data is complete.
+
+It should reserve space for:
+
+* quick summary
+* add food box
+* meals table
+* activity section
+* energy summary
+* weekly adjustment panel
+
+### 5. Food entry flow
+
+Then implement:
+
+* add meal input
+* proposed structured result
+* editable food table
+* save final entries
+* refresh daily totals
+
+### 6. Activity section
+
+After meals:
+
+* show day activities
+* allow add/edit/delete
+* support template selection
+
+### 7. Profile page
+
+Separate from onboarding, for later edits.
+
+### 8. Monthly history page
+
+Finally:
+
+* monthly daily stats
+* day navigation
+* edit a specific day
+
+This order gets the highest-value workflow working first. ([Microsoft Learn][2])
+
+---
+
+## Phase 12: Decide how authentication will be handled in the UI
+
+Before wiring everything deeply, define:
+
+* where the token is stored
+* how authenticated requests are sent
+* how logout works
+* what happens when the token expires
+
+Your frontend should centralize this logic early, otherwise every page ends up managing auth in its own way.
+
+---
+
+## Phase 13: Add consistent request states
+
+Before the UI grows, define standard behavior for:
+
+* loading
+* empty state
+* validation error
+* server error
+* unauthorized state
+
+This makes the app feel much more stable and predictable.
+
+---
+
+## Phase 14: Test the full local flow
+
+Before worrying about Azure, verify this local scenario:
+
+1. Run backend
+2. Run frontend
+3. Open login page
+4. Log in successfully
+5. Load profile
+6. Load today’s dashboard
+7. Add/edit/delete a food entry
+8. Add/edit/delete an activity
+9. Verify the day recalculates
+10. Verify history loads
+
+That full vertical slice should work locally before you style heavily.
+
+---
+
+## Phase 15: Prepare for deployment
+
+For deployment, your earlier Azure plan still fits well:
+
+* React frontend → **Azure Static Web Apps** or App Service
+* .NET API → **Azure App Service**
+* SQL Server → **Azure SQL Database**
+
+Azure Static Web Apps is designed for modern frontend apps and automatically deploys from a repository, which fits a React UI well. ([Microsoft Learn][7])
+
+Also note that Azure Static Web Apps now uses `staticwebapp.config.json` for routing/config rather than the older `routes.json`. ([Microsoft Learn][8])

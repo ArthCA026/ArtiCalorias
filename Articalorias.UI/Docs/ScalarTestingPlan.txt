@@ -1,0 +1,544 @@
+SCALAR API TESTING PLAN — ARTICALORIAS BACKEND
+================================================================================
+
+Your API documentation UI is Scalar (not classic Swagger UI, but it works the same
+way). When you launch the app it opens at /scalar/v1. All endpoints have a "Try it"
+button and the JWT Authorize padlock.
+
+================================================================================
+PREREQUISITE — Set your JWT secret
+================================================================================
+
+Your appsettings.json has a placeholder key. It is 48 characters so it WILL work
+for local testing as-is. But if you prefer a real secret, run this once in a terminal:
+
+    dotnet user-secrets set "Jwt:SecretKey" "MySuperSecret-Articalorias-Key-MinLength32!!"
+
+OpenAI note: The parse-food endpoint calls the OpenAI API. If you want to test it,
+also run:
+
+    dotnet user-secrets set "OpenAI:ApiKey" "sk-your-real-key-here"
+
+If you skip this, everything else works — only the AI parsing endpoint will fail.
+
+================================================================================
+STEP 0 — Launch the app
+================================================================================
+
+Press F5 in Visual Studio (or dotnet run). The browser opens at:
+
+    https://localhost:7205/scalar/v1
+
+You will see all 6 controllers listed on the left sidebar. Each endpoint has a
+"Try it" button that lets you send requests.
+
+================================================================================
+STEP 1 — Health Check (no auth required)
+================================================================================
+
+These two endpoints have no [Authorize], so test them first to verify your database
+connection.
+
+---- 1a. GET /api/health ----
+
+  Click Try it -> Send
+  Expected: 200 OK with { "status": "Healthy", "timestamp": "..." }
+  Verifies: The API is running.
+
+---- 1b. GET /api/health/db ----
+
+  Click Try it -> Send
+  Expected: 200 OK with { "status": "Connected", "tableRowCounts": { "users": 0, ... } }
+  Verifies: SQL Server connection works and all 10 tables exist.
+  If it fails: Check your connection string in appsettings.json and make sure
+  SQL Server Express is running.
+
+================================================================================
+STEP 2 — Register a user
+================================================================================
+
+---- POST /api/auth/register ----
+
+Click Try it, paste this body and Send:
+
+    {
+      "username": "arturo",
+      "email": "arturo@test.com",
+      "password": "TestPass123!"
+    }
+
+  Expected: 200 OK with { "token": "eyJhbG...", "username": "arturo", "userId": 1 }
+  Verifies: User creation, password hashing, JWT generation.
+  COPY THE TOKEN VALUE — you will need it in the next step.
+
+  Try sending it again with the same username — you should get an error (duplicate
+  username).
+
+================================================================================
+STEP 3 — Login
+================================================================================
+
+---- POST /api/auth/login ----
+
+    {
+      "username": "arturo",
+      "password": "TestPass123!"
+    }
+
+  Expected: 200 OK with a new JWT token.
+  Copy this token — this is the one you will use going forward.
+
+  Test with a wrong password to verify you get an error.
+
+================================================================================
+STEP 4 — Authorize in Scalar
+================================================================================
+
+This is the key step — all remaining endpoints require JWT.
+
+  1. At the top of Scalar, look for the Authentication section (or the lock icon).
+  2. Select Bearer as the type.
+  3. Paste the token you copied from Step 3 (just the token string, WITHOUT the
+     word "Bearer").
+  4. Click Apply or Save.
+
+From now on, every request will include the Authorization: Bearer <token> header
+automatically.
+
+How to verify: Try any [Authorize] endpoint. If you get 401 Unauthorized, the
+token was not applied. If you get a real response, you are authenticated.
+
+================================================================================
+STEP 5 — Create your user profile (onboarding)
+================================================================================
+
+---- 5a. GET /api/userprofile ----
+
+  Click Try it -> Send
+  Expected: 404 Not Found with "Profile not found. Complete onboarding."
+  Verifies: New users don't have a profile yet.
+
+---- 5b. PUT /api/userprofile ----
+
+This is the "create or update" endpoint. Paste this body:
+
+    {
+      "currentWeightKg": 80.5,
+      "heightCm": 175,
+      "bmrKcal": 1800,
+      "bodyFatPercent": 18.5,
+      "dailyBaseGoalKcal": -500,
+      "proteinGoalGrams": 150,
+      "autoCalculateProteinGoal": false
+    }
+
+  Expected: 200 OK with the full UserProfileResponse including
+  isOnboardingCompleted: true.
+  Verifies: Profile creation, default values, onboarding flag.
+
+---- 5c. GET /api/userprofile (again) ----
+
+  Expected: 200 OK with all the profile data you just saved.
+  Verifies: Read-back works.
+
+---- 5d. Update the profile (optional) ----
+
+Call PUT /api/userprofile again with a different weight to verify updates:
+
+    {
+      "currentWeightKg": 79.0,
+      "heightCm": 175,
+      "bmrKcal": 1780,
+      "bodyFatPercent": 17.5,
+      "dailyBaseGoalKcal": -500,
+      "proteinGoalGrams": 150,
+      "autoCalculateProteinGoal": false
+    }
+
+================================================================================
+STEP 6 — Daily Log basics
+================================================================================
+
+---- 6a. GET /api/dailylog/2025-06-24 ----
+
+  Use today's date (format YYYY-MM-DD).
+  Expected: 200 OK — if the log doesn't exist, it will be AUTO-CREATED with a
+  snapshot of your current profile.
+  Verify: snapshotWeightKg matches your profile weight. All totals are 0.
+
+---- 6b. GET /api/dailylog/2025-06-24/dashboard ----
+
+  Expected: 200 OK — a composite response with the daily log + empty foods and
+  activities arrays.
+  Verifies: The dashboard endpoint that the frontend will use.
+
+================================================================================
+STEP 7 — Add food entries (manual)
+================================================================================
+
+---- 7a. POST /api/dailylog/2025-06-24/foods ----
+
+    {
+      "foodName": "Chicken Breast",
+      "portionDescription": "1 grilled breast",
+      "quantity": 200,
+      "unit": "g",
+      "caloriesKcal": 330,
+      "proteinGrams": 62,
+      "fatGrams": 7.2,
+      "carbsGrams": 0,
+      "alcoholGrams": 0,
+      "sourceType": "MANUAL",
+      "notes": "Lunch"
+    }
+
+  Expected: 201 Created with the saved food entry (includes a foodEntryId).
+  Save that foodEntryId (e.g., 1) for later updates.
+
+---- 7b. Add a second food ----
+
+    {
+      "foodName": "White Rice",
+      "portionDescription": "1 cup cooked",
+      "quantity": 200,
+      "unit": "g",
+      "caloriesKcal": 260,
+      "proteinGrams": 5,
+      "fatGrams": 0.5,
+      "carbsGrams": 57,
+      "alcoholGrams": 0,
+      "sourceType": "MANUAL",
+      "notes": "Lunch side"
+    }
+
+---- 7c. GET /api/dailylog/2025-06-24/foods ----
+
+  Expected: 200 OK with an array of 2 food entries.
+
+---- 7d. PUT /api/dailylog/2025-06-24/foods/{foodEntryId} ----
+
+Use the foodEntryId from step 7a (e.g., 1):
+
+    {
+      "foodName": "Chicken Breast (grilled)",
+      "portionDescription": "1 large breast",
+      "quantity": 250,
+      "unit": "g",
+      "caloriesKcal": 412,
+      "proteinGrams": 77,
+      "fatGrams": 9,
+      "carbsGrams": 0,
+      "alcoholGrams": 0,
+      "notes": "Updated portion"
+    }
+
+  Expected: 200 OK with the updated entry.
+
+---- 7e. DELETE /api/dailylog/2025-06-24/foods/{foodEntryId} ----
+
+Delete the second food (use its ID):
+
+  Expected: 204 No Content.
+
+================================================================================
+STEP 8 — Recalculate the daily log
+================================================================================
+
+---- POST /api/dailylog/2025-06-24/recalculate ----
+
+  No body needed.
+  Expected: 200 OK with the full DailyLogResponse.
+  Verify these fields are now populated:
+    - totalFoodCaloriesKcal       — should match the remaining food (~412)
+    - totalProteinGrams           — ~77
+    - tefKcal                     — per-macro TEF (protein×4×0.25 + fat×9×0.02 + carbs×4×0.08 + alcohol×7×0.15)
+    - totalDailyExpenditureKcal   — BMR + TEF + activity
+    - netBalanceKcal              — food calories minus expenditure
+    - dailyGoalDeltaKcal          — net balance compared to your -500 goal
+    - caloriesRemainingToDailyTargetKcal — how much you can still eat
+    - Weekly projection fields (weeklyTargetKcal, weeklyActualToDateKcal, etc.)
+
+  This is the MOST IMPORTANT VERIFICATION — it tests the full 10-step
+  recalculation pipeline.
+
+================================================================================
+STEP 9 — AI Food Parsing (requires OpenAI key)
+================================================================================
+
+  WARNING: Skip this step if you have not set the OpenAI API key in User Secrets.
+
+---- 9a. POST /api/dailylog/2025-06-24/parse-food ----
+
+    {
+      "freeText": "For breakfast I had 2 scrambled eggs with a slice of whole wheat toast and a glass of orange juice"
+    }
+
+  Expected: 200 OK with an array of ParsedFoodItem objects (e.g., eggs, toast, OJ)
+  — each with estimated calories and macros.
+  Verifies: OpenAI integration. Nothing is saved yet — these are proposals.
+
+---- 9b. POST /api/dailylog/2025-06-24/foods/batch ----
+
+Take the AI response, adjust if needed, and confirm it:
+
+    {
+      "items": [
+        {
+          "foodName": "Scrambled Eggs",
+          "portionDescription": "2 large eggs",
+          "quantity": 2,
+          "unit": "eggs",
+          "caloriesKcal": 182,
+          "proteinGrams": 12,
+          "fatGrams": 14,
+          "carbsGrams": 1.6,
+          "alcoholGrams": 0,
+          "sourceType": "AI",
+          "notes": "From AI parsing"
+        },
+        {
+          "foodName": "Whole Wheat Toast",
+          "portionDescription": "1 slice",
+          "quantity": 1,
+          "unit": "slice",
+          "caloriesKcal": 80,
+          "proteinGrams": 4,
+          "fatGrams": 1,
+          "carbsGrams": 15,
+          "alcoholGrams": 0,
+          "sourceType": "AI",
+          "notes": "From AI parsing"
+        }
+      ]
+    }
+
+  Expected: 200 OK with array of created food entries.
+  Verifies: Batch creation + recalculation trigger.
+
+================================================================================
+STEP 10 — Activity Templates
+================================================================================
+
+---- 10a. Create a MET_SIMPLE template ----
+
+POST /api/activities/templates
+
+    {
+      "templateScope": "USER",
+      "activityType": "MET_SIMPLE",
+      "templateName": "Morning Walk",
+      "description": "Casual 30-minute walk",
+      "autoAddToNewDay": false,
+      "defaultDurationMinutes": 30,
+      "defaultMET": 3.5,
+      "segments": []
+    }
+
+  Expected: 201 Created with an activityTemplateId.
+
+---- 10b. Create a MET_MULTIPLE template (with segments) ----
+
+    {
+      "templateScope": "USER",
+      "activityType": "MET_MULTIPLE",
+      "templateName": "HIIT Session",
+      "description": "Interval training with warm-up and cooldown",
+      "autoAddToNewDay": false,
+      "segments": [
+        { "segmentOrder": 1, "segmentName": "Warm-up",        "metValue": 3.0,  "durationMinutes": 5 },
+        { "segmentOrder": 2, "segmentName": "High Intensity",  "metValue": 10.0, "durationMinutes": 1 },
+        { "segmentOrder": 3, "segmentName": "Recovery",        "metValue": 4.0,  "durationMinutes": 2 },
+        { "segmentOrder": 4, "segmentName": "High Intensity",  "metValue": 10.0, "durationMinutes": 1 },
+        { "segmentOrder": 5, "segmentName": "Cooldown",        "metValue": 2.5,  "durationMinutes": 5 }
+      ]
+    }
+
+---- 10c. Create a DIRECT_CALORIES template ----
+
+    {
+      "templateScope": "USER",
+      "activityType": "DIRECT_CALORIES",
+      "templateName": "Gym Machine (display)",
+      "description": "Use the machine's calorie counter directly",
+      "autoAddToNewDay": false,
+      "defaultDurationMinutes": 45,
+      "defaultDirectCaloriesKcal": 350,
+      "segments": []
+    }
+
+---- 10d. GET /api/activities/templates ----
+
+  Expected: 200 OK with array of your 3 templates.
+
+---- 10e. PUT and DELETE templates ----
+
+  PUT /api/activities/templates/{templateId} — update one to verify.
+  DELETE /api/activities/templates/{templateId} — delete one to verify.
+
+================================================================================
+STEP 11 — Activity Entries (log actual exercise)
+================================================================================
+
+---- 11a. MET_SIMPLE entry ----
+
+POST /api/activities/daily/2025-06-24
+
+    {
+      "activityType": "MET_SIMPLE",
+      "activityName": "Morning Walk",
+      "durationMinutes": 35,
+      "metValue": 3.5,
+      "segments": []
+    }
+
+  Expected: 201 Created with an activityEntryId and calculatedCaloriesKcal
+  computed from MET x weight x duration.
+
+---- 11b. DIRECT_CALORIES entry ----
+
+    {
+      "activityType": "DIRECT_CALORIES",
+      "activityName": "Elliptical machine",
+      "durationMinutes": 40,
+      "directCaloriesKcal": 320,
+      "segments": []
+    }
+
+---- 11c. MET_MULTIPLE entry (with segments) ----
+
+    {
+      "activityType": "MET_MULTIPLE",
+      "activityName": "HIIT Session",
+      "segments": [
+        { "segmentOrder": 1, "segmentName": "Warm-up",  "metValue": 3.0,  "durationMinutes": 5 },
+        { "segmentOrder": 2, "segmentName": "Sprint",   "metValue": 12.0, "durationMinutes": 1 },
+        { "segmentOrder": 3, "segmentName": "Rest",     "metValue": 3.0,  "durationMinutes": 2 },
+        { "segmentOrder": 4, "segmentName": "Sprint",   "metValue": 12.0, "durationMinutes": 1 },
+        { "segmentOrder": 5, "segmentName": "Cooldown", "metValue": 2.5,  "durationMinutes": 5 }
+      ]
+    }
+
+---- 11d. GET /api/activities/daily/2025-06-24 ----
+
+  Expected: 200 OK with your 3 activity entries and their calculated calories.
+
+---- 11e. Update and delete ----
+
+  PUT /api/activities/daily/2025-06-24/{activityEntryId} — change duration or MET.
+  DELETE /api/activities/daily/2025-06-24/{activityEntryId} — remove one.
+
+================================================================================
+STEP 12 — Full Recalculation (with food + activities)
+================================================================================
+
+---- POST /api/dailylog/2025-06-24/recalculate ----
+
+Now with both food and activities logged, recalculate again:
+
+  Expected: 200 OK — all fields fully populated.
+  Verify:
+    - totalActivityCaloriesKcal > 0 (sum of all activities)
+    - totalDailyExpenditureKcal = BMR + TEF + activity calories
+    - netBalanceKcal = food - expenditure
+    - Weekly projections updated
+
+================================================================================
+STEP 13 — Full Dashboard
+================================================================================
+
+---- GET /api/dailylog/2025-06-24/dashboard ----
+
+  Expected: 200 OK with a composite response containing:
+    - All daily log fields (totals, projections)
+    - foods array with all food entries
+    - activities array with all activity entries
+  This is the single endpoint the frontend dashboard will call.
+
+================================================================================
+STEP 14 — Add data for multiple days (for history)
+================================================================================
+
+Repeat steps 6-12 for a few more dates to create history data:
+
+  - 2025-06-23 — add a food + activity, recalculate
+  - 2025-06-22 — add a food + activity, recalculate
+  - 2025-06-21 — add a food, recalculate
+
+This seeds the database so the history endpoints have something to return.
+
+================================================================================
+STEP 15 — History endpoints
+================================================================================
+
+---- 15a. Daily range ----
+
+GET /api/history/daily?from=2025-06-20&to=2025-06-24
+
+  Expected: 200 OK with an array of DailyLogResponse for each day that has data.
+
+---- 15b. Weekly range ----
+
+GET /api/history/weekly?from=2025-06-16&to=2025-06-22
+
+  Expected: 200 OK — may be empty if weekly summaries have not been triggered yet.
+  That is OK.
+
+---- 15c. Single weekly summary ----
+
+GET /api/history/weekly/2025-06-16
+
+  The date must be a Monday (week start).
+  Expected: 200 OK with the weekly summary, or 404 if not yet generated.
+
+---- 15d. Monthly by year ----
+
+GET /api/history/monthly/2025
+
+  Expected: 200 OK with array of monthly summaries for 2025 (may be empty until
+  month-end calculations run).
+
+---- 15e. Single monthly ----
+
+GET /api/history/monthly/2025/6
+
+  Expected: 200 OK or 404.
+
+================================================================================
+BONUS — Validation Testing
+================================================================================
+
+Test that your Data Annotations validation works by sending bad data:
+
+  Endpoint                        Bad Payload                                          Expected
+  ----------------------------    --------------------------------------------------   ----------
+  POST /api/auth/register         { "username": "ab", "email": "bad", "password": "x" } 400 — username too short, email invalid, password too short
+  PUT /api/userprofile            { "currentWeightKg": 0, "heightCm": -1, "bmrKcal": 0 }  400 — values out of range
+  POST /api/dailylog/.../foods    { "foodName": "", "caloriesKcal": -5 }                  400 — required field empty, negative calories
+  POST /api/activities/daily/...  { "activityType": "", "metValue": 100 }                 400 — type required, MET over 50
+
+================================================================================
+SUMMARY — Testing Order Cheat Sheet
+================================================================================
+
+  #   Endpoint                              Auth?   What it proves
+  --  ------------------------------------  ------  ----------------------------------
+  1   GET /api/health                       NO      API is alive
+  2   GET /api/health/db                    NO      DB connected, tables exist
+  3   POST /api/auth/register               NO      User creation + JWT
+  4   POST /api/auth/login                  NO      Login + token issuance
+  5   (Authorize in Scalar)                 --      Paste token
+  6   GET then PUT /api/userprofile         YES     Profile CRUD + onboarding
+  7   GET /api/dailylog/{date}              YES     Auto-create daily log
+  8   POST/GET/PUT/DELETE .../foods         YES     Food entry CRUD
+  9   POST .../recalculate                  YES     10-step pipeline
+  10  POST .../parse-food                   YES     OpenAI integration
+  11  POST .../foods/batch                  YES     Batch confirm AI foods
+  12  Template CRUD                         YES     Activity template catalog
+  13  Activity entry CRUD                   YES     Logging exercise
+  14  Recalculate again                     YES     Full pipeline with activities
+  15  Dashboard                             YES     Composite response
+  16  History endpoints                     YES     Range queries + summaries
+  17  Bad payloads                          YES     Validation rules
+
+Follow this order exactly and by Step 15 you will have verified every layer of
+your backend. Once everything looks good, we move to the React frontend!

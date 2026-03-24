@@ -1,0 +1,603 @@
+PLAN DE DESARROLLO DEL SISTEMA
+
+============================================================
+1. OBJETIVO DEL SISTEMA
+============================================================
+
+Construir una aplicación web desplegada en Azure, con la siguiente arquitectura:
+
+- Frontend: React
+- API backend: .NET
+- Base de datos: Microsoft SQL Server / Azure SQL
+
+El sistema debe permitir registrar, calcular y analizar el balance energético diario
+de un usuario, tomando en cuenta:
+
+- Ingesta de alimentos
+- Actividad física y actividades cotidianas
+- Metas calóricas
+- Metas de proteína
+- Histórico semanal y mensual
+- Ajuste dinámico del objetivo según progreso semanal
+
+
+============================================================
+2. PRINCIPIOS BASE DEL SISTEMA
+============================================================
+
+Estas son las decisiones que quedan fijadas desde ya.
+
+A. Fuente de verdad
+-------------------
+
+La base de datos es la fuente de verdad de todo el sistema.
+
+Eso implica que:
+
+- El frontend solo muestra y edita datos
+- La IA solo propone estructura
+- Los cálculos definitivos viven en backend
+- Lo que cuenta oficialmente siempre es lo persistido en base de datos
+
+
+B. Flujo de comida con IA
+-------------------------
+
+El flujo oficial será:
+
+1. El usuario escribe una comida en lenguaje natural
+2. El backend envía esa entrada a OpenAI
+3. La IA devuelve un JSON estructurado
+4. El backend valida ese JSON
+5. El frontend muestra los registros propuestos
+6. El usuario puede corregir manualmente
+7. El backend guarda la versión final
+8. El sistema recalcula los totales del día
+9. El resultado recalculado se guarda en base de datos
+
+
+C. Persistencia
+---------------
+
+No hace falta guardar el texto original libre que escribió el usuario.
+
+Lo que sí se guarda es:
+
+- Los registros estructurados finales
+- Los totales del día
+- Las actividades del día
+- Los valores usados para los cálculos
+
+
+D. Objetivos energéticos
+------------------------
+
+El sistema manejará dos niveles:
+
+1. Objetivo diario base
+	- Por defecto será -500, pero el usuario puede cambiarlo.
+
+2. Objetivo semanal dinámico
+	- El sistema ajusta lo que queda de la semana según lo que ya ocurrió.
+
+Ejemplo:
+
+- Si un día hubo superávit o menor déficit del esperado
+- El sistema recalcula cuánto deberían compensar los días restantes
+- Sin cambiar necesariamente el objetivo base del usuario, sino mostrando
+  un objetivo ajustado para cerrar la semana como se desea
+
+
+============================================================
+3. VISIÓN FUNCIONAL DEL PRODUCTO
+============================================================
+
+La aplicación será un sistema personal de seguimiento energético con 4 funciones
+centrales:
+
+1. Registrar perfil fisiológico
+	- Para tener las constantes necesarias para el cálculo.
+
+2. Registrar comidas del día
+	- Usando lenguaje natural más corrección manual.
+
+3. Registrar actividades y gasto
+	- Con distintos tipos de actividades y cálculos.
+
+4. Ver análisis histórico
+	- Para revisar desempeño diario, semanal y mensual.
+
+
+============================================================
+4. ARQUITECTURA OBJETIVO
+============================================================
+
+Frontend
+--------
+
+Tecnología:
+- React
+
+Responsabilidades:
+- Login
+- Interfaz diaria
+- Formularios CRUD
+- Visualización del histórico
+- Edición de perfil
+- Edición de actividades
+- Mostrar objetivos y progreso
+
+
+Backend
+-------
+
+Tecnología:
+- API REST en .NET
+
+Responsabilidades:
+- Autenticación
+- Lógica de negocio
+- Integración con OpenAI
+- Validación de datos
+- Cálculo calórico
+- Ajuste semanal dinámico
+- Lectura y escritura en base de datos
+
+
+Base de datos
+-------------
+
+Tecnología:
+- Microsoft SQL Server / Azure SQL Database
+
+Responsabilidades:
+- Usuarios
+- Perfiles
+- Registros diarios
+- Comidas
+- Actividades
+- Plantillas
+- Cálculos finales
+- Histórico agregado o datos base para calcularlo
+
+
+Azure
+-----
+
+Despliegue sugerido:
+
+- Frontend: Azure Static Web Apps o Azure App Service
+- Backend: Azure App Service
+- Base de datos: Azure SQL Database
+- Secretos: Azure Key Vault
+- Monitoreo: Application Insights
+
+
+============================================================
+5. FLUJO FUNCIONAL PRINCIPAL DEL SISTEMA
+============================================================
+
+5.1 Login
+---------
+
+El usuario entra con usuario y contraseña.
+
+Objetivo:
+
+- Identificar al usuario
+- Cargar su perfil
+- Mostrar solo sus datos
+
+
+5.2 Verificación de datos esenciales
+------------------------------------
+
+Si el usuario no tiene datos esenciales, la app lo obliga a configurarlos antes
+de usar el sistema.
+
+Datos esenciales:
+
+- Peso actual
+- Altura
+- TMB
+- Grasa corporal
+- Objetivo diario base
+- Objetivo de proteína
+
+Reglas:
+
+- El objetivo diario base es opcional, pero si no se define se usa -500
+- El objetivo de proteína también puede calcularse automáticamente con base
+  en peso si no se define manualmente
+
+
+5.3 Pantalla principal del día
+------------------------------
+
+Esta es la pieza más importante del sistema.
+
+Debe mostrar en una sola vista:
+
+- Resumen del día
+- Caja central para agregar comida
+- Tabla de comidas del día
+- Indicadores de calorías restantes
+- Indicadores de proteína restante
+- Sección de actividades
+- Resumen de gasto
+- Balance del día
+- Objetivo semanal ajustado
+
+
+5.4 Registro de comidas
+-----------------------
+
+El usuario escribe una o varias veces al día lo que comió.
+
+Ejemplos:
+
+- “3 cafés con leche”
+- “2 huevos, 50g de queso, pan dulce de 170 kcal”
+- “hamburguesa angus jumbo, mitad chicken bites”
+
+Flujo:
+
+1. Se manda a OpenAI
+2. Vuelve como JSON estructurado
+3. Se muestra en tabla editable
+4. El usuario corrige si hace falta
+5. Se guarda la versión final
+6. Se recalculan calorías, proteína y demás totales
+
+La tabla del día debe permitir:
+
+- Agregar manualmente
+- Editar manualmente
+- Borrar manualmente
+- Recalcular inmediatamente después de cualquier cambio
+
+
+5.5 Indicadores de consumo restante
+-----------------------------------
+
+El sistema mostrará al menos dos indicadores principales:
+
+A. Calorías restantes para el objetivo diario
+	- Cuántas calorías puede consumir ese día sin romper el objetivo actual del día.
+
+B. Proteína restante
+	- Cuántos gramos faltan para alcanzar la meta de proteína.
+
+Más adelante puede haber otros:
+
+- Grasa restante
+- Carbos restantes
+- Margen semanal restante
+
+
+5.6 Registro de actividades
+---------------------------
+
+Cada usuario tendrá:
+
+A. Actividades recomendadas del sistema
+	- Disponibles desde el día 1.
+
+B. Actividades comunes del usuario
+	- Plantillas personales que se agregan automáticamente a los nuevos días.
+
+C. Actividades concretas del día
+	- Las que realmente se registran y afectan el cálculo de ese día.
+
+Cada tipo de actividad tendrá CRUD propio, tanto para:
+
+- Plantillas frecuentes
+- Registros diarios
+
+
+============================================================
+6. TIPOS DE ACTIVIDAD SOPORTADOS
+============================================================
+
+El sistema soportará 3 formatos iniciales.
+
+Tipo 1. MET simple
+------------------
+
+Ejemplo:
+- Trabajar
+- Un solo MET
+- Duración en horas o minutos
+- Calorías calculadas automáticamente
+
+
+Tipo 2. MET múltiple
+--------------------
+
+Ejemplo:
+- Patinaje
+- Fase descanso
+- Fase activa
+- Dos MET distintos
+- Dos tiempos distintos
+- Una sola actividad consolidada
+
+
+Tipo 3. Calorías directas
+-------------------------
+
+Ejemplo:
+- Caminadora
+- La máquina da calorías gastadas
+- El sistema usa ese valor y ajusta según la lógica definida
+
+
+============================================================
+7. CÁLCULO DEL SISTEMA
+============================================================
+
+Toda la lógica matemática vive en backend.
+El frontend nunca será la autoridad del cálculo; sólo mostrará resultados.
+
+El sistema debe calcular:
+
+Ingesta
+-------
+- Calorías totales
+- Proteína total
+- Grasa total
+- Carbohidratos totales
+- Alcohol total
+
+Gasto
+-----
+- Calorías por actividad
+- TEF
+- Horas restantes del día
+- Gasto total diario
+
+Balance
+-------
+- Balance diario
+- Comparación contra objetivo diario base
+- Ajuste contra objetivo semanal
+
+
+============================================================
+8. LÓGICA DE OBJETIVOS
+============================================================
+
+Esta parte es clave y debe quedar clara desde el inicio.
+
+8.1 Objetivo diario base
+------------------------
+
+Es la meta estándar del usuario.
+
+Ejemplo:
+- -500 kcal por día
+
+Se usa como referencia general y default inicial.
+
+
+8.2 Objetivo semanal dinámico
+-----------------------------
+
+El sistema agrupa los días por semana y revisa cómo va el acumulado real contra
+el esperado.
+
+Ejemplo:
+
+- Objetivo base diario = -500
+- Objetivo semanal esperado = -3500
+
+Si en los primeros 3 días el usuario solo logró -900 acumulados, el sistema
+calcula cuánto déficit faltaría repartir entre los días restantes de la semana.
+
+Entonces el sistema puede mostrar algo como:
+
+- Déficit logrado esta semana
+- Déficit esperado a esta fecha
+- Déficit faltante para cerrar la semana en meta
+- Promedio necesario para los días restantes
+
+Esto no reemplaza el objetivo base, sino que lo complementa.
+
+
+8.3 Qué debe mostrar la pantalla principal respecto a la semana
+---------------------------------------------------------------
+
+Idealmente:
+
+- Déficit acumulado de la semana
+- Objetivo acumulado esperado
+- Diferencia actual
+- Promedio requerido en los días restantes
+
+Eso convierte la app en una herramienta de ajuste real, no solo de registro.
+
+
+============================================================
+9. PANTALLAS PRINCIPALES DEL SISTEMA
+============================================================
+
+9.1 Login
+---------
+
+Simple:
+
+- Usuario
+- Contraseña
+
+
+9.2 Perfil inicial / onboarding
+-------------------------------
+
+Se usa si faltan datos esenciales.
+
+Campos:
+
+- Peso actual
+- Altura
+- TMB
+- Grasa corporal
+- Objetivo diario base
+- Proteína objetivo
+
+
+9.3 Pantalla principal del día
+------------------------------
+
+Debe incluir:
+
+Bloque 1. Resumen rápido
+- Fecha
+- Calorías consumidas
+- Calorías gastadas
+- Balance actual
+- Calorías restantes
+- Proteína restante
+
+Bloque 2. Caja “Agregar comida de hoy”
+- Entrada libre de texto.
+
+Bloque 3. Tabla de comidas
+- Columnas mínimas:
+  - Alimento / producto
+  - Porción
+  - Calorías
+  - Proteína
+  - Grasa
+  - Carbohidratos
+  - Alcohol
+  - Acciones editar / borrar
+
+Bloque 4. Actividades del día
+- Con sus tiempos, MET o calorías y total calculado.
+
+Bloque 5. Resumen energético
+- TEF
+- Gasto por actividades
+- Horas restantes
+- Gasto total
+- Balance final del día
+
+Bloque 6. Ajuste semanal
+- Acumulado semanal
+- Objetivo semanal
+- Diferencia
+- Meta sugerida para los días restantes
+
+
+9.4 Histórico mensual
+---------------------
+
+Vista por mes.
+
+Debe mostrar:
+
+- Stats de cada día
+- Promedio semanal
+- Promedio mensual
+- Peso perdido estimado semanal
+- Peso perdido estimado mensual
+
+También debe permitir:
+
+- Entrar a un día específico
+- Editar el registro de ese día
+- Recalcular si fue modificado
+
+
+9.5 Perfil fisiológico
+----------------------
+
+Página separada para editar constantes.
+
+Ejemplos:
+
+- Peso actual
+- Altura
+- TMB
+- Grasa corporal
+- Objetivo diario base
+- Proteína objetivo
+
+
+9.6 Catálogo de actividades
+---------------------------
+
+Página o módulo donde se gestionan:
+
+- Actividades recomendadas
+- Actividades comunes del usuario
+
+
+============================================================
+10. MODELO CONCEPTUAL DEL SISTEMA
+============================================================
+
+Entidades principales:
+
+User
+----
+Representa al usuario autenticado.
+
+UserProfile
+-----------
+Datos fisiológicos y metas vigentes.
+
+DailyLog
+--------
+Contenedor del día.
+
+Debe guardar:
+
+- Fecha
+- Usuario
+- Snapshot de constantes usadas
+- Totales de ingesta
+- Totales de gasto
+- Balance
+- Métricas semanales relevantes
+
+FoodEntry
+---------
+Cada comida o alimento registrado.
+
+ActivityTemplate
+----------------
+Actividad frecuente del usuario o recomendada por sistema.
+
+ActivityEntry
+-------------
+Actividad de un día específico.
+
+WeeklySummary
+-------------
+Resumen de desempeño de la semana.
+
+MonthlySummary
+--------------
+Resumen de desempeño del mes.
+
+
+============================================================
+11. REGLA IMPORTANTE DE SNAPSHOTS
+============================================================
+
+Aunque la fuente de verdad esté en la base de datos, necesitas distinguir entre:
+
+- Perfil vigente
+- Valores usados en un día histórico
+
+Por eso cada DailyLog debe guardar snapshot de:
+
+- Peso usado
+- TMB usada
+- Grasa corporal usada
+- Objetivo diario base usado
+- Objetivo de proteína usado
+
+Así, si mañana cambias el peso, no se reescriben implícitamente días viejos.
+

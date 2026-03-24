@@ -1,0 +1,334 @@
+### Phase 1: Create the project skeleton
+
+In Visual Studio, create the Web API project and leave the solution clean and organized from day one.
+
+At this stage, define the folder structure you want to keep. A practical structure would be:
+
+* `Controllers`
+* `Models` or `Entities`
+* `Data`
+* `Services`
+* `DTOs`
+* `Mappings`
+* `Validators`
+* `Configuration`
+* `Middleware`
+* `Interfaces`
+
+The goal of this phase is not functionality yet. It is to avoid ending up with all logic mixed inside controllers.
+
+### Phase 2: Define the architecture boundaries
+
+Before coding endpoints, decide what belongs to each layer:
+
+* **Controllers** receive requests and return responses.
+* **Services** contain business logic.
+* **Data/Repositories or DbContext layer** handles persistence.
+* **Entities** represent database tables.
+* **DTOs** represent API input/output contracts.
+
+For your system, this separation matters a lot because the frontend is not the authority of calculations; the backend is. So the API should own:
+
+* validation
+* recalculation rules
+* snapshot generation
+* weekly target adjustment
+* persistence of final truth
+
+### Phase 3: Set up Entity Framework Core with SQL Server
+
+Install and configure EF Core with the SQL Server provider, since that provider is the one Microsoft maintains for SQL Server and Azure SQL. ([Microsoft Learn][3])
+
+At this phase you should prepare:
+
+* the `DbContext`
+* entity classes for your tables
+* connection string configuration
+* migrations strategy
+
+Do not start from controllers first. Start from the data model because your backend is centered on the database being the source of truth.
+
+### Phase 4: Translate the database design into entities
+
+Create the C# entities that correspond to the tables we already designed:
+
+* User
+* UserProfile
+* DailyLog
+* FoodEntry
+* ActivityTemplate
+* ActivityTemplateSegment
+* ActivityEntry
+* ActivityEntrySegment
+* WeeklySummary
+* MonthlySummary
+
+Then define relationships clearly:
+
+* one user → one profile
+* one user → many daily logs
+* one daily log → many food entries
+* one daily log → many activity entries
+* one activity entry → many segments when applicable
+
+This phase should also define required fields, decimals, lengths, indexes, and unique constraints.
+
+### Phase 5: Decide your authentication strategy
+
+You need to decide this before writing protected endpoints.
+
+For your React frontend + .NET API, the normal choices are:
+
+* ASP.NET Core Identity
+* JWT bearer authentication
+* cookie auth if frontend and backend are tightly coupled
+
+Microsoft documents ASP.NET Core Identity for authentication/authorization and also documents JWT bearer-based secured APIs. ([Microsoft Learn][4])
+
+For your architecture, I would plan for **JWT bearer auth** or **Identity + token-based auth**, because your frontend is separate from the backend.
+
+What must be defined here:
+
+* registration or seeded users
+* login endpoint
+* password hashing strategy
+* token issuing
+* authorization rules per endpoint
+
+### Phase 6: Define the core backend modules
+
+Before writing endpoints, write down the business modules the API will have.
+
+For your app, I would separate them like this:
+
+* **Auth module**
+* **Profile module**
+* **Daily log module**
+* **Food module**
+* **Activity module**
+* **Weekly summary module**
+* **Monthly summary module**
+* **OpenAI parsing module**
+* **Recalculation module**
+
+The most important one is the **recalculation module**, because every insert, update, or delete of food/activity should trigger authoritative recalculation.
+
+### Phase 7: Define the recalculation flow
+
+This is the heart of the API.
+
+Every time a food or activity changes, the backend should:
+
+1. load the correct `DailyLog`
+2. recompute food totals
+3. recompute activity totals
+4. recompute TEF
+5. recompute expenditure
+6. recompute net balance
+7. recompute daily remaining calories and protein
+8. recompute weekly dynamic values
+9. update weekly summary
+10. update monthly summary
+
+This is where you define your true backend contract: the database is not just storing records; it stores the official calculated state.
+
+### Phase 8: Define the OpenAI integration boundary
+
+Since the user’s free text is not the source of truth, your OpenAI integration should be treated as a proposal generator, not as a persistence layer.
+
+Plan it like this:
+
+* API receives free-text meal input
+* backend sends prompt to OpenAI
+* OpenAI returns structured JSON
+* backend validates JSON
+* frontend shows editable proposal
+* user confirms/corrects
+* backend stores only final structured entries
+
+So in the backend, OpenAI should be isolated behind a service such as a “meal parser service.”
+
+That service should not write directly to DB. It should only return structured proposals.
+
+### Phase 9: Define your request and response DTOs
+
+Before building endpoints, decide what the API contracts look like.
+
+Examples of DTO groups you will need:
+
+* login request/response
+* profile create/update
+* create daily log
+* add food entry manually
+* parse meal text request
+* confirm parsed food entries
+* update food entry
+* delete food entry
+* create activity entry
+* update activity entry
+* daily dashboard response
+* weekly summary response
+* monthly history response
+
+This keeps your API clean and prevents exposing EF entities directly.
+
+### Phase 10: Add validation rules
+
+Validation should happen before business logic runs.
+
+Examples:
+
+* weight must be positive
+* height must be positive
+* BMR must be positive
+* date cannot be invalid
+* duration cannot be negative
+* MET must be positive
+* macros cannot be negative unless your business rule explicitly allows corrections
+
+You can do this with built-in model validation and/or a validation library later, but the plan should exist now even before code.
+
+### Phase 11: Plan the endpoint map
+
+Before coding, define the endpoint families.
+
+A clean first version could look conceptually like this:
+
+* `/api/auth`
+* `/api/profile`
+* `/api/dailylogs`
+* `/api/foodentries`
+* `/api/activities`
+* `/api/activitytemplates`
+* `/api/history`
+* `/api/openai/meals`
+
+Not all of them need to exist on day one, but the route design should be thought through before implementation.
+
+### Phase 12: Configure app settings and secrets correctly
+
+ASP.NET Core supports configuration and structured logging, and Azure deployment usually means you should separate configuration from code. ([Microsoft Learn][5])
+
+Plan these settings from the start:
+
+* SQL connection string
+* JWT secret / issuer / audience
+* OpenAI API key
+* logging settings
+* environment name
+* allowed origins for CORS
+
+For local development, keep secrets out of source control. For Azure, the long-term plan should be App Service configuration + Key Vault.
+
+### Phase 13: Enable Swagger/OpenAPI and local testing
+
+Your API should be testable from day one.
+
+Plan to use Swagger for:
+
+* seeing endpoints
+* testing request/response contracts
+* validating auth flow
+* checking DTO shape
+
+This is especially useful before the React frontend is ready.
+
+### Phase 14: Logging and observability
+
+ASP.NET Core provides structured logging through `ILogger`, and you should use that early for traceability. ([Microsoft Learn][5])
+
+At minimum, plan logs for:
+
+* login attempts
+* profile updates
+* food parse requests
+* recalculation runs
+* database write failures
+* OpenAI errors
+* unexpected exceptions
+
+Later, when deployed to Azure, that connects well with Application Insights.
+
+### Phase 15: Migrations and database lifecycle
+
+Define how the DB schema will be created and evolved.
+
+Plan this workflow:
+
+* entities updated in code
+* migration created
+* migration reviewed
+* migration applied to local DB
+* migration later applied to Azure SQL
+
+Do not manually change production tables once the project starts moving. Let migrations become the source of schema evolution.
+
+### Phase 16: Deployment plan for Azure
+
+Once local development is stable, your deployment path is:
+
+* React frontend → Azure Static Web Apps or App Service
+* .NET API → Azure App Service
+* SQL Server DB → Azure SQL Database
+* secrets → Azure Key Vault
+* telemetry → Application Insights
+
+That aligns well with the Azure plan you already described.
+
+---
+
+## The order I recommend you build it in
+
+This is the sequence I would personally follow:
+
+1. Create the ASP.NET Core Web API project in Visual Studio.
+2. Clean the default template and define folders.
+3. Add EF Core + SQL Server provider. ([Microsoft Learn][3])
+4. Create entities and `DbContext`.
+5. Configure connection string.
+6. Create first migration and local database.
+7. Implement authentication basics.
+8. Implement `UserProfile`.
+9. Implement `DailyLog` creation/get-or-create logic.
+10. Implement food entry CRUD.
+11. Implement activity template CRUD.
+12. Implement activity entry CRUD.
+13. Implement recalculation service.
+14. Implement weekly/monthly summary recalculation.
+15. Implement OpenAI meal parsing endpoint.
+16. Add validation, error handling, and logging.
+17. Test everything in Swagger/Postman.
+18. Deploy to Azure.
+
+---
+
+## What you must avoid
+
+Do not start by coding random controllers.
+Do not put calculation logic inside controllers.
+Do not let the frontend compute official totals.
+Do not make OpenAI responses persist directly without validation.
+Do not skip migrations discipline.
+Do not mix DTOs and EF entities in API contracts.
+
+---
+
+## Best practical next step
+
+Your very next step in Visual Studio should be:
+
+**Create the ASP.NET Core Web API project and set up the solution structure before writing any business code.**
+
+After that, the first implementation target should be:
+
+**entities + DbContext + EF Core + SQL Server connection + first migration**
+
+That gives you the foundation for everything else.
+
+In the next message, I can give you the exact **project structure and build roadmap for Visual Studio**, still without jumping into full business code.
+
+[1]: https://learn.microsoft.com/en-us/aspnet/core/web-api/?view=aspnetcore-10.0&utm_source=chatgpt.com "Create web APIs with ASP.NET Core"
+[2]: https://learn.microsoft.com/en-us/aspnet/core/migration/fx-to-core/areas/authentication?view=aspnetcore-10.0&utm_source=chatgpt.com "ASP.NET Framework to Core Authentication Migration"
+[3]: https://learn.microsoft.com/en-us/ef/core/providers/sql-server/?utm_source=chatgpt.com "Microsoft SQL Server EF Core Database Provider"
+[4]: https://learn.microsoft.com/en-us/aspnet/core/security/authentication/identity-api-authorization?view=aspnetcore-10.0&utm_source=chatgpt.com "Use Identity to secure a Web API backend for SPAs"
+[5]: https://learn.microsoft.com/en-us/aspnet/core/fundamentals/logging/?view=aspnetcore-10.0&utm_source=chatgpt.com "Logging in .NET and ASP.NET Core"
