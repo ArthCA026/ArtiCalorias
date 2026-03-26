@@ -2,6 +2,7 @@
 
 import AppLayout from '@/layouts/AppLayout';
 import AuthLayout from '@/layouts/AuthLayout';
+import OnboardingLayout from '@/layouts/OnboardingLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import PublicOnlyRoute from '@/components/PublicOnlyRoute';
 
@@ -39,9 +40,14 @@ const router = createBrowserRouter([
     element: <ProtectedRoute />,
     children: [
       {
-        element: <AppLayout />,
+        element: <OnboardingLayout />,
         children: [
           { path: '/onboarding', element: <OnboardingPage /> },
+        ],
+      },
+      {
+        element: <AppLayout />,
+        children: [
           { path: '/today', element: <DashboardPage /> },
           { path: '/history', element: <HistoryPage /> },
           { path: '/history/:date', element: <HistoryPage /> },

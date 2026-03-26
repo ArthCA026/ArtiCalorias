@@ -53,3 +53,6 @@ CodeCoverage/
 TestResult.xml
 nunit-*.xml
 /Articalorias/.vs
+
+# Secrets – never commit real credentials
+Articalorias/appsettings.json

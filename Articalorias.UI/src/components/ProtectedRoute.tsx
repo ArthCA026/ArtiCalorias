@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { profileService } from "@/services/profileService";
@@ -9,6 +9,7 @@ export default function ProtectedRoute() {
   const location = useLocation();
   const [checking, setChecking] = useState(true);
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  const verifiedPath = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -17,17 +18,26 @@ export default function ProtectedRoute() {
     }
 
     // Once confirmed onboarded, skip future network checks
-    if (onboarded === true) return;
+    if (onboarded === true) {
+      verifiedPath.current = location.pathname;
+      return;
+    }
 
     setChecking(true);
     let cancelled = false;
     profileService
       .get()
       .then(({ data }) => {
-        if (!cancelled) setOnboarded(data.isOnboardingCompleted);
+        if (!cancelled) {
+          setOnboarded(data.isOnboardingCompleted);
+          verifiedPath.current = location.pathname;
+        }
       })
       .catch(() => {
-        if (!cancelled) setOnboarded(false);
+        if (!cancelled) {
+          setOnboarded(false);
+          verifiedPath.current = location.pathname;
+        }
       })
       .finally(() => {
         if (!cancelled) setChecking(false);
@@ -47,6 +57,9 @@ export default function ProtectedRoute() {
   }
 
   if (onboarded === false && location.pathname !== "/onboarding") {
+    if (verifiedPath.current !== location.pathname) {
+      return <LoadingSpinner message="Checking profile..." />;
+    }
     return <Navigate to="/onboarding" replace />;
   }
 

@@ -23,8 +23,10 @@ export default function DashboardPage() {
           Hello{user?.username ? `, ${user.username}` : ""}! 👋
         </h1>
         <p className="mt-1 text-sm text-gray-500">
-          Remember to log your calories and activities for today &mdash;{" "}
           <span className="font-medium text-gray-700">{formatFriendlyDate(today)}</span>
+        </p>
+        <p className="mt-1.5 text-sm text-gray-400">
+          Log your meals and activities to stay on track. You can update things anytime during the day.
         </p>
       </div>
 
