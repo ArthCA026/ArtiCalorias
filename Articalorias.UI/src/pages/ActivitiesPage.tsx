@@ -40,13 +40,13 @@ export default function ActivitiesPage() {
   });
 
   function friendlyName(name: string) {
-    const map: Record<string, string> = { NEAT: "Daily movement", Sleep: "Sleep" };
+    const map: Record<string, string> = { Sleep: "Sleep" };
     return map[name] ?? name;
   }
 
   function friendlyHint(name: string): string | null {
     const hints: Record<string, string> = {
-      NEAT: "Walking around, chores, errands, and other non-exercise movement",
+      "Daily movement": "Walking around, chores, errands, and other non-exercise movement",
       Sleep: "Rest and recovery — your body uses energy even while sleeping",
     };
     return hints[name] ?? null;

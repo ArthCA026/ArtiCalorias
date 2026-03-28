@@ -1,7 +1,13 @@
 {
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/*.{png,jpg,gif,css,js,ico,svg,woff,woff2}"]
+    "exclude": [
+      "*.{png,jpg,gif,css,js,mjs,ico,svg,woff,woff2,json,txt,map,webp,avif,ttf,eot,otf}"
+    ]
+  },
+  "mimeTypes": {
+    ".js": "application/javascript",
+    ".mjs": "application/javascript"
   },
   "globalHeaders": {
     "X-Content-Type-Options": "nosniff",
