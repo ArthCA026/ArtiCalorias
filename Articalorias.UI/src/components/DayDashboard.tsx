@@ -1198,7 +1198,7 @@ function ActivitySection({ date, activities, onChanged }: { date: string; activi
               <div>
                 <div className="mb-2">
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Included in your daily estimate</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">Added automatically based on your profile — you can adjust the duration if needed</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Things like sleep and daily movement are part of everyone's day — including them helps your calorie estimate stay accurate. You can adjust the duration if needed.</p>
                 </div>
                 <div className="rounded-lg border border-gray-100 bg-gray-50/50 divide-y divide-gray-100">
                   {autoActivities.map((a) =>
