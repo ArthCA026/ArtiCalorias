@@ -3,7 +3,6 @@ import { activityService } from "@/services/activityService";
 import type { ActivityTemplateResponse, ActivityTemplateRequest, ParsedActivityItem } from "@/types";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import ErrorMessage from "@/components/ErrorMessage";
-import EmptyState from "@/components/EmptyState";
 import { extractApiError } from "@/utils/apiError";
 import { fmt } from "@/utils/format";
 
