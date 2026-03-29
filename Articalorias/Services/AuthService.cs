@@ -5,9 +5,11 @@ using System.Text;
 using Articalorias.Configuration;
 using Articalorias.Data;
 using Articalorias.DTOs.Auth;
+using Articalorias.Exceptions;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
@@ -18,12 +20,18 @@ public class AuthService : IAuthService
     private readonly AppDbContext _db;
     private readonly JwtSettings _jwt;
     private readonly IEmailService _emailService;
+    private readonly IMemoryCache _cache;
 
-    public AuthService(AppDbContext db, IOptions<JwtSettings> jwt, IEmailService emailService)
+    private const int ResendCooldownSeconds = 60;
+    private const int MaxVerificationAttempts = 5;
+    private const int ResetTokenLifetimeMinutes = 15;
+
+    public AuthService(AppDbContext db, IOptions<JwtSettings> jwt, IEmailService emailService, IMemoryCache cache)
     {
         _db = db;
         _jwt = jwt.Value;
         _emailService = emailService;
+        _cache = cache;
     }
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
@@ -66,33 +74,78 @@ public class AuthService : IAuthService
 
     public async Task ForgotPasswordAsync(ForgotPasswordRequest request)
     {
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var cooldownKey = $"resend-cooldown:{normalizedEmail}";
+
+        // Enforce resend cooldown regardless of whether the email exists (privacy-safe)
+        if (_cache.TryGetValue(cooldownKey, out _))
+            throw new ApiException(ErrorCodes.ResendCooldown, "Please wait before requesting another code.");
+
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
 
-        // Always return success to avoid leaking whether the email exists
+        // Always set the cooldown and return success to avoid leaking whether the email exists
+        _cache.Set(cooldownKey, true, TimeSpan.FromSeconds(ResendCooldownSeconds));
+
         if (user is null || !user.IsActive)
             return;
 
         var token = GenerateResetToken();
         user.PasswordResetToken = token;
-        user.PasswordResetTokenExpiresAtUtc = DateTime.UtcNow.AddMinutes(15);
+        user.PasswordResetTokenExpiresAtUtc = DateTime.UtcNow.AddMinutes(ResetTokenLifetimeMinutes);
         await _db.SaveChangesAsync();
+
+        // Clear any previous verification attempts for this email (fresh code = fresh attempts)
+        _cache.Remove($"reset-attempts:{normalizedEmail}");
 
         await _emailService.SendPasswordResetEmailAsync(user.Email, token);
     }
 
     public async Task ResetPasswordAsync(ResetPasswordRequest request)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == request.Email)
-            ?? throw new InvalidOperationException("Invalid or expired reset token.");
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var attemptsKey = $"reset-attempts:{normalizedEmail}";
 
-        if (string.IsNullOrEmpty(user.PasswordResetToken)
-            || user.PasswordResetToken != request.Token
-            || user.PasswordResetTokenExpiresAtUtc is null
-            || user.PasswordResetTokenExpiresAtUtc < DateTime.UtcNow)
+        // Check verification attempt limit
+        var attempts = _cache.GetOrCreate(attemptsKey, entry =>
         {
-            throw new InvalidOperationException("Invalid or expired reset token.");
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(ResetTokenLifetimeMinutes);
+            return 0;
+        });
+
+        if (attempts >= MaxVerificationAttempts)
+            throw new ApiException(ErrorCodes.TooManyAttempts, "Too many failed attempts. Please request a new code.");
+
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+
+        // Use the same generic message for user-not-found to avoid email enumeration
+        if (user is null)
+        {
+            _cache.Set(attemptsKey, attempts + 1, TimeSpan.FromMinutes(ResetTokenLifetimeMinutes));
+            throw new ApiException(ErrorCodes.CodeInvalid, "Invalid or expired reset code.");
         }
 
+        // Check if token was never issued or already consumed
+        if (string.IsNullOrEmpty(user.PasswordResetToken))
+        {
+            _cache.Set(attemptsKey, attempts + 1, TimeSpan.FromMinutes(ResetTokenLifetimeMinutes));
+            throw new ApiException(ErrorCodes.CodeInvalid, "Invalid or expired reset code.");
+        }
+
+        // Check expiration explicitly
+        if (user.PasswordResetTokenExpiresAtUtc is null || user.PasswordResetTokenExpiresAtUtc < DateTime.UtcNow)
+        {
+            _cache.Set(attemptsKey, attempts + 1, TimeSpan.FromMinutes(ResetTokenLifetimeMinutes));
+            throw new ApiException(ErrorCodes.CodeExpired, "This code has expired. Please request a new one.");
+        }
+
+        // Check token match
+        if (user.PasswordResetToken != request.Token)
+        {
+            _cache.Set(attemptsKey, attempts + 1, TimeSpan.FromMinutes(ResetTokenLifetimeMinutes));
+            throw new ApiException(ErrorCodes.CodeInvalid, "That code doesn't match. Please check and try again.");
+        }
+
+        // Success — reset the password and clean up
         CreatePasswordHash(request.NewPassword, out string hash, out string salt);
         user.PasswordHash = hash;
         user.PasswordSalt = salt;
@@ -100,6 +153,9 @@ public class AuthService : IAuthService
         user.PasswordResetTokenExpiresAtUtc = null;
 
         await _db.SaveChangesAsync();
+
+        // Clear attempt counter
+        _cache.Remove(attemptsKey);
     }
 
     private AuthResponse GenerateToken(User user)
@@ -155,7 +211,6 @@ public class AuthService : IAuthService
 
     private static string GenerateResetToken()
     {
-        var bytes = RandomNumberGenerator.GetBytes(32);
-        return Convert.ToHexStringLower(bytes);
+        return RandomNumberGenerator.GetInt32(100_000, 1_000_000).ToString();
     }
 }

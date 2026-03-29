@@ -4,6 +4,22 @@ import { Link, useNavigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/authService";
 import { extractApiError } from "@/utils/apiError";
+import AuthCard from "@/components/auth/AuthCard";
+import AlertBanner from "@/components/auth/AlertBanner";
+import FormField from "@/components/auth/FormField";
+import SubmitButton from "@/components/auth/SubmitButton";
+import PasswordCreateField from "@/components/PasswordCreateField";
+import ConfirmPasswordField from "@/components/ConfirmPasswordField";
+import { validatePassword, validateConfirmPassword } from "@/utils/passwordValidation";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+interface FieldTouched {
+  username: boolean;
+  email: boolean;
+  password: boolean;
+  confirmPassword: boolean;
+}
 
 export default function RegisterPage() {
   const { login } = useAuth();
@@ -13,27 +29,31 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [touched, setTouched] = useState<FieldTouched>({ username: false, email: false, password: false, confirmPassword: false });
+
+  const usernameError = !username.trim() ? "Please choose a username." : username.trim().length < 3 ? "Must be at least 3 characters." : null;
+  const emailError = !email.trim() ? "Please enter your email." : !EMAIL_RE.test(email.trim()) ? "That doesn't look like a valid email." : null;
+  const passwordError = validatePassword(password);
+  const confirmError = validateConfirmPassword(password, confirmPassword);
+
+  function markTouched(field: keyof FieldTouched) {
+    setTouched((t) => ({ ...t, [field]: true }));
+  }
+
+  function showError(field: keyof FieldTouched, error: string | null): boolean {
+    return !!(error && (submitted || touched[field]));
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setError(null);
+    if (loading) return;
+    setSubmitted(true);
+    setServerError(null);
 
-    if (!username.trim() || !email.trim() || !password.trim()) {
-      setError("All fields are required.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
+    if (usernameError || emailError || passwordError || confirmError) return;
 
     setLoading(true);
     try {
@@ -41,47 +61,65 @@ export default function RegisterPage() {
       login(data);
       navigate("/today", { replace: true });
     } catch (err) {
-      setError(extractApiError(err, "Registration failed."));
+      setServerError(extractApiError(err, "We couldn't create your account. Please try again."));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm space-y-4">
-        <h2 className="text-lg font-semibold text-gray-900">Create account</h2>
+    <form onSubmit={handleSubmit} className="space-y-5" noValidate aria-busy={loading}>
+      <AuthCard
+        title="Create account"
+        subtitle="It only takes a minute to get started."
+        alerts={serverError && <AlertBanner>{serverError}</AlertBanner>}
+      >
+        <FormField
+          id="reg-username"
+          label="Username"
+          autoComplete="username"
+          value={username}
+          onChange={setUsername}
+          onBlur={() => markTouched("username")}
+          error={usernameError}
+          showError={showError("username", usernameError)}
+          hint="3–50 characters"
+        />
 
-        {error && (
-          <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
+        <FormField
+          id="reg-email"
+          label="Email"
+          type="email"
+          autoComplete="email"
+          value={email}
+          onChange={setEmail}
+          onBlur={() => markTouched("email")}
+          error={emailError}
+          showError={showError("email", emailError)}
+          hint="Used only for account recovery"
+        />
 
-        <div>
-          <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label>
-          <input id="username" type="text" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-        </div>
+        <PasswordCreateField
+          id="reg-password"
+          value={password}
+          onChange={setPassword}
+          touched={touched.password}
+          onBlur={() => markTouched("password")}
+          submitted={submitted}
+        />
 
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
-          <input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-        </div>
+        <ConfirmPasswordField
+          id="reg-confirm"
+          password={password}
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+          touched={touched.confirmPassword}
+          onBlur={() => markTouched("confirmPassword")}
+          submitted={submitted}
+        />
 
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
-          <input id="password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-        </div>
-
-        <div>
-          <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">Confirm password</label>
-          <input id="confirmPassword" type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-        </div>
-
-        <button type="submit" disabled={loading} className="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors">
-          {loading ? "Creating account..." : "Create account"}
-        </button>
-      </div>
+        <SubmitButton loading={loading} text="Create account" loadingText="Creating account…" />
+      </AuthCard>
 
       <p className="text-center text-sm text-gray-500">
         Already have an account?{" "}

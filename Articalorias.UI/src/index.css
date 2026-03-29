@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+/*
+ * Visible focus ring for keyboard navigation.
+ * Uses :focus-visible so mouse clicks don't show the ring.
+ */
+:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+/* Inputs already draw their own ring via Tailwind; suppress the global one. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
 /* Hide number input spin buttons */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {

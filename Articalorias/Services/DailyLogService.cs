@@ -89,11 +89,16 @@ public class DailyLogService : IDailyLogService
 
         await _db.SaveChangesAsync();
 
-        // Auto-add activity entries from templates with AutoAddToNewDay = true
+        // Auto-add activity entries from templates with AutoAddToNewDay = true,
+        // but skip any whose name already matches a global default we just added.
+        var globalNames = GlobalDefaultActivities.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var autoAddTemplates = await _db.ActivityTemplates
             .Include(t => t.Segments)
             .Where(t => t.IsActive && t.AutoAddToNewDay && (t.TemplateScope == "SYSTEM" || t.UserId == userId))
             .ToListAsync();
+        autoAddTemplates = autoAddTemplates
+            .Where(t => !globalNames.Contains(t.TemplateName))
+            .ToList();
 
         if (autoAddTemplates.Count > 0)
         {

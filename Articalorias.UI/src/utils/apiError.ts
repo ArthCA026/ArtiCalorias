@@ -40,3 +40,15 @@ export function extractApiError(err: unknown, fallback = "An unexpected error oc
 export function isNotFound(err: unknown): boolean {
   return err instanceof AxiosError && err.response?.status === 404;
 }
+
+/**
+ * Extracts the machine-readable ErrorCode from an API error response.
+ * Returns undefined when no code is present (legacy endpoints, network errors, etc.).
+ */
+export function extractApiErrorCode(err: unknown): string | undefined {
+  if (err instanceof AxiosError && err.response?.data) {
+    const d = err.response.data;
+    if (d && typeof d === "object" && typeof d.ErrorCode === "string") return d.ErrorCode;
+  }
+  return undefined;
+}

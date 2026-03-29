@@ -15,3 +15,13 @@ export interface AuthResponse {
   token: string;
   expiresAtUtc: string;
 }
+
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+  token: string;
+  newPassword: string;
+}

@@ -20,6 +20,9 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration configuration)
     {
+        // In-memory cache for rate limiting (resend cooldown, verification attempts)
+        services.AddMemoryCache();
+
         // OpenAI configuration
         services.Configure<OpenAiSettings>(configuration.GetSection(OpenAiSettings.SectionName));
 

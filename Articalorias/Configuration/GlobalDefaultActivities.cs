@@ -8,9 +8,9 @@ namespace Articalorias.Configuration;
 public static class GlobalDefaultActivities
 {
     public static readonly ActivityDefault Sleep = new("Sleep", 0.9m, 360m);
-    public static readonly ActivityDefault NEAT = new("NEAT", 3.0m, 180m);
+    public static readonly ActivityDefault DailyMovement = new("Daily movement (NEAT)", 3.0m, 180m);
 
-    public static IReadOnlyList<ActivityDefault> All { get; } = [Sleep, NEAT];
+    public static IReadOnlyList<ActivityDefault> All { get; } = [Sleep, DailyMovement];
 
     public sealed record ActivityDefault(string Name, decimal METValue, decimal DefaultDurationMinutes);
 }

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Articalorias.Exceptions;
 
 namespace Articalorias.Middleware;
 
@@ -31,6 +32,14 @@ public class ErrorHandlingMiddleware
     {
         context.Response.ContentType = "application/json";
 
+        if (exception is ApiException apiEx)
+        {
+            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            var response = new { StatusCode = (int)HttpStatusCode.BadRequest, Message = apiEx.Message, ErrorCode = apiEx.ErrorCode };
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+            return;
+        }
+
         var (statusCode, message) = exception switch
         {
             UnauthorizedAccessException => ((int)HttpStatusCode.Unauthorized, exception.Message),
@@ -40,7 +49,7 @@ public class ErrorHandlingMiddleware
 
         context.Response.StatusCode = statusCode;
 
-        var response = new { StatusCode = statusCode, Message = message };
-        await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+        var fallbackResponse = new { StatusCode = statusCode, Message = message };
+        await context.Response.WriteAsync(JsonSerializer.Serialize(fallbackResponse));
     }
 }

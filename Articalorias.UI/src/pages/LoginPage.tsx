@@ -4,6 +4,10 @@ import { Link, useNavigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/authService";
 import { extractApiError } from "@/utils/apiError";
+import AuthCard from "@/components/auth/AuthCard";
+import AlertBanner from "@/components/auth/AlertBanner";
+import FormField from "@/components/auth/FormField";
+import SubmitButton from "@/components/auth/SubmitButton";
 
 export default function LoginPage() {
   const { login, sessionExpired, clearSessionExpired } = useAuth();
@@ -11,18 +15,22 @@ export default function LoginPage() {
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [touched, setTouched] = useState<{ username: boolean; password: boolean }>({ username: false, password: false });
+
+  const usernameError = !username.trim() ? "Please enter your username." : null;
+  const passwordError = !password.trim() ? "Please enter your password." : null;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setError(null);
+    if (loading) return;
+    setSubmitted(true);
+    setServerError(null);
     clearSessionExpired();
 
-    if (!username.trim() || !password.trim()) {
-      setError("Username and password are required.");
-      return;
-    }
+    if (usernameError || passwordError) return;
 
     setLoading(true);
     try {
@@ -30,43 +38,54 @@ export default function LoginPage() {
       login(data);
       navigate("/today", { replace: true });
     } catch (err) {
-      setError(extractApiError(err, "Invalid credentials."));
+      setServerError(extractApiError(err, "Incorrect username or password."));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm space-y-4">
-        <h2 className="text-lg font-semibold text-gray-900">Sign in</h2>
+    <form onSubmit={handleSubmit} className="space-y-5" noValidate aria-busy={loading}>
+      <AuthCard
+        title="Welcome back"
+        subtitle="Sign in to pick up where you left off."
+        alerts={<>
+          {sessionExpired && (
+            <AlertBanner variant="warning">Your session expired — please sign in again.</AlertBanner>
+          )}
+          {serverError && <AlertBanner>{serverError}</AlertBanner>}
+        </>}
+      >
+        <FormField
+          id="login-username"
+          label="Username"
+          autoComplete="username"
+          value={username}
+          onChange={setUsername}
+          onBlur={() => setTouched((t) => ({ ...t, username: true }))}
+          error={usernameError}
+          showError={!!(usernameError && (submitted || touched.username))}
+        />
 
-        {sessionExpired && (
-          <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-            Your session has expired. Please sign in again.
-          </div>
-        )}
+        <FormField
+          id="login-password"
+          label="Password"
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={setPassword}
+          onBlur={() => setTouched((t) => ({ ...t, password: true }))}
+          error={passwordError}
+          showError={!!(passwordError && (submitted || touched.password))}
+          labelRight={
+            <Link to="/forgot-password" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 rounded-sm px-0.5">
+              Forgot password?
+            </Link>
+          }
+        />
 
-        {error && (
-          <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
-
-        <div>
-          <label htmlFor="username" className="block text-sm font-medium text-gray-700">Username</label>
-          <input id="username" type="text" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-        </div>
-
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
-          <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-        </div>
-
-        <button type="submit" disabled={loading} className="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors">
-          {loading ? "Signing in..." : "Sign in"}
-        </button>
-      </div>
+        <SubmitButton loading={loading} text="Sign in" loadingText="Signing in…" />
+      </AuthCard>
 
       <p className="text-center text-sm text-gray-500">
         Don't have an account?{" "}

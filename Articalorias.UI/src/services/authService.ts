@@ -1,5 +1,5 @@
 import api from './api';
-import type { LoginRequest, RegisterRequest, AuthResponse } from '@/types';
+import type { LoginRequest, RegisterRequest, AuthResponse, ForgotPasswordRequest, ResetPasswordRequest } from '@/types';
 
 export const authService = {
   login(data: LoginRequest) {
@@ -8,5 +8,13 @@ export const authService = {
 
   register(data: RegisterRequest) {
     return api.post<AuthResponse>('/auth/register', data);
+  },
+
+  forgotPassword(data: ForgotPasswordRequest) {
+    return api.post('/auth/forgot-password', data);
+  },
+
+  resetPassword(data: ResetPasswordRequest) {
+    return api.post('/auth/reset-password', data);
   },
 };
