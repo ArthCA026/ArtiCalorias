@@ -102,11 +102,9 @@ public class FoodParsingService : IFoodParsingService
             - If foods differ meaningfully (e.g., chicken taco vs beef taco), keep them separate.
             - Preserve important modifiers that affect nutrition:
               (e.g., con leche, con azúcar, frito, integral, descremado, light, con alcohol).
-
             - If a dish clearly contains multiple core components and splitting improves accuracy, you may separate them:
               Example: "arroz con pollo" → arroz + pollo (optional, only if useful).
             - Otherwise, keep it as a single item.
-
             - Do not invent side dishes, toppings, or ingredients not implied by the text.
             - However, you may infer minimal standard preparation when strongly implied:
               Example: fried foods include oil.
@@ -149,6 +147,7 @@ public class FoodParsingService : IFoodParsingService
 
             LANGUAGE RULES
             - Preserve foodName and portionDescription in the same language as the user input when possible.
+            - Keep in the same language as the user’s activity text; normalize but never translate.
 
             OUTPUT SCHEMA (STRICT)
             Each item must contain exactly these fields:

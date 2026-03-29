@@ -61,7 +61,9 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
+        var identifier = request.UsernameOrEmail.Trim();
+        var user = await _db.Users.FirstOrDefaultAsync(u =>
+            u.Username == identifier || u.Email == identifier);
 
         if (user is null || !user.IsActive)
             throw new UnauthorizedAccessException("Invalid credentials.");

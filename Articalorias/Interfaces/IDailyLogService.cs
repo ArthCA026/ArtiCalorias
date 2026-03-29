@@ -8,4 +8,5 @@ public interface IDailyLogService
     Task<DailyLog> GetOrCreateAsync(long userId, DateOnly date);
     Task<IReadOnlyList<DailyLog>> GetRangeAsync(long userId, DateOnly from, DateOnly to);
     Task RecalculateAsync(long dailyLogId);
+    Task DeleteByDateAsync(long userId, DateOnly date);
 }

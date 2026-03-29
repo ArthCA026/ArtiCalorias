@@ -83,6 +83,34 @@ public class RecalculationService : IRecalculationService
         await RecalculateMonthlySummary(log.UserId, log.LogDate.Year, log.LogDate.Month);
     }
 
+    public async Task RecalculateAfterDayDeletionAsync(long userId, DateOnly deletedDate, DateOnly weekStart, DateOnly weekEnd, decimal baseDailyGoal)
+    {
+        // Recalculate all remaining days in the same week (updates their weekly context)
+        var remainingWeekLogIds = await _db.DailyLogs
+            .Where(d => d.UserId == userId && d.LogDate >= weekStart && d.LogDate <= weekEnd)
+            .Select(d => d.DailyLogId)
+            .ToListAsync();
+
+        foreach (var logId in remainingWeekLogIds)
+            await RecalculateFullPipelineAsync(logId);
+
+        if (remainingWeekLogIds.Count == 0)
+        {
+            // No more days in this week — remove the stale weekly summary
+            var weeklySummary = await _db.WeeklySummaries
+                .FirstOrDefaultAsync(w => w.UserId == userId && w.WeekStartDate == weekStart);
+            if (weeklySummary is not null)
+            {
+                _db.WeeklySummaries.Remove(weeklySummary);
+                await _db.SaveChangesAsync();
+            }
+        }
+
+        // Always recalculate the monthly summary for the deleted date's month
+        // (handles cross-month weeks where no remaining days fall in the same month)
+        await RecalculateMonthlySummary(userId, deletedDate.Year, deletedDate.Month);
+    }
+
     // ─────────────────────────────────────────────────────
     //  Step 8 — Weekly context fields on the DailyLog itself
     // ─────────────────────────────────────────────────────
@@ -104,9 +132,17 @@ public class RecalculationService : IRecalculationService
         log.WeeklyActualToDateKcal = allWeekBalances;
         log.WeeklyDifferenceKcal = log.WeeklyActualToDateKcal - log.WeeklyExpectedToDateKcal;
         log.WeeklyRemainingTargetKcal = log.WeeklyTargetKcal - log.WeeklyActualToDateKcal;
-        log.SuggestedDailyAverageRemainingKcal = daysRemaining > 0
-            ? log.WeeklyRemainingTargetKcal / daysRemaining
-            : 0m;
+
+        // Use only completed past days for the suggested average so that
+        // today's incomplete balance doesn't distort the suggestion, and
+        // today itself counts as one of the remaining days to plan for.
+        var pastDaysBalance = weekLogs.Sum(d => d.NetBalanceKcal);
+        var pastDaysCount = weekLogs.Count;
+        var daysRemainingIncludingToday = 7 - pastDaysCount;
+
+        log.SuggestedDailyAverageRemainingKcal = daysRemainingIncludingToday > 0
+            ? (log.WeeklyTargetKcal - pastDaysBalance) / daysRemainingIncludingToday
+            : log.SnapshotDailyBaseGoalKcal;
     }
 
     // ─────────────────────────────────────────────────────

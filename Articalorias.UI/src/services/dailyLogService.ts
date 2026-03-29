@@ -40,4 +40,8 @@ export const dailyLogService = {
   confirmParsedActivities(date: string, data: ConfirmParsedActivitiesRequest) {
     return api.post<ActivityEntryResponse[]>(`/dailylog/${date}/activities/batch`, data);
   },
+
+  deleteDay(date: string) {
+    return api.delete(`/dailylog/${date}`);
+  },
 };

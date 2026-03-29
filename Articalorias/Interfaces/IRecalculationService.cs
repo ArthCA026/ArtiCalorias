@@ -22,4 +22,11 @@ public interface IRecalculationService
     /// 10. Update MonthlySummary
     /// </summary>
     Task RecalculateFullPipelineAsync(long dailyLogId);
+
+    /// <summary>
+    /// Recalculates weekly and monthly summaries after a day has been deleted.
+    /// Updates weekly context on remaining sibling days, then refreshes
+    /// the WeeklySummary and MonthlySummary aggregates.
+    /// </summary>
+    Task RecalculateAfterDayDeletionAsync(long userId, DateOnly deletedDate, DateOnly weekStart, DateOnly weekEnd, decimal baseDailyGoal);
 }

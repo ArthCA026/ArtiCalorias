@@ -46,7 +46,7 @@ export default function ActivitiesPage() {
   function friendlyHint(name: string): string | null {
     const hints: Record<string, string> = {
       "Daily movement": "Walking around, chores, errands, and other non-exercise movement",
-      Sleep: "Rest and recovery — your body uses energy even while sleeping",
+      Sleep: "Rest and recovery — your body uses less energy while sleeping than when awake, so this reduces your daily estimate",
     };
     return hints[name] ?? null;
   }

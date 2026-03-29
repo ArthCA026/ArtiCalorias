@@ -119,7 +119,7 @@ public class ActivityParsingService : IActivityParsingService
         Return a JSON object with a single key "items" containing an array.
 
         Each item must have exactly these fields:
-        - activityName (string): normalized activity name
+        - activityName (string): normalized activity name in the same language as the user's input for that activity; do not translate
         - activityType (string): always "MET_SIMPLE"
         - durationMinutes (number | null): total duration in minutes, or null if not specified
         - metValue (number | null): estimated MET value for the activity
@@ -128,6 +128,7 @@ public class ActivityParsingService : IActivityParsingService
 
         Rules:
         - Parse each distinct activity as a separate item.
+        - Keep activityName in the same language as the user’s activity text; normalize but never translate.
         - If the user mentions multiple activities joined by "and", "y", commas, or similar separators, return one item per activity.
         - activityType must always be "MET_SIMPLE".
         - notes must always be null.
@@ -156,7 +157,7 @@ public class ActivityParsingService : IActivityParsingService
         {
           "items": [
             {
-              "activityName": "Running",
+              "activityName": "Correr",
               "activityType": "MET_SIMPLE",
               "durationMinutes": 30,
               "metValue": 8.3,
@@ -164,7 +165,7 @@ public class ActivityParsingService : IActivityParsingService
               "segments": null
             },
             {
-              "activityName": "Stretching",
+              "activityName": "Estiramiento",
               "activityType": "MET_SIMPLE",
               "durationMinutes": 15,
               "metValue": 2.3,

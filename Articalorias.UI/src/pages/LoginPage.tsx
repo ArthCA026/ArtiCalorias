@@ -13,14 +13,14 @@ export default function LoginPage() {
   const { login, sessionExpired, clearSessionExpired } = useAuth();
   const navigate = useNavigate();
 
-  const [username, setUsername] = useState("");
+  const [usernameOrEmail, setUsernameOrEmail] = useState("");
   const [password, setPassword] = useState("");
   const [serverError, setServerError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [touched, setTouched] = useState<{ username: boolean; password: boolean }>({ username: false, password: false });
+  const [touched, setTouched] = useState<{ usernameOrEmail: boolean; password: boolean }>({ usernameOrEmail: false, password: false });
 
-  const usernameError = !username.trim() ? "Please enter your username." : null;
+  const usernameOrEmailError = !usernameOrEmail.trim() ? "Please enter your username or email." : null;
   const passwordError = !password.trim() ? "Please enter your password." : null;
 
   async function handleSubmit(e: FormEvent) {
@@ -30,15 +30,15 @@ export default function LoginPage() {
     setServerError(null);
     clearSessionExpired();
 
-    if (usernameError || passwordError) return;
+    if (usernameOrEmailError || passwordError) return;
 
     setLoading(true);
     try {
-      const { data } = await authService.login({ username, password });
+      const { data } = await authService.login({ usernameOrEmail, password });
       login(data);
       navigate("/today", { replace: true });
     } catch (err) {
-      setServerError(extractApiError(err, "Incorrect username or password."));
+      setServerError(extractApiError(err, "Incorrect username/email or password."));
     } finally {
       setLoading(false);
     }
@@ -58,13 +58,13 @@ export default function LoginPage() {
       >
         <FormField
           id="login-username"
-          label="Username"
+          label="Username or Email"
           autoComplete="username"
-          value={username}
-          onChange={setUsername}
-          onBlur={() => setTouched((t) => ({ ...t, username: true }))}
-          error={usernameError}
-          showError={!!(usernameError && (submitted || touched.username))}
+          value={usernameOrEmail}
+          onChange={setUsernameOrEmail}
+          onBlur={() => setTouched((t) => ({ ...t, usernameOrEmail: true }))}
+          error={usernameOrEmailError}
+          showError={!!(usernameOrEmailError && (submitted || touched.usernameOrEmail))}
         />
 
         <FormField
@@ -77,6 +77,7 @@ export default function LoginPage() {
           onBlur={() => setTouched((t) => ({ ...t, password: true }))}
           error={passwordError}
           showError={!!(passwordError && (submitted || touched.password))}
+          showPasswordToggle
           labelRight={
             <Link to="/forgot-password" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 rounded-sm px-0.5">
               Forgot password?

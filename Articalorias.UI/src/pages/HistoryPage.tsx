@@ -1,9 +1,11 @@
 ﻿import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router";
 import { historyService } from "@/services/historyService";
+import { dailyLogService } from "@/services/dailyLogService";
 import type { DailyLogResponse } from "@/types/dailyLog";
 import type { MonthlySummaryResponse } from "@/types/history";
-import { fmt } from "@/utils/format";
+import { fmt, toDateString } from "@/utils/format";
+import { extractApiError } from "@/utils/apiError";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import ErrorMessage from "@/components/ErrorMessage";
 import EmptyState from "@/components/EmptyState";
@@ -120,7 +122,7 @@ function MonthlyView() {
             </div>
           )}
           {(days.length > 0 || unloggedDays.length > 0) && (
-            <DailyLogsCard days={days} unloggedDays={unloggedDays} onDayClick={(d) => navigate("/history/" + d)} />
+            <DailyLogsCard days={days} unloggedDays={unloggedDays} onDayClick={(d) => navigate("/history/" + d)} onDayDeleted={load} />
           )}
         </>
       )}
@@ -143,10 +145,15 @@ function MonthlySummaryCard({ summary: s }: { summary: MonthlySummaryResponse })
   const isCurrent = s.yearNumber === today.getFullYear() && s.monthNumber === today.getMonth() + 1;
   const totalDays = isCurrent ? today.getDate() : daysInMonth;
 
+  // Check if only today is logged (calculations will be zero/null)
+  const hasCompletedDays = avgBalance !== 0 || s.totalFoodCaloriesKcal > 0 || s.totalProteinGrams > 0;
+
   // Coaching status — friendly, supportive
   let statusText: string;
   if (s.daysLogged === 0) {
     statusText = "No days logged yet — your monthly picture builds as you track each day";
+  } else if (!hasCompletedDays) {
+    statusText = "Your first day is in progress! Come back tomorrow to see your monthly averages start taking shape";
   } else if (s.daysLogged <= 3) {
     statusText = "Just getting started — your averages will get more accurate as you log more days";
   } else if (isDeficit) {
@@ -171,6 +178,31 @@ function MonthlySummaryCard({ summary: s }: { summary: MonthlySummaryResponse })
             Head to your{" "}
             <Link to="/today" className="font-medium text-indigo-600 hover:text-indigo-800">Daily page</Link>
             {" "}to log your first day — it only takes a minute.
+          </p>
+        </div>
+      </Card>
+    );
+  }
+
+  // Only today is logged - show encouraging message without confusing incomplete data
+  if (!hasCompletedDays) {
+    return (
+      <Card title="How your month is going" variant="primary">
+        <div className="space-y-2.5">
+          <p className="text-sm text-gray-500 italic">{statusText}</p>
+
+          <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-600">
+            {s.daysLogged} of {totalDays} {totalDays === 1 ? "day" : "days"} logged
+          </span>
+
+          <div className="space-y-1">
+            <p className="text-sm text-gray-600">
+              Keep going! Your monthly insights will appear here once you complete today and start building your history.
+            </p>
+          </div>
+
+          <p className="text-[11px] text-gray-400">
+            Monthly averages exclude today's incomplete data to give you the most accurate picture
           </p>
         </div>
       </Card>
@@ -224,7 +256,7 @@ function MonthlySummaryCard({ summary: s }: { summary: MonthlySummaryResponse })
 
         {/* Trust note */}
         <p className="text-[11px] text-gray-400">
-          Based on {s.daysLogged} logged {s.daysLogged === 1 ? "day" : "days"} in {monthName} · These are estimates that update as you log more
+          Based on {s.daysLogged > 1 ? `${s.daysLogged - (isCurrent ? 1 : 0)} completed ${s.daysLogged - (isCurrent ? 1 : 0) === 1 ? "day" : "days"}` : `${s.daysLogged} logged ${s.daysLogged === 1 ? "day" : "days"}`} in {monthName}{isCurrent && s.daysLogged > 1 ? " (today excluded)" : ""} · These are estimates that update as you log more
         </p>
 
         {/* Expandable details */}
@@ -256,7 +288,7 @@ function MonthlySummaryCard({ summary: s }: { summary: MonthlySummaryResponse })
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <Stat label="Days logged" value={String(s.daysLogged)} />
                 <Stat label="Calories eaten" value={fmt(s.totalFoodCaloriesKcal) + " kcal"} />
-                <Stat label="Calories burned" value={fmt(s.totalActivityCaloriesKcal) + " kcal"} />
+                <Stat label="Total burned" value={fmt(s.totalExpenditureKcal) + " kcal"} hint="BMR + activities + thermic effect" />
                 <Stat label="Net calories" value={fmt(s.actualMonthlyBalanceKcal) + " kcal"} accent />
                 <Stat label="Protein eaten" value={fmt(s.totalProteinGrams, 1) + " g"} />
               </div>
@@ -265,7 +297,7 @@ function MonthlySummaryCard({ summary: s }: { summary: MonthlySummaryResponse })
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Your daily averages</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <Stat label="Calories eaten per day" value={fmt(s.averageDailyFoodCaloriesKcal) + " kcal"} />
-                <Stat label="Calories burned per day" value={fmt(s.averageDailyExpenditureKcal) + " kcal"} />
+                <Stat label="Total burned per day" value={fmt(s.averageDailyExpenditureKcal) + " kcal"} hint="BMR + activities + thermic effect" />
                 <Stat label="Net calories per day" value={fmt(s.averageDailyBalanceKcal) + " kcal"} accent />
               </div>
             </div>
@@ -279,9 +311,30 @@ function MonthlySummaryCard({ summary: s }: { summary: MonthlySummaryResponse })
 
 /* --- Daily Logs Card --- */
 
-function DailyLogsCard({ days, unloggedDays, onDayClick }: { days: DailyLogResponse[]; unloggedDays: string[]; onDayClick: (date: string) => void }) {
+function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days: DailyLogResponse[]; unloggedDays: string[]; onDayClick: (date: string) => void; onDayDeleted: () => void }) {
   const [showFullTable, setShowFullTable] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const todayStr = toDateString();
+
+  function handleDeleteClick(e: React.MouseEvent, date: string) {
+    e.stopPropagation();
+    setDeleteTarget(date);
+    setDeleteError(null);
+  }
+
+  function handleDeleteConfirm() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError(null);
+    dailyLogService
+      .deleteDay(deleteTarget)
+      .then(() => { setDeleteTarget(null); onDayDeleted(); })
+      .catch((err) => setDeleteError(extractApiError(err, "Failed to delete this day. Please try again.")))
+      .finally(() => setDeleting(false));
+  }
 
   return (
     <Card title="Your logged days" subtitle="Click any day to see how it went">
@@ -298,10 +351,11 @@ function DailyLogsCard({ days, unloggedDays, onDayClick }: { days: DailyLogRespo
                 <tr className="bg-gray-50/80 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-500 sticky top-0 z-10">
                   <th className="py-2.5 px-3 text-left">Date</th>
                   {showFullTable && <th className="py-2.5 px-2 text-right">Eaten</th>}
-                  {showFullTable && <th className="py-2.5 px-2 text-right font-medium text-gray-400">Burned</th>}
+                  {showFullTable && <th className="py-2.5 px-2 text-right font-medium text-gray-400" title="BMR + activities + thermic effect">Total burned</th>}
                   <th className="py-2.5 px-2 text-right">Result</th>
                   <th className="py-2.5 px-2 text-right">Protein</th>
                   {showFullTable && <th className="py-2.5 px-2 text-right font-medium text-gray-400">vs. Goal</th>}
+                  <th className="py-2.5 px-2 text-center w-10"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -316,7 +370,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick }: { days: DailyLogRespo
                       {formatDayLabel(d.logDate)}
                     </td>
                     {showFullTable && <td className="py-2.5 px-2 text-right tabular-nums font-semibold text-gray-900">{fmt(d.totalFoodCaloriesKcal)} kcal</td>}
-                    {showFullTable && <td className="py-2.5 px-2 text-right tabular-nums text-gray-400">{fmt(d.totalActivityCaloriesKcal)} kcal</td>}
+                    {showFullTable && <td className="py-2.5 px-2 text-right tabular-nums text-gray-400">{fmt(d.totalDailyExpenditureKcal)} kcal</td>}
                     <td className="py-2.5 px-2 text-right">
                       <FriendlyBalance value={d.netBalanceKcal} />
                     </td>
@@ -326,6 +380,17 @@ function DailyLogsCard({ days, unloggedDays, onDayClick }: { days: DailyLogRespo
                         <FriendlyGoalDelta value={d.dailyGoalDeltaKcal} />
                       </td>
                     )}
+                    <td className="py-2.5 px-2 text-center">
+                      {d.logDate !== todayStr && (
+                        <button
+                          onClick={(e) => handleDeleteClick(e, d.logDate)}
+                          title="Delete this day"
+                          className="inline-flex items-center justify-center rounded p-1 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-red-50 transition-all focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
+                        >
+                          <TrashIcon />
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -345,7 +410,18 @@ function DailyLogsCard({ days, unloggedDays, onDayClick }: { days: DailyLogRespo
                     <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${d.netBalanceKcal <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
                     {formatDayLabel(d.logDate)}
                   </span>
-                  <FriendlyBalance value={d.netBalanceKcal} />
+                  <div className="flex items-center gap-2">
+                    <FriendlyBalance value={d.netBalanceKcal} />
+                    {d.logDate !== todayStr && (
+                      <button
+                        onClick={(e) => handleDeleteClick(e, d.logDate)}
+                        title="Delete this day"
+                        className="inline-flex items-center justify-center rounded p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
+                      >
+                        <TrashIcon />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
                   <span>Protein: <span className="font-medium text-gray-700">{fmt(d.totalProteinGrams, 1)} g</span></span>
@@ -355,7 +431,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick }: { days: DailyLogRespo
                 </div>
                 {showFullTable && (
                   <div className="mt-1.5 pt-1.5 border-t border-gray-50 flex flex-wrap items-center gap-x-3 text-xs text-gray-400">
-                    <span>Burned: {fmt(d.totalActivityCaloriesKcal)} kcal</span>
+                    <span>Total burned: {fmt(d.totalDailyExpenditureKcal)} kcal</span>
                     <span>vs. Goal: <FriendlyGoalDelta value={d.dailyGoalDeltaKcal} /></span>
                   </div>
                 )}
@@ -396,6 +472,17 @@ function DailyLogsCard({ days, unloggedDays, onDayClick }: { days: DailyLogRespo
             </div>
           )}
         </div>
+      )}
+
+      {/* Delete confirmation dialog */}
+      {deleteTarget && (
+        <DeleteDayDialog
+          date={deleteTarget}
+          deleting={deleting}
+          error={deleteError}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => { setDeleteTarget(null); setDeleteError(null); }}
+        />
       )}
     </Card>
   );
@@ -513,6 +600,72 @@ function DayDetail({ date }: { date: string }) {
   );
 }
 
+/* --- Delete Day Confirmation Dialog --- */
+
+function DeleteDayDialog({ date, deleting, error, onConfirm, onCancel }: {
+  date: string;
+  deleting: boolean;
+  error: string | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={onCancel} aria-hidden="true" />
+      <div className="relative w-full max-w-sm rounded-xl border border-gray-200 bg-white p-5 shadow-xl">
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50">
+            <svg className="h-5 w-5 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          </span>
+          <div className="min-w-0">
+            <h3 id="delete-dialog-title" className="text-base font-semibold text-gray-900">Delete this day?</h3>
+            <p className="mt-1.5 text-sm text-gray-500">
+              All meals, activities, and data for <span className="font-medium text-gray-700">{formatDayLabel(date)}</span> will be permanently removed. Your weekly and monthly summaries will be recalculated.
+            </p>
+            <p className="mt-1 text-xs text-gray-400">This action cannot be undone.</p>
+          </div>
+        </div>
+
+        {error && (
+          <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+        )}
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            disabled={deleting}
+            className="rounded-md border border-gray-300 px-3.5 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={deleting}
+            className="rounded-md bg-red-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
+          >
+            {deleting ? "Deleting…" : "Yes, delete"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
+  );
+}
+
 /* --- Helpers --- */
 
 function DetailsToggle({ open, onToggle, label }: { open: boolean; onToggle: () => void; label: string }) {
@@ -585,11 +738,12 @@ function Card({ title, subtitle, variant, children }: { title: string; subtitle?
   );
 }
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function Stat({ label, value, accent, hint }: { label: string; value: string; accent?: boolean; hint?: string }) {
   return (
     <div>
       <p className="text-xs text-gray-400">{label}</p>
       <p className={"text-lg font-semibold " + (accent ? "text-indigo-600" : "text-gray-900")}>{value}</p>
+      {hint && <p className="text-[10px] text-gray-400/70 leading-tight">{hint}</p>}
     </div>
   );
 }

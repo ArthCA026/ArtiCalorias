@@ -142,6 +142,28 @@ public class DailyLogService : IDailyLogService
         await _recalculation.RecalculateFullPipelineAsync(dailyLogId);
     }
 
+    public async Task DeleteByDateAsync(long userId, DateOnly date)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (date == today)
+            throw new InvalidOperationException("You cannot delete the current day.");
+
+        var log = await _db.DailyLogs
+            .FirstOrDefaultAsync(d => d.UserId == userId && d.LogDate == date)
+            ?? throw new InvalidOperationException("No log found for the specified date.");
+
+        // Capture context needed for recalculation before deletion
+        var weekStart = log.WeekStartDate;
+        var weekEnd = log.WeekEndDate;
+        var baseDailyGoal = log.SnapshotDailyBaseGoalKcal;
+
+        _db.DailyLogs.Remove(log);
+        await _db.SaveChangesAsync();
+
+        // Recalculate affected weekly and monthly summaries
+        await _recalculation.RecalculateAfterDayDeletionAsync(userId, date, weekStart, weekEnd, baseDailyGoal);
+    }
+
     private static (DateOnly weekStart, DateOnly weekEnd) GetWeekRange(DateOnly date)
     {
         var daysFromMonday = ((int)date.DayOfWeek + 6) % 7;
@@ -153,12 +175,14 @@ public class DailyLogService : IDailyLogService
     private static void CalculateActivityCalories(ActivityEntry entry, decimal weightKg)
     {
         // Subtract 1 MET: BMR is already counted separately in total expenditure.
+        // Activities with MET < 1 (e.g. Sleep at 0.9) yield negative net calories,
+        // meaning they burn less than the resting baseline and reduce total expenditure.
         switch (entry.ActivityType)
         {
             case "MET_SIMPLE":
                 if (entry.METValue.HasValue && entry.DurationMinutes.HasValue)
                 {
-                    var netMet = Math.Max(0m, entry.METValue.Value - 1m);
+                    var netMet = entry.METValue.Value - 1m;
                     entry.CalculatedCaloriesKcal =
                         netMet * weightKg * (entry.DurationMinutes.Value / 60m);
                 }
@@ -168,7 +192,7 @@ public class DailyLogService : IDailyLogService
                 decimal total = 0;
                 foreach (var seg in entry.Segments)
                 {
-                    var netSegMet = Math.Max(0m, seg.METValue - 1m);
+                    var netSegMet = seg.METValue - 1m;
                     seg.CalculatedCaloriesKcal = netSegMet * weightKg * (seg.DurationMinutes / 60m);
                     total += seg.CalculatedCaloriesKcal;
                 }

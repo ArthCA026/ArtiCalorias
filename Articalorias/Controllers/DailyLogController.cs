@@ -235,6 +235,14 @@ public class DailyLogController : ControllerBase
         return NoContent();
     }
 
+    [HttpDelete("{date}")]
+    public async Task<IActionResult> DeleteDay(DateOnly date)
+    {
+        var userId = GetUserId();
+        await _dailyLogService.DeleteByDateAsync(userId, date);
+        return NoContent();
+    }
+
     // ── Helpers ──
 
     private long GetUserId()

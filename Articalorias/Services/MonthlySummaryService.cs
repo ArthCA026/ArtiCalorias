@@ -53,27 +53,46 @@ public class MonthlySummaryService : IMonthlySummaryService
             _db.MonthlySummaries.Add(summary);
         }
 
-        summary.TotalFoodCaloriesKcal = logs.Sum(d => d.TotalFoodCaloriesKcal);
-        summary.TotalProteinGrams = logs.Sum(d => d.TotalProteinGrams);
-        summary.TotalFatGrams = logs.Sum(d => d.TotalFatGrams);
-        summary.TotalCarbsGrams = logs.Sum(d => d.TotalCarbsGrams);
-        summary.TotalAlcoholGrams = logs.Sum(d => d.TotalAlcoholGrams);
-        summary.TotalActivityCaloriesKcal = logs.Sum(d => d.TotalActivityCaloriesKcal);
-        summary.TotalTEFKcal = logs.Sum(d => d.TEFKcal);
-        summary.TotalExpenditureKcal = logs.Sum(d => d.TotalDailyExpenditureKcal);
-        summary.ActualMonthlyBalanceKcal = logs.Sum(d => d.NetBalanceKcal);
+        // Count all logged days including today
         summary.DaysLogged = logs.Count;
 
-        if (summary.DaysLogged > 0)
+        // For calculations, exclude today's incomplete data
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var logsExcludingToday = logs.Where(d => d.LogDate < today).ToList();
+
+        summary.TotalFoodCaloriesKcal = logsExcludingToday.Sum(d => d.TotalFoodCaloriesKcal);
+        summary.TotalProteinGrams = logsExcludingToday.Sum(d => d.TotalProteinGrams);
+        summary.TotalFatGrams = logsExcludingToday.Sum(d => d.TotalFatGrams);
+        summary.TotalCarbsGrams = logsExcludingToday.Sum(d => d.TotalCarbsGrams);
+        summary.TotalAlcoholGrams = logsExcludingToday.Sum(d => d.TotalAlcoholGrams);
+        summary.TotalActivityCaloriesKcal = logsExcludingToday.Sum(d => d.TotalActivityCaloriesKcal);
+        summary.TotalTEFKcal = logsExcludingToday.Sum(d => d.TEFKcal);
+        summary.TotalExpenditureKcal = logsExcludingToday.Sum(d => d.TotalDailyExpenditureKcal);
+        summary.ActualMonthlyBalanceKcal = logsExcludingToday.Sum(d => d.NetBalanceKcal);
+
+        // Calculate averages based on completed days only
+        var daysForCalculations = logsExcludingToday.Count;
+
+        if (daysForCalculations > 0)
         {
-            summary.AverageDailyFoodCaloriesKcal = summary.TotalFoodCaloriesKcal / summary.DaysLogged;
-            summary.AverageDailyExpenditureKcal = summary.TotalExpenditureKcal / summary.DaysLogged;
-            summary.AverageDailyBalanceKcal = summary.ActualMonthlyBalanceKcal / summary.DaysLogged;
+            summary.AverageDailyFoodCaloriesKcal = summary.TotalFoodCaloriesKcal / daysForCalculations;
+            summary.AverageDailyExpenditureKcal = summary.TotalExpenditureKcal / daysForCalculations;
+            summary.AverageDailyBalanceKcal = summary.ActualMonthlyBalanceKcal / daysForCalculations;
             summary.AverageWeeklyBalanceKcal = summary.AverageDailyBalanceKcal * 7;
+        }
+        else
+        {
+            // Only today is logged - reset calculations to zero
+            summary.AverageDailyFoodCaloriesKcal = 0;
+            summary.AverageDailyExpenditureKcal = 0;
+            summary.AverageDailyBalanceKcal = 0;
+            summary.AverageWeeklyBalanceKcal = 0;
         }
 
         // 1 kg ≈ 7700 kcal
-        summary.EstimatedWeightChangeKg = summary.ActualMonthlyBalanceKcal / 7700m;
+        summary.EstimatedWeightChangeKg = daysForCalculations > 0 
+            ? summary.ActualMonthlyBalanceKcal / 7700m 
+            : null;
 
         summary.LastCalculatedAtUtc = DateTime.UtcNow;
         summary.UpdatedAtUtc = DateTime.UtcNow;
