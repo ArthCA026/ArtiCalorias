@@ -245,7 +245,7 @@ export default function ActivitiesPage() {
   const systemTemplates = templates.filter((t) => t.templateScope === "SYSTEM");
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 overflow-x-hidden">
       {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Your Saved Activities</h1>
@@ -305,7 +305,7 @@ export default function ActivitiesPage() {
 
         {aiParsed && aiParsed.length > 0 && (
           <div className="mt-4 space-y-3 rounded-lg border border-indigo-100 bg-indigo-50/30 p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Review &amp; adjust</p>
               <p className="text-xs text-gray-400">You can edit these before saving</p>
             </div>
@@ -575,7 +575,7 @@ export default function ActivitiesPage() {
         >
           <div className="divide-y divide-gray-100 rounded-lg border border-gray-100 bg-white/80 overflow-hidden">
             {systemTemplates.map((t) => (
-              <div key={t.activityTemplateId} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
+              <div key={t.activityTemplateId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 hover:bg-gray-50 transition-colors">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-medium text-gray-700 text-sm">{friendlyName(t.templateName)}</p>
@@ -590,7 +590,7 @@ export default function ActivitiesPage() {
                     <p className="text-xs text-gray-400 italic mt-0.5">{friendlyHint(t.templateName)}</p>
                   )}
                 </div>
-                <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none flex-shrink-0 group">
+                <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none flex-shrink-0 group whitespace-nowrap">
                   <input
                     type="checkbox"
                     checked={t.autoAddToNewDay}
@@ -660,8 +660,8 @@ function Card({
         : "text-sm font-semibold uppercase tracking-wide text-gray-500";
 
   return (
-    <section className={`${sectionClass} p-4 sm:p-5`}>
-      <div className="flex items-center gap-2 mb-1">
+    <section className={`${sectionClass} p-4 sm:p-5 overflow-hidden`}>
+      <div className="flex items-center gap-2 mb-1 flex-wrap">
         {icon && <span className={variant === "muted" ? "text-gray-400" : "text-indigo-500"} aria-hidden="true">{icon}</span>}
         <h2 className={titleClass}>{title}</h2>
       </div>

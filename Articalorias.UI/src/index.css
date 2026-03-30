@@ -1,6 +1,21 @@
 @import "tailwindcss";
 
 /*
+ * Prevent horizontal overflow at the page level.
+ * Ensure body and root elements never exceed viewport width.
+ */
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+#root {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/*
  * Visible focus ring for keyboard navigation.
  * Uses :focus-visible so mouse clicks don't show the ring.
  */
