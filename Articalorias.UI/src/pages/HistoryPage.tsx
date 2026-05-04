@@ -1,4 +1,4 @@
-ï»¿import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router";
 import {
   ResponsiveContainer,
@@ -12,7 +12,6 @@ import {
   ReferenceLine,
   ReferenceArea,
   Tooltip,
-  type TooltipProps,
 } from "recharts";
 import { historyService } from "@/services/historyService";
 import { dailyLogService } from "@/services/dailyLogService";
@@ -73,7 +72,7 @@ function MonthlyView() {
         setDays(dailyData);
         setSummary(monthlyData);
       })
-      .catch(() => setError("Couldn't load your history â€” please try again."))
+      .catch(() => setError("Couldn't load your history — please try again."))
       .finally(() => setLoading(false));
   }, [year, month]);
 
@@ -108,7 +107,7 @@ function MonthlyView() {
     <div className="space-y-6">
       <div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Your Month ðŸ“…</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Your Month ??</h1>
           <div className="flex items-center gap-3">
             <button onClick={goPrev} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">&larr; Prev</button>
             <span className="min-w-[160px] text-center text-sm font-semibold text-gray-700">{monthLabel}</span>
@@ -173,7 +172,7 @@ function MonthlySummaryCard({ summary: s }: { summary: MonthlySummaryResponse })
               <Stat label="Avg. daily balance" value={`${fmt(avgBalance)} kcal`} accent />
               <Stat label="Avg. protein / day" value={`${fmt(avgProtein, 1)} g`} />
               {weightChange != null && (
-                <Stat label="Est. weight change" value={`${weightChange <= 0 ? "âˆ’" : "+"}${fmt(Math.abs(weightChange), 2)} kg`} />
+                <Stat label="Est. weight change" value={`${weightChange <= 0 ? "-" : "+"}${fmt(Math.abs(weightChange), 2)} kg`} />
               )}
               <Stat label="Calories eaten" value={`${fmt(s.totalFoodCaloriesKcal)} kcal`} />
               <Stat label="Total burned" value={`${fmt(s.totalExpenditureKcal)} kcal`} hint="BMR + activities + thermic effect" />
@@ -218,7 +217,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
   return (
     <Card title="Your logged days" subtitle="Click any day to see how it went">
       {days.length === 0 ? (
-        <EmptyState message="No logged days yet â€” you can add a missed day below." />
+        <EmptyState message="No logged days yet — you can add a missed day below." />
       ) : (
         <>
           {/* Desktop table */}
@@ -379,7 +378,7 @@ function getTrendColor(rollingAvg: number | null): string {
 
 /**
  * Picks a clean symmetric Y-axis domain around zero.
- * e.g. max abs 680 â†’ step 300, domain [-900, +900], ticks [-900,-600,-300,0,300,600,900]
+ * e.g. max abs 680 ? step 300, domain [-900, +900], ticks [-900,-600,-300,0,300,600,900]
  */
 function calculateSymmetricDomain(values: number[]): {
   yMin: number;
@@ -409,7 +408,7 @@ function formatYAxisTickMobile(value: number): string {
   if (value === 0) return "Goal";
   const abs = Math.abs(value);
   const label = abs >= 1000 ? `${abs / 1000}k` : `${abs}`;
-  return value < 0 ? `âˆ’${label}` : `+${label}`;
+  return value < 0 ? `-${label}` : `+${label}`;
 }
 
 function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
@@ -439,7 +438,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
   const lastRolling = points[points.length - 1]?.rollingAvg ?? null;
   const lineColor = getTrendColor(lastRolling);
 
-  // Symmetric domain with clean step â€” same absolute bound above and below zero
+  // Symmetric domain with clean step — same absolute bound above and below zero
   const allValues = points.flatMap((p) => [p.goalDelta, p.rollingAvg ?? p.goalDelta]);
   const domain = calculateSymmetricDomain(allValues);
 
@@ -447,9 +446,9 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
   const tickStep = points.length <= 10 ? 1 : points.length <= 20 ? 2 : Math.ceil(points.length / 10);
   const xTicks = points.filter((_, i) => i % tickStep === 0).map((p) => p.label);
 
-  function TooltipContent({ active, payload }: TooltipProps<number, string>) {
+  function TooltipContent({ active, payload }: { active?: boolean; payload?: { payload?: TrendPoint }[] }) {
     if (!active || !payload || payload.length === 0) return null;
-    const point = (payload[0] as { payload?: TrendPoint })?.payload;
+    const point = payload[0]?.payload;
     if (!point) return null;
     const daily = point.goalDelta;
     return (
@@ -477,7 +476,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
         <>
           {!hasEnoughForFullWindow && (
             <p className="mb-2 text-[10px] text-gray-400">
-              Building trend â€” {days.length} day{days.length !== 1 ? "s" : ""} logged
+              Building trend — {days.length} day{days.length !== 1 ? "s" : ""} logged
             </p>
           )}
 
@@ -506,7 +505,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
                   tickFormatter={isMobile ? formatYAxisTickMobile : formatYAxisTick}
                   width={isMobile ? 40 : 68}
                 />
-                {/* Goal line â€” zero is the user's personal calorie goal for each specific day */}
+                {/* Goal line — zero is the user's personal calorie goal for each specific day */}
                 <ReferenceLine
                   y={0}
                   stroke="#6b7280"
@@ -521,7 +520,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
                   wrapperStyle={{ zIndex: 10 }}
                 />
 
-                {/* Daily deviation bars â€” green = under goal, orange = over goal */}
+                {/* Daily deviation bars — green = under goal, orange = over goal */}
                 <Bar dataKey="goalDelta" name="daily" maxBarSize={18} radius={[2, 2, 2, 2]}>
                   {points.map((p) => (
                     <Cell
@@ -532,7 +531,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
                   ))}
                 </Bar>
 
-                {/* Rolling average â€” main trend line drawn on top of bars */}
+                {/* Rolling average — main trend line drawn on top of bars */}
                 <Line
                   type="monotone"
                   dataKey="rollingAvg"
@@ -634,7 +633,7 @@ function DeleteDayDialog({ date, deleting, error, onConfirm, onCancel }: {
             disabled={deleting}
             className="rounded-md bg-red-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
           >
-            {deleting ? "Deletingâ€¦" : "Yes, delete"}
+            {deleting ? "Deleting…" : "Yes, delete"}
           </button>
         </div>
       </div>
