@@ -350,48 +350,6 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
     </Card>
   );
 }
-
-/* --- Trend Cues --- */
-
-function TrendCues({ days }: { days: DailyLogResponse[] }) {
-  if (days.length < 2) return null;
-
-  const cues: { icon: string; text: string }[] = [];
-
-  // Deficit / surplus pattern
-  const deficitCount = days.filter((d) => d.netBalanceKcal <= 0).length;
-  if (deficitCount === days.length) {
-    cues.push({ icon: "✅", text: `All ${days.length} logged days were under your target` });
-  } else if (deficitCount > 0) {
-    cues.push({ icon: "📊", text: `${deficitCount} of ${days.length} logged days were under your target` });
-  } else {
-    cues.push({ icon: "📊", text: "Your logged days were above target — small adjustments can shift the trend" });
-  }
-
-  // Best protein day
-  const best = days.reduce((a, b) => (b.totalProteinGrams > a.totalProteinGrams ? b : a), days[0]);
-  if (best.totalProteinGrams > 0) {
-    const label = new Date(best.logDate + "T00:00:00").toLocaleDateString("default", { weekday: "short", month: "short", day: "numeric" });
-    cues.push({ icon: "💪", text: `Best protein day: ${label} (${fmt(best.totalProteinGrams, 0)} g)` });
-  }
-
-  if (cues.length === 0) return null;
-
-  return (
-    <div className="flex flex-wrap gap-2">
-      {cues.map((c, i) => (
-        <span
-          key={i}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50/60 px-3.5 py-2 text-sm text-indigo-700"
-        >
-          <span aria-hidden="true">{c.icon}</span>
-          {c.text}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 /* --- Balance Trend Chart --- */
 
 interface TrendPoint {
@@ -692,32 +650,6 @@ function TrashIcon() {
       <line x1="10" y1="11" x2="10" y2="17" />
       <line x1="14" y1="11" x2="14" y2="17" />
     </svg>
-  );
-}
-
-/* --- Helpers --- */
-
-function DetailsToggle({ open, onToggle, label }: { open: boolean; onToggle: () => void; label: string }) {
-  return (
-    <button
-      onClick={onToggle}
-      aria-expanded={open}
-      className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 font-medium rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
-    >
-      <svg
-        className={`h-4 w-4 transition-transform ${open ? "rotate-90" : ""}`}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <polyline points="9 18 15 12 9 6" />
-      </svg>
-      {open ? `Hide ${label}` : `See ${label}`}
-    </button>
   );
 }
 
