@@ -449,7 +449,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
 
   function TooltipContent({ active, payload }: TooltipProps<number, string>) {
     if (!active || !payload || payload.length === 0) return null;
-    const point = payload[0]?.payload as TrendPoint | undefined;
+    const point = (payload[0] as { payload?: TrendPoint })?.payload;
     if (!point) return null;
     const daily = point.goalDelta;
     return (
