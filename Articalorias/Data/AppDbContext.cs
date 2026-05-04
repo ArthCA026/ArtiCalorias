@@ -17,6 +17,7 @@ public class AppDbContext : DbContext
     public DbSet<ActivityEntrySegment> ActivityEntrySegments => Set<ActivityEntrySegment>();
     public DbSet<WeeklySummary> WeeklySummaries => Set<WeeklySummary>();
     public DbSet<MonthlySummary> MonthlySummaries => Set<MonthlySummary>();
+    public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

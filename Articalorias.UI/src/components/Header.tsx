@@ -7,7 +7,7 @@ const navItems = [
   { to: '/history', label: 'History' },
   { to: '/activities', label: 'Activities' },
   { to: '/profile', label: 'Profile' },
-  // { to: '/settings', label: 'Settings' },
+  { to: '/settings', label: 'Settings (WIP)' },
 ];
 
 export default function Header() {

@@ -51,6 +51,14 @@ public static class ServiceCollectionExtensions
         // OpenAI activity parsing
         services.AddScoped<IActivityParsingService, ActivityParsingService>();
 
+        // Push notifications
+        services.Configure<VapidSettings>(configuration.GetSection(VapidSettings.SectionName));
+        services.AddScoped<IPushNotificationService, PushNotificationService>();
+
+        // Meal reminder background service
+        services.Configure<MealReminderSettings>(configuration.GetSection(MealReminderSettings.SectionName));
+        services.AddHostedService<MealReminderService>();
+
         return services;
     }
 

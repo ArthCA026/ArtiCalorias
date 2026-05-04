@@ -1,4 +1,5 @@
 import { useState, Fragment } from "react";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 /* ─── tiny helpers ─────────────────────────────────────────── */
 
@@ -190,6 +191,7 @@ export default function SettingsPage() {
   const [showCalorieDecimals, setShowCalorieDecimals] = useState(false);
 
   /* Notifications */
+  const push = usePushNotifications();
   const [dailyReminder, setDailyReminder] = useState(true);
   const [weeklyReport, setWeeklyReport] = useState(false);
   const [goalAlerts, setGoalAlerts] = useState(true);
@@ -338,28 +340,49 @@ export default function SettingsPage() {
             </svg>
           }
         >
-          <SettingRow label="Daily log reminder" description="Get a nudge to log your meals each day.">
-            <Toggle checked={dailyReminder} onChange={setDailyReminder} />
+          <SettingRow
+            label="Push notifications"
+            description={
+              !push.supported
+                ? "Not supported in this browser."
+                : push.permission === "denied"
+                ? "Blocked by your browser — update site permissions to re-enable."
+                : "Allow ArtiCalorias to send you notifications when installed as an app."
+            }
+          >
+            <Toggle
+              checked={push.subscribed}
+              disabled={push.loading || !push.supported || push.permission === "denied"}
+              onChange={(on) => (on ? push.subscribe() : push.unsubscribe())}
+            />
           </SettingRow>
 
-          {dailyReminder && (
-            <SettingRow label="Reminder time" description="The time you'd like to receive your daily reminder.">
-              <input
-                type="time"
-                value={reminderTime}
-                onChange={(e) => setReminderTime(e.target.value)}
-                className="rounded-md border border-gray-300 px-2.5 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-              />
-            </SettingRow>
+          {push.subscribed && (
+            <>
+              <SettingRow label="Daily log reminder" description="Get a nudge to log your meals each day.">
+                <Toggle checked={dailyReminder} onChange={setDailyReminder} />
+              </SettingRow>
+
+              {dailyReminder && (
+                <SettingRow label="Reminder time" description="The time you'd like to receive your daily reminder.">
+                  <input
+                    type="time"
+                    value={reminderTime}
+                    onChange={(e) => setReminderTime(e.target.value)}
+                    className="rounded-md border border-gray-300 px-2.5 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                  />
+                </SettingRow>
+              )}
+
+              <SettingRow label="Weekly progress report" description="A summary of your week delivered every Sunday.">
+                <Toggle checked={weeklyReport} onChange={setWeeklyReport} />
+              </SettingRow>
+
+              <SettingRow label="Goal alerts" description="Notify me when I'm close to hitting or exceeding my daily goal.">
+                <Toggle checked={goalAlerts} onChange={setGoalAlerts} />
+              </SettingRow>
+            </>
           )}
-
-          <SettingRow label="Weekly progress report" description="A summary of your week delivered every Sunday.">
-            <Toggle checked={weeklyReport} onChange={setWeeklyReport} />
-          </SettingRow>
-
-          <SettingRow label="Goal alerts" description="Notify me when I'm close to hitting or exceeding my daily goal.">
-            <Toggle checked={goalAlerts} onChange={setGoalAlerts} />
-          </SettingRow>
         </SectionCard>
 
         {/* ── Section 4: Privacy & Data ── */}

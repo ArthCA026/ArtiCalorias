@@ -17,6 +17,7 @@
     </PackageReference>
     <PackageReference Include="OpenAI" Version="2.9.1" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.6.9" />
+    <PackageReference Include="WebPush" Version="1.0.13" />
   </ItemGroup>
 
   <ItemGroup>
