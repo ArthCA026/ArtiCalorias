@@ -7,6 +7,7 @@ const navItems = [
   { to: '/history', label: 'History' },
   { to: '/activities', label: 'Activities' },
   { to: '/profile', label: 'Profile' },
+  // { to: '/settings', label: 'Settings' },
 ];
 
 export default function Header() {
@@ -55,7 +56,7 @@ export default function Header() {
           </div>
         </nav>
 
-        {/* Mobile Navigation — only the hamburger button inline */}
+        {/* Mobile Menu Button */}
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           className="md:hidden rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors flex-shrink-0"

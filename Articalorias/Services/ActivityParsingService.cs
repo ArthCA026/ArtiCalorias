@@ -48,7 +48,6 @@ public class ActivityParsingService : IActivityParsingService
 
         var options = new ChatCompletionOptions
         {
-            Temperature = 0.2f,
             ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
         };
 
@@ -87,7 +86,6 @@ public class ActivityParsingService : IActivityParsingService
 
         var options = new ChatCompletionOptions
         {
-            Temperature = 0.2f,
             ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
         };
 

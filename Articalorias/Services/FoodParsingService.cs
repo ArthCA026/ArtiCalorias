@@ -53,7 +53,6 @@ public class FoodParsingService : IFoodParsingService
 
         var options = new ChatCompletionOptions
         {
-            Temperature = 0.2f,
             ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
         };
 
@@ -75,8 +74,11 @@ public class FoodParsingService : IFoodParsingService
         // 3. Deserialize
         var items = DeserializeResponse(content);
 
-        // 4. Validate — bad AI output never reaches the frontend
-        return Validate(items);
+        // 3. Validate — bad AI output never reaches the frontend
+        var validated = Validate(items);
+
+        // 4. Scale per-unit nutrition by quantity
+        return Scale(validated);
     }
 
     // ─────────────────────────────────────────────────────
@@ -122,6 +124,14 @@ public class FoodParsingService : IFoodParsingService
             2. Known product, brand, or restaurant equivalent
             3. Generic food database estimates
 
+            CRITICAL: All nutritional values (caloriesKcal, proteinGrams, fatGrams, carbsGrams, alcoholGrams)
+            must represent EXACTLY 1 unit of the food — never the total for the whole quantity.
+            The caller will multiply by quantity. If you multiply, the result will be wrong.
+            Examples:
+              "5 huevos"   -> caloriesKcal = 70   (1 egg),   NOT 350
+              "2 Big Macs" -> caloriesKcal = 550  (1 Big Mac), NOT 1100
+              "3 manzanas" -> caloriesKcal = 95   (1 apple),  NOT 285
+
             - Use realistic, conservative estimates.
             - Never return negative values.
             - Round calories and macro values to 1 decimal place.
@@ -153,14 +163,14 @@ public class FoodParsingService : IFoodParsingService
             Each item must contain exactly these fields:
 
             - foodName (string)
-            - portionDescription (string)
-            - quantity (number)
+            - portionDescription (string) — describe ONE unit (e.g. "1 huevo entero", "1 rebanada")
+            - quantity (number) — how many units the user specified
             - unit (string)
-            - caloriesKcal (number)
-            - proteinGrams (number)
-            - fatGrams (number)
-            - carbsGrams (number)
-            - alcoholGrams (number)
+            - caloriesKcal (number) — for ONE unit only, never multiplied by quantity
+            - proteinGrams (number) — for ONE unit only, never multiplied by quantity
+            - fatGrams (number) — for ONE unit only, never multiplied by quantity
+            - carbsGrams (number) — for ONE unit only, never multiplied by quantity
+            - alcoholGrams (number) — for ONE unit only, never multiplied by quantity
 
             - Do not include additional fields.
             - Do not omit any fields.
@@ -218,6 +228,27 @@ public class FoodParsingService : IFoodParsingService
             throw new InvalidOperationException("All parsed items were invalid. Try again or enter manually.");
 
         return validated;
+    }
+
+    // ─────────────────────────────────────────────────────
+    //  Scale — multiply per-unit nutrition values by quantity
+    // ─────────────────────────────────────────────────────
+
+    private static IReadOnlyList<ParsedFoodItem> Scale(IReadOnlyList<ParsedFoodItem> items)
+    {
+        foreach (var item in items)
+        {
+            var qty = item.Quantity ?? 1m;
+            if (qty <= 0) qty = 1m;
+
+            item.CaloriesKcal = Math.Round(item.CaloriesKcal * qty, 1);
+            item.ProteinGrams = Math.Round(item.ProteinGrams * qty, 1);
+            item.FatGrams     = Math.Round(item.FatGrams     * qty, 1);
+            item.CarbsGrams   = Math.Round(item.CarbsGrams   * qty, 1);
+            item.AlcoholGrams = Math.Round(item.AlcoholGrams * qty, 1);
+        }
+
+        return items;
     }
 
     // ─────────────────────────────────────────────────────

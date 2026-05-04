@@ -20,7 +20,10 @@ public class RecalculationService : IRecalculationService
         _db = db;
     }
 
-    public async Task RecalculateFullPipelineAsync(long dailyLogId)
+    public Task RecalculateFullPipelineAsync(long dailyLogId)
+        => RecalculateFullPipelineAsync(dailyLogId, cascade: true);
+
+    private async Task RecalculateFullPipelineAsync(long dailyLogId, bool cascade)
     {
         // ── Step 1: Load DailyLog with all children ──
         var log = await _db.DailyLogs
@@ -81,6 +84,24 @@ public class RecalculationService : IRecalculationService
 
         // ── Step 10: Update MonthlySummary ──
         await RecalculateMonthlySummary(log.UserId, log.LogDate.Year, log.LogDate.Month);
+
+        // ── Step 11: Cascade — keep sibling days in the same week in sync ──
+        // When a past day changes its NetBalanceKcal, all other days in the week
+        // need their weekly-context fields (SuggestedDailyAverageRemainingKcal, etc.)
+        // recalculated. Without this, today's "adjusted budget" stays stale after
+        // you edit yesterday. cascade=false prevents infinite recursion.
+        if (cascade)
+        {
+            var siblingIds = await _db.DailyLogs
+                .Where(d => d.UserId == log.UserId
+                    && d.WeekStartDate == log.WeekStartDate
+                    && d.DailyLogId != dailyLogId)
+                .Select(d => d.DailyLogId)
+                .ToListAsync();
+
+            foreach (var siblingId in siblingIds)
+                await RecalculateFullPipelineAsync(siblingId, cascade: false);
+        }
     }
 
     public async Task RecalculateAfterDayDeletionAsync(long userId, DateOnly deletedDate, DateOnly weekStart, DateOnly weekEnd, decimal baseDailyGoal)
@@ -92,7 +113,7 @@ public class RecalculationService : IRecalculationService
             .ToListAsync();
 
         foreach (var logId in remainingWeekLogIds)
-            await RecalculateFullPipelineAsync(logId);
+            await RecalculateFullPipelineAsync(logId, cascade: false);
 
         if (remainingWeekLogIds.Count == 0)
         {

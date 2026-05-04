@@ -75,7 +75,11 @@ function DayProgress({ dash, isToday }: { dash: DailyDashboardResponse | null; i
 
   if (!dash) return <Card title={isToday ? "How you're doing today" : "How this day went"} variant="primary"><EmptyState message={isToday ? "Nothing logged yet — add your first meal to get started!" : "Nothing was logged for this day."} /></Card>;
 
-  const calRemaining = dash.caloriesRemainingToDailyTargetKcal;
+  const calRemaining = isToday
+    // Today: use the week-adjusted budget so past-day surplus/deficit is reflected
+    ? (dash.totalDailyExpenditureKcal + dash.suggestedDailyAverageRemainingKcal) - dash.totalFoodCaloriesKcal
+    // Past day: use the original snapshot goal for an accurate historical view
+    : dash.caloriesRemainingToDailyTargetKcal;
   const calOver = calRemaining < 0;
   const calAbs = Math.abs(calRemaining);
 

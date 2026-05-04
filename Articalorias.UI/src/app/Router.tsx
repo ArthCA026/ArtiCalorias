@@ -15,6 +15,7 @@ import DashboardPage from '@/pages/DashboardPage';
 import HistoryPage from '@/pages/HistoryPage';
 import ProfilePage from '@/pages/ProfilePage';
 import ActivitiesPage from '@/pages/ActivitiesPage';
+import SettingsPage from '@/pages/SettingsPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 
 const router = createBrowserRouter([
@@ -57,6 +58,7 @@ const router = createBrowserRouter([
           { path: '/history/:date', element: <HistoryPage /> },
           { path: '/profile', element: <ProfilePage /> },
           { path: '/activities', element: <ActivitiesPage /> },
+          { path: '/settings', element: <SettingsPage /> },
         ],
       },
     ],

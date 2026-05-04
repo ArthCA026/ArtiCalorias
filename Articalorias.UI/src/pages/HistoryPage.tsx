@@ -1,5 +1,19 @@
 ﻿import { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate, Link } from "react-router";
+import { useParams, useNavigate, useSearchParams, Link } from "react-router";
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  Bar,
+  Cell,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  ReferenceLine,
+  ReferenceArea,
+  Tooltip,
+  type TooltipProps,
+} from "recharts";
 import { historyService } from "@/services/historyService";
 import { dailyLogService } from "@/services/dailyLogService";
 import type { DailyLogResponse } from "@/types/dailyLog";
@@ -21,9 +35,16 @@ export default function HistoryPage() {
 
 function MonthlyView() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
+
+  // Seed year/month from ?m=YYYY-MM when returning from a day detail
+  const mParam = searchParams.get("m");
+  const initYear  = mParam ? parseInt(mParam.slice(0, 4))  : now.getFullYear();
+  const initMonth = mParam ? parseInt(mParam.slice(5, 7))  : now.getMonth() + 1;
+
+  const [year, setYear] = useState(initYear);
+  const [month, setMonth] = useState(initMonth);
   const [days, setDays] = useState<DailyLogResponse[]>([]);
   const [summary, setSummary] = useState<MonthlySummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -104,26 +125,11 @@ function MonthlyView() {
 
       {!loading && !error && (
         <>
-          {summary ? (
-            <MonthlySummaryCard summary={summary} />
-          ) : (
-            <Card title="How your month is going" variant="primary">
-              <p className="text-sm text-gray-500 italic">
-                No data for this month yet — head to your{" "}
-                <Link to="/today" className="font-medium text-indigo-600 hover:text-indigo-800 not-italic">Daily page</Link>
-                {" "}to start logging.
-              </p>
-            </Card>
-          )}
-          {days.length >= 2 && (
-            <div className="space-y-3">
-              <TrendCues days={days} />
-              <BalanceTrend days={days} />
-            </div>
-          )}
+          {days.length >= 1 && <BalanceTrend days={days} />}
           {(days.length > 0 || unloggedDays.length > 0) && (
             <DailyLogsCard days={days} unloggedDays={unloggedDays} onDayClick={(d) => navigate("/history/" + d)} onDayDeleted={load} />
           )}
+          {summary && <MonthlySummaryCard summary={summary} />}
         </>
       )}
     </div>
@@ -133,175 +139,49 @@ function MonthlyView() {
 /* --- Monthly Summary Card --- */
 
 function MonthlySummaryCard({ summary: s }: { summary: MonthlySummaryResponse }) {
-  const [showDetails, setShowDetails] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const avgBalance = s.averageDailyBalanceKcal;
-  const isDeficit = avgBalance <= 0;
   const avgProtein = s.daysLogged > 0 ? s.totalProteinGrams / s.daysLogged : 0;
   const weightChange = s.estimatedWeightChangeKg;
-  const monthName = new Date(s.yearNumber, s.monthNumber - 1).toLocaleString("default", { month: "long" });
   const today = new Date();
   const daysInMonth = new Date(s.yearNumber, s.monthNumber, 0).getDate();
   const isCurrent = s.yearNumber === today.getFullYear() && s.monthNumber === today.getMonth() + 1;
   const totalDays = isCurrent ? today.getDate() : daysInMonth;
 
-  // Check if only today is logged (calculations will be zero/null)
-  const hasCompletedDays = avgBalance !== 0 || s.totalFoodCaloriesKcal > 0 || s.totalProteinGrams > 0;
-
-  // Coaching status — friendly, supportive
-  let statusText: string;
-  if (s.daysLogged === 0) {
-    statusText = "No days logged yet — your monthly picture builds as you track each day";
-  } else if (!hasCompletedDays) {
-    statusText = "Your first day is in progress! Come back tomorrow to see your monthly averages start taking shape";
-  } else if (s.daysLogged <= 3) {
-    statusText = "Just getting started — your averages will get more accurate as you log more days";
-  } else if (isDeficit) {
-    statusText = Math.abs(avgBalance) > 300
-      ? "You're making solid progress this month — keep it up!"
-      : "You're in a slight deficit — steady and sustainable wins the race";
-  } else {
-    statusText = avgBalance > 300
-      ? "You're trending above your target — small adjustments can make a big difference"
-      : "You're close to maintenance — a small tweak could get you back on track";
-  }
-
-  if (s.daysLogged === 0) {
-    return (
-      <Card title="How your month is going" variant="primary">
-        <div className="space-y-2.5">
-          <p className="text-sm text-gray-500 italic">{statusText}</p>
-          <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-600">
-            0 of {totalDays} {totalDays === 1 ? "day" : "days"} logged
-          </span>
-          <p className="text-sm text-gray-400">
-            Head to your{" "}
-            <Link to="/today" className="font-medium text-indigo-600 hover:text-indigo-800">Daily page</Link>
-            {" "}to log your first day — it only takes a minute.
-          </p>
-        </div>
-      </Card>
-    );
-  }
-
-  // Only today is logged - show encouraging message without confusing incomplete data
-  if (!hasCompletedDays) {
-    return (
-      <Card title="How your month is going" variant="primary">
-        <div className="space-y-2.5">
-          <p className="text-sm text-gray-500 italic">{statusText}</p>
-
-          <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-600">
-            {s.daysLogged} of {totalDays} {totalDays === 1 ? "day" : "days"} logged
-          </span>
-
-          <div className="space-y-1">
-            <p className="text-sm text-gray-600">
-              Keep going! Your monthly insights will appear here once you complete today and start building your history.
-            </p>
-          </div>
-
-          <p className="text-[11px] text-gray-400">
-            Monthly averages exclude today's incomplete data to give you the most accurate picture
-          </p>
-        </div>
-      </Card>
-    );
-  }
-
   return (
     <Card title="How your month is going" variant="primary">
       <div className="space-y-2.5">
-        {/* Coaching status */}
-        <p className="text-sm text-gray-500 italic">{statusText}</p>
-
-        {/* Consistency cue */}
-        <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-600">
-          {s.daysLogged} of {totalDays} {totalDays === 1 ? "day" : "days"} logged
-        </span>
-
-        {/* Calories per day — primary metric */}
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Calories per day</p>
-          <p className={`text-sm font-medium ${isDeficit ? "text-green-700" : "text-amber-600"}`}>
-            {isDeficit
-              ? `${fmt(Math.abs(avgBalance))} kcal under your target per day — you're heading in the right direction`
-              : `${fmt(avgBalance)} kcal over your target per day — that's okay, small shifts add up over time`}
-          </p>
-        </div>
-
-        {/* Protein per day — secondary metric */}
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Protein per day</p>
-          <p className="text-sm font-medium text-indigo-600">
-            {fmt(avgProtein, 1)} g per day
-          </p>
-          <p className="text-xs text-gray-400 italic">Protein helps you stay fuller and protects muscle while losing weight</p>
-        </div>
-
-        {/* How your weight is trending */}
-        {weightChange != null && (
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">How your weight is trending</p>
-            <p className={`text-sm font-medium ${weightChange <= 0 ? "text-green-700" : "text-amber-600"}`}>
-              {weightChange <= 0
-                ? `About ${fmt(Math.abs(weightChange), 2)} kg lost so far this month`
-                : `About ${fmt(weightChange, 2)} kg gained so far this month`}
-            </p>
-            {weightChange > 0 && (
-              <p className="text-xs text-amber-500/80 italic">Weight fluctuates — focus on the overall trend over weeks</p>
-            )}
-          </div>
-        )}
-
-        {/* Trust note */}
-        <p className="text-[11px] text-gray-400">
-          Based on {s.daysLogged > 1 ? `${s.daysLogged - (isCurrent ? 1 : 0)} completed ${s.daysLogged - (isCurrent ? 1 : 0) === 1 ? "day" : "days"}` : `${s.daysLogged} logged ${s.daysLogged === 1 ? "day" : "days"}`} in {monthName}{isCurrent && s.daysLogged > 1 ? " (today excluded)" : ""} · These are estimates that update as you log more
-        </p>
-
-        {/* Expandable details */}
         <button
-          onClick={() => setShowDetails((v) => !v)}
-          aria-expanded={showDetails}
-          aria-controls="monthly-summary-details"
+          onClick={() => setOpen((v) => !v)}
           className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 font-medium rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
         >
           <svg
-            className={`h-4 w-4 transition-transform ${showDetails ? "rotate-90" : ""}`}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
+            className={`h-4 w-4 transition-transform ${open ? "rotate-90" : ""}`}
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
           >
             <polyline points="9 18 15 12 9 6" />
           </svg>
-          {showDetails ? "Hide the numbers" : "See the numbers"}
+          {open ? "Hide the numbers" : "Show the numbers"}
         </button>
 
-        {showDetails && (
-          <div id="monthly-summary-details" role="region" aria-label="Detailed monthly numbers" className="space-y-4 pt-2.5 border-t border-gray-100">
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1.5">This month so far</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <Stat label="Days logged" value={String(s.daysLogged)} />
-                <Stat label="Calories eaten" value={fmt(s.totalFoodCaloriesKcal) + " kcal"} />
-                <Stat label="Total burned" value={fmt(s.totalExpenditureKcal) + " kcal"} hint="BMR + activities + thermic effect" />
-                <Stat label="Net calories" value={fmt(s.actualMonthlyBalanceKcal) + " kcal"} accent />
-                <Stat label="Protein eaten" value={fmt(s.totalProteinGrams, 1) + " g"} />
-              </div>
+        {open && (
+          <div className="pt-2.5 border-t border-gray-100">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <Stat label="Days logged" value={`${s.daysLogged} of ${totalDays}`} />
+              <Stat label="Avg. daily balance" value={`${fmt(avgBalance)} kcal`} accent />
+              <Stat label="Avg. protein / day" value={`${fmt(avgProtein, 1)} g`} />
+              {weightChange != null && (
+                <Stat label="Est. weight change" value={`${weightChange <= 0 ? "−" : "+"}${fmt(Math.abs(weightChange), 2)} kg`} />
+              )}
+              <Stat label="Calories eaten" value={`${fmt(s.totalFoodCaloriesKcal)} kcal`} />
+              <Stat label="Total burned" value={`${fmt(s.totalExpenditureKcal)} kcal`} hint="BMR + activities + thermic effect" />
+              <Stat label="Net calories" value={`${fmt(s.actualMonthlyBalanceKcal)} kcal`} accent />
+              <Stat label="Avg. eaten / day" value={`${fmt(s.averageDailyFoodCaloriesKcal)} kcal`} />
+              <Stat label="Avg. burned / day" value={`${fmt(s.averageDailyExpenditureKcal)} kcal`} hint="BMR + activities + thermic effect" />
+              <Stat label="Total protein" value={`${fmt(s.totalProteinGrams, 1)} g`} />
             </div>
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Your daily averages</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <Stat label="Calories eaten per day" value={fmt(s.averageDailyFoodCaloriesKcal) + " kcal"} />
-                <Stat label="Total burned per day" value={fmt(s.averageDailyExpenditureKcal) + " kcal"} hint="BMR + activities + thermic effect" />
-                <Stat label="Net calories per day" value={fmt(s.averageDailyBalanceKcal) + " kcal"} accent />
-              </div>
-            </div>
-            <p className="text-[11px] text-gray-400 italic">Averages get more reliable as you log more days — consistency is what matters most</p>
           </div>
         )}
       </div>
@@ -312,7 +192,6 @@ function MonthlySummaryCard({ summary: s }: { summary: MonthlySummaryResponse })
 /* --- Daily Logs Card --- */
 
 function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days: DailyLogResponse[]; unloggedDays: string[]; onDayClick: (date: string) => void; onDayDeleted: () => void }) {
-  const [showFullTable, setShowFullTable] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -342,19 +221,15 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
         <EmptyState message="No logged days yet — you can add a missed day below." />
       ) : (
         <>
-          <DetailsToggle open={showFullTable} onToggle={() => setShowFullTable((v) => !v)} label="the details" />
-
           {/* Desktop table */}
-          <div className="hidden sm:block overflow-x-auto mt-3 rounded-lg border border-gray-100">
+          <div className="hidden sm:block overflow-x-auto rounded-lg border border-gray-100">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50/80 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-500 sticky top-0 z-10">
                   <th className="py-2.5 px-3 text-left">Date</th>
-                  {showFullTable && <th className="py-2.5 px-2 text-right">Eaten</th>}
-                  {showFullTable && <th className="py-2.5 px-2 text-right font-medium text-gray-400" title="BMR + activities + thermic effect">Total burned</th>}
                   <th className="py-2.5 px-2 text-right">Result</th>
+                  <th className="py-2.5 px-2 text-right">vs. Goal</th>
                   <th className="py-2.5 px-2 text-right">Protein</th>
-                  {showFullTable && <th className="py-2.5 px-2 text-right font-medium text-gray-400">vs. Goal</th>}
                   <th className="py-2.5 px-2 text-center w-10"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -369,17 +244,13 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
                       <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${d.netBalanceKcal <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
                       {formatDayLabel(d.logDate)}
                     </td>
-                    {showFullTable && <td className="py-2.5 px-2 text-right tabular-nums font-semibold text-gray-900">{fmt(d.totalFoodCaloriesKcal)} kcal</td>}
-                    {showFullTable && <td className="py-2.5 px-2 text-right tabular-nums text-gray-400">{fmt(d.totalDailyExpenditureKcal)} kcal</td>}
                     <td className="py-2.5 px-2 text-right">
                       <FriendlyBalance value={d.netBalanceKcal} />
                     </td>
+                    <td className="py-2.5 px-2 text-right">
+                      <FriendlyGoalDelta value={d.dailyGoalDeltaKcal} />
+                    </td>
                     <td className="py-2.5 px-2 text-right tabular-nums font-medium text-gray-700">{fmt(d.totalProteinGrams, 1)} g</td>
-                    {showFullTable && (
-                      <td className="py-2.5 px-2 text-right">
-                        <FriendlyGoalDelta value={d.dailyGoalDeltaKcal} />
-                      </td>
-                    )}
                     <td className="py-2.5 px-2 text-center">
                       {d.logDate !== todayStr && (
                         <button
@@ -425,16 +296,8 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
                   <span>Protein: <span className="font-medium text-gray-700">{fmt(d.totalProteinGrams, 1)} g</span></span>
-                  {showFullTable && (
-                    <span>Eaten: <span className="font-medium text-gray-700">{fmt(d.totalFoodCaloriesKcal)} kcal</span></span>
-                  )}
+                  <span>vs. Goal: <FriendlyGoalDelta value={d.dailyGoalDeltaKcal} /></span>
                 </div>
-                {showFullTable && (
-                  <div className="mt-1.5 pt-1.5 border-t border-gray-50 flex flex-wrap items-center gap-x-3 text-xs text-gray-400">
-                    <span>Total burned: {fmt(d.totalDailyExpenditureKcal)} kcal</span>
-                    <span>vs. Goal: <FriendlyGoalDelta value={d.dailyGoalDeltaKcal} /></span>
-                  </div>
-                )}
               </div>
             ))}
           </div>
@@ -531,53 +394,218 @@ function TrendCues({ days }: { days: DailyLogResponse[] }) {
 
 /* --- Balance Trend Chart --- */
 
+interface TrendPoint {
+  date: string;
+  label: string;
+  /** How far above/below the user's personal goal for *this specific day* (dailyGoalDeltaKcal). Zero = exactly on goal. */
+  goalDelta: number;
+  rollingAvg: number | null;
+}
+
+function calculateRollingAverage(values: number[], index: number, window = 7): number {
+  const start = Math.max(0, index - window + 1);
+  const slice = values.slice(start, index + 1);
+  return slice.reduce((s, v) => s + v, 0) / slice.length;
+}
+
+function formatCalorieDelta(value: number): string {
+  const abs = Math.abs(Math.round(value));
+  if (abs < 5) return "Right on goal";
+  return value <= 0 ? `${abs} kcal under goal` : `${abs} kcal over goal`;
+}
+
+function getTrendColor(rollingAvg: number | null): string {
+  if (rollingAvg === null) return "#6366f1";
+  return rollingAvg <= 0 ? "#16a34a" : "#f97316";
+}
+
+/**
+ * Picks a clean symmetric Y-axis domain around zero.
+ * e.g. max abs 680 → step 300, domain [-900, +900], ticks [-900,-600,-300,0,300,600,900]
+ */
+function calculateSymmetricDomain(values: number[]): {
+  yMin: number;
+  yMax: number;
+  step: number;
+  ticks: number[];
+} {
+  const maxAbs = Math.max(...values.map((v) => Math.abs(v)), 1);
+  const step =
+    maxAbs <= 300  ? 100 :
+    maxAbs <= 900  ? 300 :
+    maxAbs <= 1500 ? 500 :
+    1000;
+  const bound = Math.ceil(maxAbs / step) * step;
+  const ticks: number[] = [];
+  for (let v = -bound; v <= bound; v += step) ticks.push(v);
+  return { yMin: -bound, yMax: bound, step, ticks };
+}
+
+function formatYAxisTick(value: number): string {
+  if (value === 0) return "Goal";
+  const abs = Math.abs(value);
+  return value < 0 ? `${abs} under` : `${abs} over`;
+}
+
+function formatYAxisTickMobile(value: number): string {
+  if (value === 0) return "Goal";
+  const abs = Math.abs(value);
+  const label = abs >= 1000 ? `${abs / 1000}k` : `${abs}`;
+  return value < 0 ? `−${label}` : `+${label}`;
+}
+
 function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
-  if (days.length < 2) return null;
+  if (days.length === 0) return null;
+
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
 
   const sorted = [...days].sort((a, b) => a.logDate.localeCompare(b.logDate));
-  const maxAbs = Math.max(...sorted.map((d) => Math.abs(d.netBalanceKcal)), 1);
+  // goalDelta = how far above/below the user's personal goal for THAT day.
+  // Uses each day's snapshotted goal so goal changes mid-month are handled correctly.
+  // Zero = hit goal exactly. Negative = better than goal. Positive = fell short.
+  const goalDeltas = sorted.map((d) => d.dailyGoalDeltaKcal);
+  const hasEnoughForFullWindow = days.length >= 7;
 
-  const n = sorted.length;
-  const vbW = 400;
-  const gap = 4;
-  const barW = Math.min(28, Math.max(6, Math.floor((vbW - (n - 1) * gap) / n)));
-  const contentW = n * barW + (n - 1) * gap;
-  const offsetX = (vbW - contentW) / 2;
-  const halfH = 26;
-  const midY = halfH;
-  const labelH = 11;
-  const vbH = halfH * 2 + labelH;
+  const points: TrendPoint[] = sorted.map((d, i) => ({
+    date: d.logDate,
+    label: new Date(d.logDate + "T00:00:00").toLocaleDateString("default", { month: "short", day: "numeric" }),
+    goalDelta: d.dailyGoalDeltaKcal,
+    rollingAvg: calculateRollingAverage(goalDeltas, i, 7),
+  }));
+
+  const lastRolling = points[points.length - 1]?.rollingAvg ?? null;
+  const lineColor = getTrendColor(lastRolling);
+
+  // Symmetric domain with clean step — same absolute bound above and below zero
+  const allValues = points.flatMap((p) => [p.goalDelta, p.rollingAvg ?? p.goalDelta]);
+  const domain = calculateSymmetricDomain(allValues);
+
+  // X-axis tick thinning for mobile
+  const tickStep = points.length <= 10 ? 1 : points.length <= 20 ? 2 : Math.ceil(points.length / 10);
+  const xTicks = points.filter((_, i) => i % tickStep === 0).map((p) => p.label);
+
+  function TooltipContent({ active, payload }: TooltipProps<number, string>) {
+    if (!active || !payload || payload.length === 0) return null;
+    const point = payload[0]?.payload as TrendPoint | undefined;
+    if (!point) return null;
+    const daily = point.goalDelta;
+    return (
+      <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-lg text-xs max-w-[180px]">
+        <p className="font-semibold text-gray-700 mb-1">{point.label}</p>
+        <p className="text-gray-400">
+          That day:{" "}
+          <span className={daily <= 0 ? "text-green-600 font-semibold" : "text-orange-500 font-semibold"}>
+            {formatCalorieDelta(daily)}
+          </span>
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <Card title="How each day went" variant="muted">
-      <svg
-        viewBox={`0 0 ${vbW} ${vbH}`}
-        className="w-full max-w-lg mx-auto"
-        role="img"
-        aria-label="Daily calorie balance trend chart"
-        preserveAspectRatio="xMidYMid meet"
-      >
-        <line x1={offsetX} y1={midY} x2={offsetX + contentW} y2={midY} stroke="#e5e7eb" strokeWidth={0.5} />
-        {sorted.map((d, i) => {
-          const x = offsetX + i * (barW + gap);
-          const ratio = d.netBalanceKcal / maxAbs;
-          const barH = Math.max(Math.abs(ratio) * halfH, 1.5);
-          const isDeficit = d.netBalanceKcal <= 0;
-          const y = isDeficit ? midY : midY - barH;
-          const fill = isDeficit ? "#22c55e" : "#f59e0b";
-          const day = new Date(d.logDate + "T00:00:00").getDate();
-          return (
-            <g key={d.logDate}>
-              <rect x={x} y={y} width={barW} height={barH} rx={2} fill={fill} opacity={0.55} />
-              <text x={x + barW / 2} y={vbH - 1} textAnchor="middle" fontSize={7} fill="#9ca3af">{day}</text>
-            </g>
-          );
-        })}
-      </svg>
-      <div className="mt-1.5 flex justify-center gap-4 text-[10px] text-gray-400">
-        <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-sm bg-green-500/60" />Under target</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-sm bg-amber-500/60" />Over target</span>
-      </div>
+    <Card
+      title="Are you staying on track?"
+      subtitle="Each bar shows how far above or below your personal calorie goal you were. Adjusts automatically when your settings change."
+      variant="muted"
+    >
+      {points.length < 2 ? (
+        <p className="text-xs text-gray-400 text-center py-4">Log at least 2 days to see the trend.</p>
+      ) : (
+        <>
+          {!hasEnoughForFullWindow && (
+            <p className="mb-2 text-[10px] text-gray-400">
+              Building trend — {days.length} day{days.length !== 1 ? "s" : ""} logged
+            </p>
+          )}
+
+          <div className="w-full" style={{ height: isMobile ? 220 : 200 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              {/* tabIndex={-1} + outline none prevents the browser focus ring on click */}
+              <ComposedChart data={points} margin={{ top: 4, right: isMobile ? 8 : 16, left: 4, bottom: 4 }} barCategoryGap="30%" style={{ outline: "none" }} tabIndex={-1}>
+                {/* Background zones */}
+                <ReferenceArea y1={0} y2={domain.yMax} fill="#fef3c7" fillOpacity={0.3} ifOverflow="hidden" />
+                <ReferenceArea y1={domain.yMin} y2={0} fill="#dcfce7" fillOpacity={0.3} ifOverflow="hidden" />
+
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  ticks={xTicks}
+                  tick={{ fontSize: 10, fill: "#9ca3af" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  domain={[domain.yMin, domain.yMax]}
+                  ticks={domain.ticks}
+                  tick={{ fontSize: 9, fill: "#9ca3af" }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={isMobile ? formatYAxisTickMobile : formatYAxisTick}
+                  width={isMobile ? 40 : 68}
+                />
+                {/* Goal line — zero is the user's personal calorie goal for each specific day */}
+                <ReferenceLine
+                  y={0}
+                  stroke="#6b7280"
+                  strokeWidth={1.5}
+                  strokeDasharray="5 3"
+                  label={{ value: "Your goal", position: "insideTopRight", fontSize: 9, fill: "#6b7280", fontWeight: 600 }}
+                />
+                <Tooltip
+                  content={<TooltipContent />}
+                  cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                  allowEscapeViewBox={{ x: false, y: false }}
+                  wrapperStyle={{ zIndex: 10 }}
+                />
+
+                {/* Daily deviation bars — green = under goal, orange = over goal */}
+                <Bar dataKey="goalDelta" name="daily" maxBarSize={18} radius={[2, 2, 2, 2]}>
+                  {points.map((p) => (
+                    <Cell
+                      key={p.date}
+                      fill={p.goalDelta <= 0 ? "#86efac" : "#fdba74"}
+                      fillOpacity={0.85}
+                    />
+                  ))}
+                </Bar>
+
+                {/* Rolling average — main trend line drawn on top of bars */}
+                <Line
+                  type="monotone"
+                  dataKey="rollingAvg"
+                  name="rolling"
+                  stroke={lineColor}
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{ r: isMobile ? 7 : 5, fill: lineColor, stroke: "#fff", strokeWidth: 2 }}
+                  connectNulls
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Legend */}
+          <div className="mt-1 flex justify-center gap-4 text-[10px] text-gray-400">
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-3 w-2.5 rounded-sm bg-green-300" />
+              Under goal
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-3 w-2.5 rounded-sm bg-orange-200" />
+              Over goal
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-0.5 w-4 rounded" style={{ backgroundColor: lineColor }} />
+              Trend
+            </span>
+          </div>
+        </>
+      )}
     </Card>
   );
 }
@@ -585,10 +613,11 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
 /* --- Day Detail --- */
 
 function DayDetail({ date }: { date: string }) {
+  const backTo = "/history?m=" + date.slice(0, 7); // e.g. /history?m=2025-04
   return (
     <div className="space-y-6">
       <div>
-        <Link to="/history" className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-800 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">
+        <Link to={backTo} className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-800 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">
           &larr; Back to month
         </Link>
         <h1 className="mt-2 text-2xl font-bold text-gray-900">{formatDayLabel(date)}</h1>
