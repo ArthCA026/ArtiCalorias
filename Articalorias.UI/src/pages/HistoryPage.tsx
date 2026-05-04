@@ -72,7 +72,7 @@ function MonthlyView() {
         setDays(dailyData);
         setSummary(monthlyData);
       })
-      .catch(() => setError("Couldn't load your history � please try again."))
+      .catch(() => setError("Couldn't load your history — please try again."))
       .finally(() => setLoading(false));
   }, [year, month]);
 
@@ -107,7 +107,7 @@ function MonthlyView() {
     <div className="space-y-6">
       <div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Your Month ??</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Your Month 📅</h1>
           <div className="flex items-center gap-3">
             <button onClick={goPrev} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">&larr; Prev</button>
             <span className="min-w-[160px] text-center text-sm font-semibold text-gray-700">{monthLabel}</span>
@@ -172,7 +172,7 @@ function MonthlySummaryCard({ summary: s }: { summary: MonthlySummaryResponse })
               <Stat label="Avg. daily balance" value={`${fmt(avgBalance)} kcal`} accent />
               <Stat label="Avg. protein / day" value={`${fmt(avgProtein, 1)} g`} />
               {weightChange != null && (
-                <Stat label="Est. weight change" value={`${weightChange <= 0 ? "-" : "+"}${fmt(Math.abs(weightChange), 2)} kg`} />
+                <Stat label="Est. weight change" value={`${weightChange <= 0 ? "−" : "+"}${fmt(Math.abs(weightChange), 2)} kg`} />
               )}
               <Stat label="Calories eaten" value={`${fmt(s.totalFoodCaloriesKcal)} kcal`} />
               <Stat label="Total burned" value={`${fmt(s.totalExpenditureKcal)} kcal`} hint="BMR + activities + thermic effect" />
@@ -217,7 +217,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
   return (
     <Card title="Your logged days" subtitle="Click any day to see how it went">
       {days.length === 0 ? (
-        <EmptyState message="No logged days yet � you can add a missed day below." />
+        <EmptyState message="No logged days yet — you can add a missed day below." />
       ) : (
         <>
           {/* Desktop table */}
@@ -349,6 +349,48 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
     </Card>
   );
 }
+
+/* --- Trend Cues --- */
+
+function TrendCues({ days }: { days: DailyLogResponse[] }) {
+  if (days.length < 2) return null;
+
+  const cues: { icon: string; text: string }[] = [];
+
+  // Deficit / surplus pattern
+  const deficitCount = days.filter((d) => d.netBalanceKcal <= 0).length;
+  if (deficitCount === days.length) {
+    cues.push({ icon: "✅", text: `All ${days.length} logged days were under your target` });
+  } else if (deficitCount > 0) {
+    cues.push({ icon: "📊", text: `${deficitCount} of ${days.length} logged days were under your target` });
+  } else {
+    cues.push({ icon: "📊", text: "Your logged days were above target — small adjustments can shift the trend" });
+  }
+
+  // Best protein day
+  const best = days.reduce((a, b) => (b.totalProteinGrams > a.totalProteinGrams ? b : a), days[0]);
+  if (best.totalProteinGrams > 0) {
+    const label = new Date(best.logDate + "T00:00:00").toLocaleDateString("default", { weekday: "short", month: "short", day: "numeric" });
+    cues.push({ icon: "💪", text: `Best protein day: ${label} (${fmt(best.totalProteinGrams, 0)} g)` });
+  }
+
+  if (cues.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {cues.map((c, i) => (
+        <span
+          key={i}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50/60 px-3.5 py-2 text-sm text-indigo-700"
+        >
+          <span aria-hidden="true">{c.icon}</span>
+          {c.text}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /* --- Balance Trend Chart --- */
 
 interface TrendPoint {
@@ -378,7 +420,7 @@ function getTrendColor(rollingAvg: number | null): string {
 
 /**
  * Picks a clean symmetric Y-axis domain around zero.
- * e.g. max abs 680 ? step 300, domain [-900, +900], ticks [-900,-600,-300,0,300,600,900]
+ * e.g. max abs 680 → step 300, domain [-900, +900], ticks [-900,-600,-300,0,300,600,900]
  */
 function calculateSymmetricDomain(values: number[]): {
   yMin: number;
@@ -408,7 +450,7 @@ function formatYAxisTickMobile(value: number): string {
   if (value === 0) return "Goal";
   const abs = Math.abs(value);
   const label = abs >= 1000 ? `${abs / 1000}k` : `${abs}`;
-  return value < 0 ? `-${label}` : `+${label}`;
+  return value < 0 ? `−${label}` : `+${label}`;
 }
 
 function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
@@ -438,7 +480,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
   const lastRolling = points[points.length - 1]?.rollingAvg ?? null;
   const lineColor = getTrendColor(lastRolling);
 
-  // Symmetric domain with clean step � same absolute bound above and below zero
+  // Symmetric domain with clean step — same absolute bound above and below zero
   const allValues = points.flatMap((p) => [p.goalDelta, p.rollingAvg ?? p.goalDelta]);
   const domain = calculateSymmetricDomain(allValues);
 
@@ -476,7 +518,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
         <>
           {!hasEnoughForFullWindow && (
             <p className="mb-2 text-[10px] text-gray-400">
-              Building trend � {days.length} day{days.length !== 1 ? "s" : ""} logged
+              Building trend — {days.length} day{days.length !== 1 ? "s" : ""} logged
             </p>
           )}
 
@@ -505,7 +547,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
                   tickFormatter={isMobile ? formatYAxisTickMobile : formatYAxisTick}
                   width={isMobile ? 40 : 68}
                 />
-                {/* Goal line � zero is the user's personal calorie goal for each specific day */}
+                {/* Goal line — zero is the user's personal calorie goal for each specific day */}
                 <ReferenceLine
                   y={0}
                   stroke="#6b7280"
@@ -520,7 +562,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
                   wrapperStyle={{ zIndex: 10 }}
                 />
 
-                {/* Daily deviation bars � green = under goal, orange = over goal */}
+                {/* Daily deviation bars — green = under goal, orange = over goal */}
                 <Bar dataKey="goalDelta" name="daily" maxBarSize={18} radius={[2, 2, 2, 2]}>
                   {points.map((p) => (
                     <Cell
@@ -531,7 +573,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
                   ))}
                 </Bar>
 
-                {/* Rolling average � main trend line drawn on top of bars */}
+                {/* Rolling average — main trend line drawn on top of bars */}
                 <Line
                   type="monotone"
                   dataKey="rollingAvg"
@@ -633,7 +675,7 @@ function DeleteDayDialog({ date, deleting, error, onConfirm, onCancel }: {
             disabled={deleting}
             className="rounded-md bg-red-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
           >
-            {deleting ? "Deleting�" : "Yes, delete"}
+            {deleting ? "Deleting…" : "Yes, delete"}
           </button>
         </div>
       </div>
@@ -649,6 +691,32 @@ function TrashIcon() {
       <line x1="10" y1="11" x2="10" y2="17" />
       <line x1="14" y1="11" x2="14" y2="17" />
     </svg>
+  );
+}
+
+/* --- Helpers --- */
+
+function DetailsToggle({ open, onToggle, label }: { open: boolean; onToggle: () => void; label: string }) {
+  return (
+    <button
+      onClick={onToggle}
+      aria-expanded={open}
+      className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 font-medium rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+    >
+      <svg
+        className={`h-4 w-4 transition-transform ${open ? "rotate-90" : ""}`}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <polyline points="9 18 15 12 9 6" />
+      </svg>
+      {open ? `Hide ${label}` : `See ${label}`}
+    </button>
   );
 }
 
