@@ -25,6 +25,11 @@ export const dailyLogService = {
     return api.post<DailyLogResponse>(`/dailylog/${date}/recalculate`);
   },
 
+  /** Updates all profile snapshot fields on the log for today, then recalculates. */
+  refreshSnapshot(date: string) {
+    return api.post<DailyLogResponse | null>(`/dailylog/${date}/refresh-snapshot`);
+  },
+
   parseFood(date: string, data: ParseFoodRequest) {
     return api.post<ParsedFoodItem[]>(`/dailylog/${date}/parse-food`, data);
   },

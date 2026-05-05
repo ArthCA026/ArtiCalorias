@@ -24,6 +24,13 @@ public interface IRecalculationService
     Task RecalculateFullPipelineAsync(long dailyLogId);
 
     /// <summary>
+    /// Updates all profile snapshot fields on the daily log for <paramref name="date"/>
+    /// from the user's current profile, then runs the full recalculation pipeline.
+    /// A no-op if no log exists for that date yet.
+    /// </summary>
+    Task RefreshSnapshotAndRecalculateAsync(long userId, DateOnly date);
+
+    /// <summary>
     /// Recalculates weekly and monthly summaries after a day has been deleted.
     /// Updates weekly context on remaining sibling days, then refreshes
     /// the WeeklySummary and MonthlySummary aggregates.

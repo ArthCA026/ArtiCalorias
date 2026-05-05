@@ -104,6 +104,36 @@ public class RecalculationService : IRecalculationService
         }
     }
 
+    public async Task RefreshSnapshotAndRecalculateAsync(long userId, DateOnly date)
+    {
+        var log = await _db.DailyLogs
+            .FirstOrDefaultAsync(d => d.UserId == userId && d.LogDate == date);
+
+        if (log is null)
+            return; // No log for this date yet — nothing to update.
+
+        var profile = await _db.UserProfiles
+            .FirstOrDefaultAsync(p => p.UserId == userId);
+
+        if (profile is null)
+            return;
+
+        // Mirror the snapshot logic used in DailyLogService.GetOrCreateAsync.
+        var proteinGoal = profile.ProteinGoalGrams
+            ?? (profile.AutoCalculateProteinGoal ? profile.CurrentWeightKg * 2.0m : 0m);
+
+        log.SnapshotWeightKg          = profile.CurrentWeightKg;
+        log.SnapshotHeightCm          = profile.HeightCm;
+        log.SnapshotBMRKcal           = profile.BMRKcal;
+        log.SnapshotBodyFatPercent    = profile.BodyFatPercent;
+        log.SnapshotDailyBaseGoalKcal = profile.DailyBaseGoalKcal;
+        log.SnapshotProteinGoalGrams  = proteinGoal;
+
+        await _db.SaveChangesAsync();
+
+        await RecalculateFullPipelineAsync(log.DailyLogId);
+    }
+
     public async Task RecalculateAfterDayDeletionAsync(long userId, DateOnly deletedDate, DateOnly weekStart, DateOnly weekEnd, decimal baseDailyGoal)
     {
         // Recalculate all remaining days in the same week (updates their weekly context)

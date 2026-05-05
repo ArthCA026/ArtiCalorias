@@ -75,6 +75,17 @@ public class DailyLogController : ControllerBase
         return Ok(MapToResponse(log!));
     }
 
+    [HttpPost("{date}/refresh-snapshot")]
+    public async Task<IActionResult> RefreshSnapshot(DateOnly date)
+    {
+        var userId = GetUserId();
+        await _recalculation.RefreshSnapshotAndRecalculateAsync(userId, date);
+        var log = await _dailyLogService.GetByDateAsync(userId, date);
+        if (log is null)
+            return NoContent(); // No log exists yet — nothing to return, not an error.
+        return Ok(MapToResponse(log));
+    }
+
     // ── AI food parsing (proposes entries, does NOT save) ──
 
     [HttpPost("{date}/parse-food")]
