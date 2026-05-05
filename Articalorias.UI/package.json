@@ -8,6 +8,8 @@
   },
   "scripts": {
     "dev": "vite --host",
+    "typecheck": "tsc -b --noEmit",
+    "typecheck:watch": "tsc -b --noEmit --watch",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"

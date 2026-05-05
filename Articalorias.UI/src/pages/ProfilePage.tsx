@@ -241,7 +241,7 @@ export default function ProfilePage() {
   if (error && form === emptyForm) return <ErrorMessage message={error} />;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 w-full min-w-0">
       <div>
         <h1 className="text-xl font-semibold text-gray-900">Your profile</h1>
         <p className="mt-0.5 text-sm text-gray-400">
@@ -254,7 +254,7 @@ export default function ProfilePage() {
           <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
 
-        <section className="rounded-xl border border-gray-200 bg-white shadow-sm divide-y divide-gray-100">
+        <section className="rounded-xl border border-gray-200 bg-white shadow-sm divide-y divide-gray-100 w-full min-w-0 overflow-x-hidden">
 
           {/* ── Basic details ── */}
           <div className="p-4 sm:p-5 space-y-3">
@@ -456,7 +456,7 @@ export default function ProfilePage() {
 
           {/* ── Advanced estimates ── */}
           <div className="p-4 sm:p-5 space-y-3">
-            <div className="flex items-start justify-between gap-2">
+            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
               <div>
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Advanced estimates</h2>
                 <p className="mt-0.5 text-xs text-gray-400">Calculated automatically. Edit only if you know your measured values.</p>
@@ -464,7 +464,7 @@ export default function ProfilePage() {
               <button
                 type="button"
                 onClick={() => setShowAdvanced((v) => !v)}
-                className="shrink-0 flex items-center gap-1 rounded px-2 py-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium hover:bg-indigo-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                className="self-start sm:shrink-0 flex items-center gap-1 rounded px-2 py-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium hover:bg-indigo-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                 aria-expanded={showAdvanced}
                 aria-controls="advanced-estimates-content"
               >
@@ -476,7 +476,7 @@ export default function ProfilePage() {
             </div>
 
             {showAdvanced && (
-              <div id="advanced-estimates-content" className="divide-y divide-gray-100 rounded-lg border border-gray-100">
+              <div id="advanced-estimates-content" className="divide-y divide-gray-100 rounded-lg border border-gray-100 w-full min-w-0 overflow-x-hidden">
                 <CalculatedEstimateRow
                   label="Calories burned at rest"
                   explanation="Your baseline burn before daily movement or exercise."
@@ -612,73 +612,75 @@ function CalculatedEstimateRow({
   }
 
   return (
-    <div className="px-3 py-2.5">
+    <div className="px-3 py-2.5 min-w-0">
       {/* Display row — hidden while editing */}
       {!isEditing && (
-        /*
-         * Desktop: four columns — label+desc | value | badge | action
-         * Mobile:  stacked (flex-col)
-         */
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
-          {/* Col 1: label + explanation */}
-          <div className="flex-1 min-w-0">
-            <span className="text-xs font-medium text-gray-700">{label}</span>
-            <span className="ml-1.5 text-[11px] text-gray-400">{explanation}</span>
-          </div>
+        <div className="min-w-0">
+          {/* Row 1 (mobile): label — Row 1 (desktop): all cols inline */}
+          <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-4">
+            {/* Col 1: label + explanation */}
+            <div className="flex-1 min-w-0">
+              <span className="text-xs font-medium text-gray-700">{label}</span>
+              <span className="mt-0.5 block text-[11px] text-gray-400 sm:mt-0 sm:inline sm:ml-1.5">{explanation}</span>
+            </div>
 
-          {/* Col 2: value */}
-          <div className="sm:w-40 sm:shrink-0 sm:text-right">
-            <span className="text-sm font-semibold text-gray-800">
-              {value != null
-                ? <>{isCustom ? "" : "~"}{value}</>
-                : <span className="text-xs font-normal text-gray-400">—</span>
-              }
-            </span>
-          </div>
+            {/* Mobile row 2: value + badge side-by-side; desktop: separate cols */}
+            <div className="flex items-center gap-2 sm:contents">
+              {/* Col 2: value */}
+              <div className="sm:w-40 sm:shrink-0 sm:text-right">
+                <span className="text-sm font-semibold text-gray-800">
+                  {value != null
+                    ? <>{isCustom ? "" : "~"}{value}</>
+                    : <span className="text-xs font-normal text-gray-400">—</span>
+                  }
+                </span>
+              </div>
 
-          {/* Col 3: badge */}
-          <div className="sm:w-24 sm:shrink-0 sm:text-center">
-            <span className={[
-              "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none",
-              isCustom
-                ? "border-amber-200 bg-amber-50 text-amber-700"
-                : "border-indigo-100 bg-indigo-50 text-indigo-600",
-            ].join(" ")}>
-              {isCustom ? "Custom" : "Estimated"}
-            </span>
-          </div>
+              {/* Col 3: badge */}
+              <div className="sm:w-24 sm:shrink-0 sm:text-center">
+                <span className={[
+                  "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none",
+                  isCustom
+                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                    : "border-indigo-100 bg-indigo-50 text-indigo-600",
+                ].join(" ")}>
+                  {isCustom ? "Custom" : "Estimated"}
+                </span>
+              </div>
+            </div>
 
-          {/* Col 4: action */}
-          <div className="sm:w-28 sm:shrink-0 sm:text-right">
-            {isCustom ? (
-              <div className="flex sm:flex-col sm:items-end gap-x-3 gap-y-0.5">
+            {/* Col 4: action */}
+            <div className="sm:w-28 sm:shrink-0 sm:text-right">
+              {isCustom ? (
+                <div className="flex items-center sm:flex-col sm:items-end gap-x-3 gap-y-0.5">
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => setIsEditing(true)}
+                    className="text-xs font-medium text-indigo-600 transition-colors hover:text-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-50"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={onRevertToAuto}
+                    className="text-xs text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-50"
+                  >
+                    Use estimate
+                  </button>
+                </div>
+              ) : (
                 <button
                   type="button"
                   disabled={disabled}
-                  onClick={() => setIsEditing(true)}
+                  onClick={handleUseOwn}
                   className="text-xs font-medium text-indigo-600 transition-colors hover:text-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-50"
                 >
-                  Edit
+                  Use my own
                 </button>
-                <button
-                  type="button"
-                  disabled={disabled}
-                  onClick={onRevertToAuto}
-                  className="text-xs text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-50"
-                >
-                  Use estimate
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={handleUseOwn}
-                className="text-xs font-medium text-indigo-600 transition-colors hover:text-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-50"
-              >
-                Use my own
-              </button>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}

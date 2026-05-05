@@ -82,7 +82,7 @@ export default function GoalSelector({ selectedKcal, onGoalChange, disabled }: G
   const savedKgPerWeek = parseFloat(kcalToKgPerWeek(savedKcalNum));
 
   return (
-    <fieldset>
+    <fieldset className="w-full min-w-0">
       <legend className="sr-only">Choose your weight goal</legend>
 
       {/*
@@ -107,10 +107,11 @@ export default function GoalSelector({ selectedKcal, onGoalChange, disabled }: G
           disabled={disabled}
         />
 
-        {/* Caption row: directional labels as a footer of the scale section */}
+        {/* Caption row: directional labels — hidden on mobile where the
+            4-col wrapping grid makes left/right directions ambiguous. */}
         {!showCustomInput && (
           <div
-            className="flex select-none justify-between px-3 pb-1.5 pt-1"
+            className="hidden sm:flex select-none justify-between px-3 pb-1.5 pt-1"
             aria-hidden="true"
           >
             <span className="text-[10px] text-gray-400">← More deficit</span>

@@ -42,21 +42,20 @@ interface ScaleCellProps {
   onChange: (id: ProteinPresetId) => void;
   /** Personalised g/day for this preset, or null when weight is unknown. */
   computedGrams: number | null;
+  /** Extra class names (e.g. col-span-full for the lone last item on mobile). */
+  className?: string;
 }
 
 function ScaleCell({
   preset,
   isSelected,
   isAdjacent,
-  isLeftOfSelected,
+  isLeftOfSelected: _isLeftOfSelected,
   disabled,
   onChange,
   computedGrams,
+  className,
 }: ScaleCellProps) {
-  // The right divider is suppressed on the selected cell and its left neighbour
-  // so the active region has no internal seam — mirrors GoalPresetButton.
-  const showDivider = !isSelected && !isLeftOfSelected;
-
   return (
     <label
       title={
@@ -66,17 +65,17 @@ function ScaleCell({
       }
       className={[
         "flex w-full cursor-pointer select-none flex-col items-center justify-center touch-manipulation",
-        "px-1 py-2.5 min-h-11 text-center text-xs font-medium leading-tight",
+        "px-1 py-2.5 min-h-11 min-w-0 text-center text-xs font-medium leading-tight",
         "transition-colors duration-200",
         // Keyboard focus ring is inset so it doesn't bleed outside the container.
         "focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500",
-        showDivider ? "border-r border-gray-200 last:border-r-0" : "border-r-0",
         isSelected
           ? "bg-indigo-600 text-white font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
           : isAdjacent
           ? "bg-indigo-50 text-indigo-500"
           : "bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700",
         disabled ? "pointer-events-none opacity-50" : "",
+        className,
       ]
         .filter(Boolean)
         .join(" ")}
@@ -298,16 +297,6 @@ export default function ProteinPresetSelector({
   const selectedIndex = PROTEIN_PRESETS.findIndex((p) => p.id === localPresetId);
   const isCustomActive = savedPresetId === "";
 
-  // On mount: scroll the selected cell to the centre of the visible viewport.
-  const scrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el || selectedIndex < 0) return;
-    const cellWidth = el.scrollWidth / PROTEIN_PRESETS.length;
-    const targetLeft = cellWidth * selectedIndex - (el.clientWidth - cellWidth) / 2;
-    el.scrollLeft = Math.max(0, targetLeft);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   function handlePresetClick(presetId: ProteinPresetId) {
     const preset = PROTEIN_PRESETS.find((p) => p.id === presetId)!;
     const weight = parseFloat(weightKg);
@@ -339,7 +328,7 @@ export default function ProteinPresetSelector({
   const goalHint = getGoalHint(goalKcal);
 
   return (
-    <fieldset>
+    <fieldset className="w-full min-w-0">
       <legend className="sr-only">Choose your daily protein target</legend>
 
       {/*
@@ -348,36 +337,36 @@ export default function ProteinPresetSelector({
        */}
       <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm">
 
-        {/* ── Scale ── */}
-        {/* overscroll-contain prevents the page scrolling when the scale hits
-            its edges on mobile (scroll chaining / rubber-band leakthrough). */}
-        <div ref={scrollRef} className="overflow-x-auto overscroll-contain">
-          <div
-            role="group"
-            aria-label="Protein presets"
-            // min-w-112.5 (= 450 px) × 5 keeps all labels on one line on narrow phones.
-            // sm:min-w-0 lets it fill the container on wider screens.
-            className="grid min-w-112.5 grid-cols-5 overflow-hidden sm:min-w-0"
-          >
-            {PROTEIN_PRESETS.map((p, i) => (
-              <ScaleCell
-                key={p.id}
-                preset={p}
-                isSelected={p.id === localPresetId}
-                isAdjacent={selectedIndex >= 0 && Math.abs(i - selectedIndex) === 1}
-                isLeftOfSelected={selectedIndex >= 0 && i === selectedIndex - 1}
-                onChange={handlePresetClick}
-                disabled={disabled}
-                computedGrams={weight > 0 ? Math.round(weight * p.gramsPerKg) : null}
-              />
-            ))}
-          </div>
+        {/* ── Scale — 2-col grid on mobile, single row on desktop ── */}
+        <div
+          role="group"
+          aria-label="Protein presets"
+          className="grid grid-cols-2 gap-px bg-gray-200 overflow-hidden sm:grid-cols-5"
+        >
+          {PROTEIN_PRESETS.map((p, i) => (
+            <ScaleCell
+              key={p.id}
+              preset={p}
+              isSelected={p.id === localPresetId}
+              isAdjacent={selectedIndex >= 0 && Math.abs(i - selectedIndex) === 1}
+              isLeftOfSelected={selectedIndex >= 0 && i === selectedIndex - 1}
+              onChange={handlePresetClick}
+              disabled={disabled}
+              computedGrams={weight > 0 ? Math.round(weight * p.gramsPerKg) : null}
+              className={
+                i === PROTEIN_PRESETS.length - 1 && PROTEIN_PRESETS.length % 2 !== 0
+                  ? "col-span-full sm:col-span-1"
+                  : undefined
+              }
+            />
+          ))}
         </div>
 
-        {/* ── Caption row — hidden when the custom input form is open ── */}
+        {/* ── Caption row — hidden on mobile (2-col grid makes left/right
+            directional labels ambiguous) and when custom input is open. ── */}
         {!showCustomInput && (
           <div
-            className="flex select-none justify-between px-3 pb-1.5 pt-1"
+            className="hidden sm:flex select-none justify-between px-3 pb-1.5 pt-1"
             aria-hidden="true"
           >
             <span className="text-[10px] text-gray-400">← Less protein</span>
