@@ -34,12 +34,6 @@ const emptyForm: FormState = {
   proteinPresetId: "muscle-gain", autoCalculateProteinGoal: true, country: "",
 };
 
-function matchPreset(kcalValue: string): { preset: string; isCustom: boolean } {
-  // Kept locally only for seeding showAdvanced on load.
-  const PRESET_KCALS = ["-1100", "-825", "-550", "-275", "-110", "0", "330"];
-  const isCustom = !PRESET_KCALS.includes(kcalValue);
-  return { preset: kcalValue, isCustom };
-}
 
 /**
  * Reverse-engineers which preset produced the stored proteinGoalGrams by
@@ -824,4 +818,3 @@ function FieldWrap({ label, dirty, saving, error, hint, onConfirm, onRevert, chi
   );
 }
 
-function ImmediateSaveStatus() { return null; }
