@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+﻿import { useEffect, useState, useCallback, useMemo } from "react";
 import { dailyLogService } from "@/services/dailyLogService";
 import { foodService } from "@/services/foodService";
 import { activityService } from "@/services/activityService";
@@ -7,7 +7,6 @@ import type {
   FoodEntryResponse,
   UpdateFoodEntryRequest,
   ActivityEntryResponse,
-  CreateActivityEntryRequest,
   UpdateActivityEntryRequest,
   ActivityTemplateResponse,
   ActivityTemplateRequest,
@@ -74,14 +73,13 @@ function CompactDayProgress({ dash, isToday }: { dash: DailyDashboardResponse | 
   const protGoalReached = protRemaining <= 0;
   const protAbs = Math.abs(protRemaining);
 
-  // Status line â€” a quick, human-friendly take on the numbers
+  // Status line – a quick, human-friendly take on the numbers
   const foodCal = dash.totalFoodCaloriesKcal;
   const dailyBudget = foodCal + calRemaining;
-  const usedPct = !calOver && dailyBudget > 0 ? foodCal / dailyBudget : 0;
   const protPct = dash.snapshotProteinGoalGrams > 0 ? dash.totalProteinGrams / dash.snapshotProteinGoalGrams : 1;
 
-  const calPct = calOver ? 100 : Math.min(Math.round(usedPct * 100), 100);
-  const protPctDisplay = Math.min(Math.round(protPct * 100), 100);
+  const calPct = dailyBudget > 0 ? Math.round((foodCal / dailyBudget) * 100) : 0;
+  const protPctDisplay = Math.round(protPct * 100);
 
   return (
     <Card title={isToday ? "Today" : "Day summary"} variant="primary" compact>
@@ -96,9 +94,9 @@ function CompactDayProgress({ dash, isToday }: { dash: DailyDashboardResponse | 
             </span>
           </div>
           <div className="h-2 rounded-full bg-gray-100 overflow-hidden" role="progressbar" aria-valuenow={foodCal} aria-valuemin={0} aria-valuemax={dailyBudget} aria-label="Calorie budget progress">
-            <div className={`h-full rounded-full transition-all duration-500 ${calOver ? "bg-amber-400" : "bg-green-500"}`} style={{ width: `${calPct}%` }} />
+            <div className={`h-full rounded-full transition-all duration-500 ${calOver ? "bg-amber-400" : "bg-green-500"}`} style={{ width: `${Math.min(calPct, 100)}%` }} />
           </div>
-          <p className="text-[11px] tabular-nums text-gray-400">{calPct}% Â· {fmt(foodCal)} of {fmt(dailyBudget)} kcal spent</p>
+          <p className="text-[11px] tabular-nums text-gray-400">{calPct}% · {fmt(foodCal)} of {fmt(dailyBudget)} kcal spent</p>
         </div>
 
         {/* Protein row */}
@@ -112,9 +110,9 @@ function CompactDayProgress({ dash, isToday }: { dash: DailyDashboardResponse | 
             </span>
           </div>
           <div className="h-2 rounded-full bg-indigo-50 overflow-hidden" role="progressbar" aria-valuenow={dash.totalProteinGrams} aria-valuemin={0} aria-valuemax={dash.snapshotProteinGoalGrams} aria-label="Protein goal progress">
-            <div className={`h-full rounded-full transition-all duration-500 ${protGoalReached ? "bg-green-500" : "bg-indigo-500"}`} style={{ width: `${protPctDisplay}%` }} />
+            <div className={`h-full rounded-full transition-all duration-500 ${protGoalReached ? "bg-green-500" : "bg-indigo-500"}`} style={{ width: `${Math.min(protPctDisplay, 100)}%` }} />
           </div>
-          <p className="text-[11px] tabular-nums text-gray-400">{protPctDisplay}% Â· {fmt(dash.totalProteinGrams, 1)} of {fmt(dash.snapshotProteinGoalGrams, 1)} g goal</p>
+          <p className="text-[11px] tabular-nums text-gray-400">{protPctDisplay}% · {fmt(dash.totalProteinGrams, 1)} of {fmt(dash.snapshotProteinGoalGrams, 1)} g goal</p>
         </div>
 
       </div>
@@ -246,7 +244,7 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
           {busy ? (
             <>
               <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-              Loggingâ€¦
+              Logging…
             </>
           ) : (
             <>
@@ -264,7 +262,7 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
   return (
     <Card
       title={isToday ? "Log food" : "Add food"}
-      subtitle={isToday ? "Describe what you ate â€” we'll estimate the calories for you" : "Add what you ate that day â€” we'll estimate the calories"}
+      subtitle={isToday ? "Describe what you ate – we'll estimate the calories for you" : "Add what you ate that day – we'll estimate the calories"}
       icon={<IconUtensils className="w-5 h-5" />}
     >
       {foodBody}
@@ -413,7 +411,7 @@ function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSav
           {busy ? (
             <>
               <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-              Loggingâ€¦
+              Logging…
             </>
           ) : (
             <>
@@ -425,7 +423,7 @@ function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSav
       </div>
       {error && <p className="mt-1.5 text-sm text-red-600" role="alert">{error}</p>}
 
-      {/* Post-success template prompt â€” step 1: subtle suggestion */}
+      {/* Post-success template prompt – step 1: subtle suggestion */}
       {lastLogged && !templateSaved && !editingTemplateName && (
         <div className="mt-2 flex items-center gap-2 rounded-lg bg-indigo-50/40 px-3 py-2 text-sm text-indigo-600">
           <IconBookmark className="w-3.5 h-3.5 flex-shrink-0 text-indigo-400" />
@@ -465,7 +463,7 @@ function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSav
               disabled={savingTemplate || !templateName.trim()}
               className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
             >
-              {savingTemplate ? "Savingâ€¦" : "Save"}
+              {savingTemplate ? "Saving…" : "Save"}
             </button>
             <button
               onClick={dismissTemplatePrompt}
@@ -480,7 +478,7 @@ function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSav
       {templateSaved && (
         <div className="mt-2 flex items-center gap-2 rounded-lg bg-green-50/40 px-3 py-1.5 text-xs text-green-600">
           <IconCheck className="w-3.5 h-3.5 flex-shrink-0 text-green-500" />
-          <span>Saved â€” you'll find it in the activity list next time.</span>
+          <span>Saved – you'll find it in the activity list next time.</span>
         </div>
       )}
     </>
@@ -488,7 +486,7 @@ function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSav
 
   if (noCard) return activityBody;
   return (
-    <Card title={isToday ? "Log activity" : "Add activity"} subtitle={isToday ? "Describe what you did and for how long â€” we'll estimate calories for you" : "Add what you did that day â€” we'll estimate the calories"}>
+    <Card title={isToday ? "Log activity" : "Add activity"} subtitle={isToday ? "Describe what you did and for how long – we'll estimate calories for you" : "Add what you did that day – we'll estimate the calories"}>
       {activityBody}
     </Card>
   );
@@ -652,7 +650,7 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
       : (
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <p className="text-sm font-medium text-gray-500">No meals logged yet</p>
-          <p className="mt-1 text-sm text-gray-400">Describe what you ate in the box above â€” even a rough description works</p>
+          <p className="mt-1 text-sm text-gray-400">Describe what you ate in the box above – even a rough description works</p>
           <p className="mt-3 text-xs text-gray-400 italic">Try something like: "2 eggs, toast with butter, and a coffee with milk"</p>
         </div>
       )
@@ -678,7 +676,7 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
                   <th className="py-1.5 px-2 text-right">Qty</th>
                   <th className="py-1.5 px-2 text-left text-gray-400 font-medium">Portion</th>
                   <th className="py-1.5 px-2 text-right" title="Total calories for the full quantity">Kcal</th>
-                  <th className="py-1.5 px-2 text-right" title="Total protein for the full quantity â€” helps you stay full and preserve muscle">Prot</th>
+                  <th className="py-1.5 px-2 text-right" title="Total protein for the full quantity – helps you stay full and preserve muscle">Prot</th>
                   <th className="py-1.5 px-2 text-right font-medium text-gray-400" title="Total fat for the full quantity">Fat</th>
                   <th className="py-1.5 px-2 text-right font-medium text-gray-400" title="Total carbs for the full quantity">Carbs</th>
                   <th className="py-1.5 px-2 text-right font-medium text-gray-400" title="Total alcohol for the full quantity">Alc</th>
@@ -762,7 +760,7 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
             </table>
           </div>
 
-          <p className="hidden md:block mt-1.5 text-[11px] text-gray-400">All values (kcal, protein, fat, carbs) are totals for the full quantity â€” not per unit</p>
+          <p className="hidden md:block mt-1.5 text-[11px] text-gray-400">All values (kcal, protein, fat, carbs) are totals for the full quantity – not per unit</p>
 
           {/* -- Mobile stacked cards (visible on small screens) -- */}
           <div className="md:hidden space-y-2">
@@ -835,15 +833,12 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
 /* --- Activity Section --- */
 function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCard }: { date: string; activities: ActivityEntryResponse[]; onChanged: () => void; isToday: boolean; noCard?: boolean }) {
   const [templates, setTemplates] = useState<ActivityTemplateResponse[]>([]);
-  const [showAdd, setShowAdd] = useState(false);
+  const [selectKey, setSelectKey] = useState(0);
+  const [addError, setAddError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [autoMet] = useState(true);
-  const [alwaysShowAdvanced, setAlwaysShowAdvanced] = useState(() => {
+  const [alwaysShowAdvanced] = useState(() => {
     try { return localStorage.getItem("articalorias:showAdvancedActivity") === "true"; } catch { return false; }
   });
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const advancedVisible = alwaysShowAdvanced || showAdvanced;
-  const [durationUnit, setDurationUnit] = useState<"minutes" | "hours">("minutes");
   const [editDurationUnit, setEditDurationUnit] = useState<"minutes" | "hours">("minutes");
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<UpdateActivityEntryRequest | null>(null);
@@ -851,58 +846,35 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
   const [templateSaveTarget, setTemplateSaveTarget] = useState<ActivityEntryResponse | null>(null);
   const [templateSaveName, setTemplateSaveName] = useState("");
 
-  const [form, setForm] = useState<CreateActivityEntryRequest>({
-    activityType: "MET_SIMPLE",
-    activityName: "",
-    durationMinutes: null,
-    metValue: null,
-    notes: null,
-    segments: [],
-  });
-
   useEffect(() => {
     activityService.getTemplates().then(({ data }) => setTemplates(data)).catch(() => {});
   }, [activities]);
 
-  function applyTemplate(id: string) {
+  async function addFromTemplate(id: string) {
     const t = templates.find((tpl) => tpl.activityTemplateId === +id);
     if (!t) return;
-    setForm({
-      activityTemplateId: t.activityTemplateId,
-      activityType: t.activityType,
-      activityName: t.templateName,
-      durationMinutes: t.defaultDurationMinutes,
-      metValue: t.defaultMET,
-      notes: null,
-      segments: t.segments.map((s) => ({
-        segmentOrder: s.segmentOrder,
-        segmentName: s.segmentName,
-        metValue: s.metValue,
-        durationMinutes: s.durationMinutes,
-      })),
-    });
-  }
-
-  async function handleAdd() {
-    if (!form.activityName.trim()) return;
     setBusy(true);
-    let submitForm = { ...form };
-    if (autoMet && !form.metValue) {
-      try {
-        const { data } = await activityService.estimateMet({
-          activityName: form.activityName,
-          durationMinutes: form.durationMinutes,
-        });
-        submitForm = { ...submitForm, metValue: data.metValue };
-      } catch { /* ignore */ }
-    }
+    setAddError(null);
     try {
-      await activityService.create(date, submitForm);
-      setShowAdd(false);
-      setForm({ activityType: "MET_SIMPLE", activityName: "", durationMinutes: null, metValue: null, notes: null, segments: [] });
-      setDurationUnit("minutes");
+      await activityService.create(date, {
+        activityTemplateId: t.activityTemplateId,
+        activityType: t.activityType,
+        activityName: t.templateName,
+        durationMinutes: t.defaultDurationMinutes,
+        metValue: t.defaultMET,
+        notes: null,
+        segments: t.segments.map((s) => ({
+          segmentOrder: s.segmentOrder,
+          segmentName: s.segmentName,
+          metValue: s.metValue,
+          durationMinutes: s.durationMinutes,
+        })),
+      });
+      setSelectKey(k => k + 1);
       onChanged();
-    } catch { /* ignore */ }
+    } catch (err) {
+      setAddError(extractApiError(err, "Failed to add activity. Please try again."));
+    }
     setBusy(false);
   }
 
@@ -997,13 +969,13 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
 
   const activitiesContent = (
     <>
-      {activities.length === 0 && !showAdd && (
+      {activities.length === 0 && (
         noCard
           ? <p className="text-sm text-gray-400 py-1">Nothing logged yet</p>
           : (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <p className="text-sm font-medium text-gray-500">No activities logged yet</p>
-              <p className="mt-1 text-sm text-gray-400">Describe what you did in the box above â€” even a rough description works</p>
+              <p className="mt-1 text-sm text-gray-400">Describe what you did in the box above – even a rough description works</p>
               <p className="mt-3 text-xs text-gray-400 italic">Try something like: "30 min walking"</p>
             </div>
           )
@@ -1095,7 +1067,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
                                 <span className="line-clamp-2">{a.activityName}</span>
                               </td>
                               <td className="py-1.5 px-2 text-right tabular-nums text-gray-700">{a.durationMinutes != null ? (a.durationMinutes >= 60 ? `${+(a.durationMinutes / 60).toFixed(1)}h` : `${fmt(a.durationMinutes)} min`) : "\u2013"}</td>
-                              <td className={`py-1.5 px-2 text-right tabular-nums font-semibold ${a.calculatedCaloriesKcal < 0 ? "text-blue-600" : "text-gray-900"}`} title={a.calculatedCaloriesKcal < 0 ? "Below resting rate â€” burns less than your baseline" : undefined}>{fmt(a.calculatedCaloriesKcal)}</td>
+                              <td className={`py-1.5 px-2 text-right tabular-nums font-semibold ${a.calculatedCaloriesKcal < 0 ? "text-blue-600" : "text-gray-900"}`} title={a.calculatedCaloriesKcal < 0 ? "Below resting rate – burns less than your baseline" : undefined}>{fmt(a.calculatedCaloriesKcal)}</td>
                               <td className="py-1.5 px-2">
                                 <div className="flex gap-1 justify-end">
                                   {savedTemplateNames.has(a.activityName.toLowerCase()) ? (
@@ -1205,115 +1177,24 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
         </div>
       )}
 
-      {showAdd && (
-        <div className="mt-3 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
-          {templates.length > 0 && (
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Use a saved activity</label>
-              <select onChange={(e) => applyTemplate(e.target.value)} defaultValue="" aria-label="Choose a saved activity" className="rounded-md border border-gray-300 px-2 py-1.5 text-sm w-full">
-                <option value="" disabled>Choose one...</option>
-                {templates.filter((t) => t.isActive).map((t) => (
-                  <option key={t.activityTemplateId} value={t.activityTemplateId}>{t.templateName}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-500">Activity name *</label>
-              <input value={form.activityName} onChange={(e) => setForm({ ...form, activityName: e.target.value })} placeholder='e.g. "Running", "Yoga"' aria-label="Activity name" className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm placeholder:text-gray-400" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500">How long</label>
-              <div className="mt-1 flex gap-1">
-                <input type="number" step={durationUnit === "hours" ? "0.25" : "1"} value={form.durationMinutes != null ? (durationUnit === "hours" ? +(form.durationMinutes / 60).toFixed(2) : form.durationMinutes) : ""} onChange={(e) => { const v = e.target.value ? +e.target.value : null; setForm({ ...form, durationMinutes: v != null ? (durationUnit === "hours" ? v * 60 : v) : null }); }} aria-label="Duration" className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
-                <select value={durationUnit} onChange={(e) => setDurationUnit(e.target.value as "minutes" | "hours")} aria-label="Duration unit" className="rounded-md border border-gray-300 px-1 py-1.5 text-xs">
-                  <option value="minutes">min</option>
-                  <option value="hours">hr</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          <p className="text-xs text-gray-400">We'll estimate how many calories you burned based on the activity and duration.</p>
-
-          {/* Advanced options â€” progressive disclosure */}
-          {!alwaysShowAdvanced && (
-            <button
-              onClick={() => setShowAdvanced((v) => !v)}
-              aria-expanded={showAdvanced}
-              aria-controls="advanced-activity-options"
-              className="flex items-center gap-1 text-xs text-gray-500 hover:text-indigo-600 font-medium rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 transition-colors"
-            >
-              <svg
-                className={`h-3.5 w-3.5 transition-transform ${showAdvanced ? "rotate-90" : ""}`}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-              Advanced options
-            </button>
-          )}
-
-          {advancedVisible && (
-            <div
-              id="advanced-activity-options"
-              role="region"
-              aria-label="Advanced activity options"
-              className="space-y-3 rounded-lg border border-gray-200 bg-white/60 p-3"
-            >
-              <div>
-                <label className="block text-xs font-medium text-gray-500">MET (intensity)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0.5"
-                  max="50"
-                  value={form.metValue ?? ""}
-                  onChange={(e) => setForm({ ...form, metValue: e.target.value ? +e.target.value : null })}
-                  placeholder="Auto"
-                  aria-label="MET value"
-                  className="mt-1 w-full max-w-[10rem] rounded-md border border-gray-300 px-2 py-1.5 text-sm placeholder:text-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                />
-                <p className="mt-1 text-xs text-gray-400">Only change this if you want to fine-tune the calorie estimate. Leave blank to use the default.</p>
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={alwaysShowAdvanced}
-                  onChange={(e) => {
-                    const next = e.target.checked;
-                    setAlwaysShowAdvanced(next);
-                    try { localStorage.setItem("articalorias:showAdvancedActivity", String(next)); } catch { /* ignore */ }
-                  }}
-                  className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                <span className="text-xs text-gray-500">Always show advanced controls</span>
-              </label>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setShowAdd(false)} className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 transition-colors">Cancel</button>
-            <button onClick={handleAdd} disabled={busy || !form.activityName.trim()} className="rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
-              {busy ? "Adding..." : "Add"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {!showAdd && (
+      {templates.filter((t) => t.isActive).length > 0 && (
         <div className="mt-3">
-          <button onClick={() => setShowAdd(true)} className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 font-medium rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-            Add custom activity
-          </button>
+          <select
+            key={selectKey}
+            defaultValue=""
+            onChange={(e) => { if (e.target.value) addFromTemplate(e.target.value); }}
+            disabled={busy}
+            aria-label="Add activity from templates"
+            className="rounded-md border border-indigo-300 bg-white px-2 py-1.5 text-sm text-indigo-700 font-medium w-full focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none disabled:opacity-50 cursor-pointer"
+          >
+            <option value="" disabled>
+              {busy ? "Adding…" : "+ Add activity from templates"}
+            </option>
+            {templates.filter((t) => t.isActive).map((t) => (
+              <option key={t.activityTemplateId} value={t.activityTemplateId}>{t.templateName}</option>
+            ))}
+          </select>
+          {addError && <p className="mt-1 text-xs text-red-600" role="alert">{addError}</p>}
         </div>
       )}
     </>
@@ -1407,7 +1288,7 @@ function DailyLogWorkspace({
         </div>
       </div>
 
-      {/* Tab content â€” both panels stay mounted to preserve typed input on tab switch */}
+      {/* Tab content – both panels stay mounted to preserve typed input on tab switch */}
       <div className="p-3">
         <div className={`space-y-2.5${tab !== "meals" ? " hidden" : ""}`}>
           <FoodInput date={date} onSaved={onChanged} isToday={isToday} noCard />
@@ -1456,7 +1337,7 @@ function CalculationBreakdown({ dash, isToday }: { dash: DailyDashboardResponse 
   return (
     <Card
       title={isToday ? "How today's numbers were calculated" : "How this day's numbers were calculated"}
-      subtitle="For the curious â€” a detailed look at the math behind your daily targets"
+      subtitle="For the curious – a detailed look at the math behind your daily targets"
       variant="muted"
     >
       <button
