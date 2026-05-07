@@ -55,6 +55,13 @@ export function formatKgPerWeek(kg: number): string {
   return `${sign}${Math.abs(kg).toFixed(2)} kg per week`;
 }
 
+/** Compact kg/week format for mobile option cards (e.g. "−0.50 kg/wk"). */
+export function formatKgPerWeekShort(kg: number): string {
+  if (kg === 0) return "0 kg/wk";
+  const sign = kg > 0 ? "+" : "−";
+  return `${sign}${Math.abs(kg).toFixed(2)} kg/wk`;
+}
+
 /** Formats a daily kcal adjustment rounded to the nearest 10. */
 export function formatKcalAdjustment(kcal: number): string {
   if (kcal === 0) return "no calorie adjustment";

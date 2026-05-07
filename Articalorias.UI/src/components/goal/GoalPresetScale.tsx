@@ -1,6 +1,6 @@
-import { memo } from "react";
-import { GOAL_PRESETS, type GoalPresetKey } from "@/utils/goalUtils";
-import GoalPresetButton from "./GoalPresetButton";
+import { memo, useCallback } from "react";
+import { GOAL_PRESETS, formatKgPerWeekShort, type GoalPresetKey } from "@/utils/goalUtils";
+import ResponsiveScaleSelector, { type ScaleOption } from "@/components/shared/ResponsiveScaleSelector";
 
 interface GoalPresetScaleProps {
   /** The currently active preset key, or "" when no preset is selected (e.g. custom mode). */
@@ -9,51 +9,38 @@ interface GoalPresetScaleProps {
   disabled: boolean;
 }
 
+// Defined at module level — stable reference, no re-allocation on every render.
+const GOAL_OPTIONS: ScaleOption[] = GOAL_PRESETS.map((p) => ({
+  key: p.key,
+  label: p.shortLabel,
+  mobileSecondaryValue: formatKgPerWeekShort(p.kgPerWeek),
+  fullAriaLabel: `${p.label} — ${p.desc}`,
+}));
+
 /**
- * A segmented scale of 7 equal-width preset buttons.
- *
- * Responsive strategy
- * ───────────────────
- * Desktop (sm+, ≥ 640 px): grid-cols-7 — all options in one row, equal width.
- *
- * Mobile (< 640 px): grid-cols-4 — options wrap into two rows (4 + 3).
- *   A ghost cell fills the empty 4th slot in the second row so the
- *   gap-px container background does not show as a stray gray square.
- *
- * Cell dividers are provided by gap-px + bg-gray-200 on the grid container;
- * individual cells no longer carry border-r/border-l classes.
+ * Segmented goal scale.
+ * Desktop (sm+): equal-width grid of 7 cells in one row.
+ * Mobile: horizontal scrollable row of fixed-width cards showing label + kg/wk.
  */
 function GoalPresetScale({ selectedKey, onChange, disabled }: GoalPresetScaleProps) {
-  const selectedIndex = GOAL_PRESETS.findIndex((p) => p.key === selectedKey);
-
-  // Fill the trailing empty slot(s) in the last row on mobile (4-col grid).
-  const mobileCols = 4;
-  const remainder = GOAL_PRESETS.length % mobileCols;
-  const ghostCount = remainder === 0 ? 0 : mobileCols - remainder;
+  const handleChange = useCallback(
+    (key: string) => {
+      const preset = GOAL_PRESETS.find((p) => p.key === key);
+      if (preset) onChange(preset.key);
+    },
+    [onChange],
+  );
 
   return (
-    <div
-      role="group"
-      aria-label="Goal presets"
-      className="grid grid-cols-4 gap-px bg-gray-200 overflow-hidden sm:grid-cols-7"
-    >
-      {GOAL_PRESETS.map((p, i) => (
-        <GoalPresetButton
-          key={p.key}
-          preset={p}
-          isSelected={p.key === selectedKey}
-          isAdjacent={selectedIndex >= 0 && Math.abs(i - selectedIndex) === 1}
-          isLeftOfSelected={selectedIndex >= 0 && i === selectedIndex - 1}
-          onChange={onChange}
-          disabled={disabled}
-        />
-      ))}
-      {/* Ghost cells prevent the gray gap-px background from showing in
-          the empty trailing slot(s) of the last row on mobile. */}
-      {Array.from({ length: ghostCount }).map((_, i) => (
-        <div key={`ghost-${i}`} className="bg-white sm:hidden" aria-hidden="true" />
-      ))}
-    </div>
+    <ResponsiveScaleSelector
+      options={GOAL_OPTIONS}
+      selectedKey={selectedKey}
+      onChange={handleChange}
+      disabled={disabled}
+      radioGroupName="goalPreset"
+      ariaLabel="Goal presets"
+      mobileOptionMinWidth={112}
+    />
   );
 }
 

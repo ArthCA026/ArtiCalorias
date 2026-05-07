@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { PROTEIN_PRESETS, getAgeProteinMinimum } from "@/config/proteinPresets";
-import type { ProteinPreset, ProteinPresetId } from "@/config/proteinPresets";
+import type { ProteinPresetId } from "@/config/proteinPresets";
+import ResponsiveScaleSelector, { type ScaleOption } from "@/components/shared/ResponsiveScaleSelector";
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -31,79 +32,15 @@ function getGoalHint(goalKcal: string): string | null {
   return null;
 }
 
-// ── Scale cell ────────────────────────────────────────────────────────────────
+// ── Mobile label map ──────────────────────────────────────────────────────────
 
-interface ScaleCellProps {
-  preset: ProteinPreset;
-  isSelected: boolean;
-  isAdjacent: boolean;
-  isLeftOfSelected: boolean;
-  disabled: boolean;
-  onChange: (id: ProteinPresetId) => void;
-  /** Personalised g/day for this preset, or null when weight is unknown. */
-  computedGrams: number | null;
-  /** Extra class names (e.g. col-span-full for the lone last item on mobile). */
-  className?: string;
-}
-
-function ScaleCell({
-  preset,
-  isSelected,
-  isAdjacent,
-  isLeftOfSelected: _isLeftOfSelected,
-  disabled,
-  onChange,
-  computedGrams,
-  className,
-}: ScaleCellProps) {
-  return (
-    <label
-      title={
-        computedGrams != null
-          ? `${preset.label} — ${computedGrams} g/day · ${preset.gramsPerKg} g/kg`
-          : `${preset.label} — ${preset.description} · ${preset.gramsPerKg} g/kg`
-      }
-      className={[
-        "flex w-full cursor-pointer select-none flex-col items-center justify-center touch-manipulation",
-        "px-1 py-2.5 min-h-11 min-w-0 text-center text-xs font-medium leading-tight",
-        "transition-colors duration-200",
-        // Keyboard focus ring is inset so it doesn't bleed outside the container.
-        "focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-500",
-        isSelected
-          ? "bg-indigo-600 text-white font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
-          : isAdjacent
-          ? "bg-indigo-50 text-indigo-500"
-          : "bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700",
-        disabled ? "pointer-events-none opacity-50" : "",
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      {/*
-       * Visually-hidden radio for full keyboard + screen-reader semantics.
-       * The label click / Enter key toggles the radio, which fires onChange.
-       */}
-      <input
-        type="radio"
-        name="proteinPreset"
-        value={preset.id}
-        checked={isSelected}
-        onChange={() => onChange(preset.id)}
-        disabled={disabled}
-        aria-label={`${preset.label} — ${preset.description}`}
-        className="sr-only"
-      />
-      <span className="leading-tight">{preset.label}</span>
-      <span className={[
-        "mt-0.5 text-[10px] font-normal leading-tight",
-        isSelected ? "text-indigo-200" : "text-gray-400",
-      ].join(" ")}>
-        {computedGrams != null ? `${computedGrams} g` : `${preset.gramsPerKg} g/kg`}
-      </span>
-    </label>
-  );
-}
+const MOBILE_LABEL_MAP: Record<ProteinPresetId, string> = {
+  "light": "Light",
+  "everyday": "Everyday",
+  "weight-loss-support": "Weight Loss",
+  "active-training": "Training",
+  "muscle-gain": "Muscle Gain",
+};
 
 // ── Custom input panel ────────────────────────────────────────────────────────
 
@@ -294,7 +231,6 @@ export default function ProteinPresetSelector({
     setShowCustomInput(false);
   }, [savedPresetId, savedGrams]);
 
-  const selectedIndex = PROTEIN_PRESETS.findIndex((p) => p.id === localPresetId);
   const isCustomActive = savedPresetId === "";
 
   function handlePresetClick(presetId: ProteinPresetId) {
@@ -319,6 +255,18 @@ export default function ProteinPresetSelector({
 
   const activePreset = PROTEIN_PRESETS.find((p) => p.id === localPresetId);
   const weight = parseFloat(weightKg);
+  const proteinOptions: ScaleOption[] = PROTEIN_PRESETS.map((p) => {
+    const grams = weight > 0 ? Math.round(weight * p.gramsPerKg) : null;
+    const secondary = grams != null ? `${grams} g` : `${p.gramsPerKg} g/kg`;
+    return {
+      key: p.id,
+      label: p.label,
+      mobileLabel: MOBILE_LABEL_MAP[p.id],
+      desktopSecondaryValue: secondary,
+      mobileSecondaryValue: secondary,
+      fullAriaLabel: `${p.label} — ${p.description}`,
+    };
+  });
   const ageNum = parseInt(age);
   const ageMin = !isNaN(ageNum) && ageNum > 0 ? getAgeProteinMinimum(ageNum) : 0;
   const isAgeAdjusted = activePreset != null && ageMin > activePreset.gramsPerKg;
@@ -337,36 +285,22 @@ export default function ProteinPresetSelector({
        */}
       <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm">
 
-        {/* ── Scale — 2-col grid on mobile, single row on desktop ── */}
-        <div
-          role="group"
-          aria-label="Protein presets"
-          className="grid grid-cols-2 gap-px bg-gray-200 overflow-hidden sm:grid-cols-5"
-        >
-          {PROTEIN_PRESETS.map((p, i) => (
-            <ScaleCell
-              key={p.id}
-              preset={p}
-              isSelected={p.id === localPresetId}
-              isAdjacent={selectedIndex >= 0 && Math.abs(i - selectedIndex) === 1}
-              isLeftOfSelected={selectedIndex >= 0 && i === selectedIndex - 1}
-              onChange={handlePresetClick}
-              disabled={disabled}
-              computedGrams={weight > 0 ? Math.round(weight * p.gramsPerKg) : null}
-              className={
-                i === PROTEIN_PRESETS.length - 1 && PROTEIN_PRESETS.length % 2 !== 0
-                  ? "col-span-full sm:col-span-1"
-                  : undefined
-              }
-            />
-          ))}
-        </div>
+        {/* ── Scale — desktop grid / mobile horizontal scroll ── */}
+        <ResponsiveScaleSelector
+          options={proteinOptions}
+          selectedKey={localPresetId}
+          onChange={(key) => handlePresetClick(key as ProteinPresetId)}
+          disabled={disabled}
+          radioGroupName="proteinPreset"
+          ariaLabel="Protein presets"
+          mobileOptionMinWidth={128}
+        />
 
         {/* ── Caption row — hidden on mobile (2-col grid makes left/right
             directional labels ambiguous) and when custom input is open. ── */}
         {!showCustomInput && (
           <div
-            className="hidden sm:flex select-none justify-between px-3 pb-1.5 pt-1"
+            className="flex select-none justify-between px-3 pb-1.5 pt-1"
             aria-hidden="true"
           >
             <span className="text-[10px] text-gray-400">← Less protein</span>
@@ -375,33 +309,48 @@ export default function ProteinPresetSelector({
         )}
 
         {/* ── Detail row ── */}
-        <div className="border-t border-gray-100 px-3 py-3">
+        <div className="border-t border-gray-100 px-3 py-2 sm:py-3">
 
           {/* Face 1: a preset is active */}
           {!showCustomInput && !isCustomActive && activePreset && (
             <>
-              <p className="text-sm font-medium text-gray-800">
-                {activePreset.label} protein
-              </p>
-              <p className="mt-0.5 text-xs text-gray-500">
-                {activePreset.gramsPerKg} g/kg
-                {previewGrams != null && (
-                  <>
-                    <span className="mx-1.5 text-gray-300" aria-hidden="true">·</span>
-                    about <strong className="text-gray-700">{previewGrams} g/day</strong>
-                  </>
-                )}
-              </p>
-              <p className="mt-0.5 text-xs text-gray-400">{activePreset.description}</p>
-              {isAgeAdjusted && (
-                <p className="mt-1.5 text-[11px] text-amber-600 italic">
-                  Adjusted for age: older adults often benefit from a slightly higher minimum protein target.
-                </p>
-              )}
-              {goalHint && (
-                <p className="mt-1.5 text-[11px] text-gray-400 italic">{goalHint}</p>
-              )}
-              <div className="mt-2 flex justify-end">
+              <div className="flex items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800">
+                    {activePreset.label} protein
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    {activePreset.gramsPerKg} g/kg
+                    {previewGrams != null && (
+                      <>
+                        <span className="mx-1.5 text-gray-300" aria-hidden="true">·</span>
+                        about <strong className="text-gray-700">{previewGrams} g/day</strong>
+                      </>
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-400">{activePreset.description}</p>
+                  {isAgeAdjusted && (
+                    <p className="mt-1.5 text-[11px] text-amber-600 italic">
+                      Adjusted for age: older adults often benefit from a slightly higher minimum protein target.
+                    </p>
+                  )}
+                  {goalHint && (
+                    <p className="hidden sm:block mt-1.5 text-[11px] text-gray-400 italic">{goalHint}</p>
+                  )}
+                </div>
+                {/* Mobile: “Custom” shortcut — top-right of summary */}
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setShowCustomInput(true)}
+                  className="sm:hidden shrink-0 mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
+                >
+                  <PencilIcon className="h-3 w-3" />
+                  Custom
+                </button>
+              </div>
+              {/* Desktop: "Set custom target" link — bottom-right */}
+              <div className="hidden sm:flex mt-2 justify-end">
                 <button
                   ref={triggerRef}
                   type="button"
@@ -426,23 +375,38 @@ export default function ProteinPresetSelector({
                 : null;
             return (
               <>
-                <p className="text-sm font-medium text-gray-700">Custom target</p>
-                {grams != null && (
-                  <p className="mt-0.5 text-xs text-gray-500">
-                    <strong className="text-gray-700">{grams} g/day</strong>
-                    {gramsPerKgCustom != null && (
-                      <>
-                        <span className="mx-1.5 text-gray-300" aria-hidden="true">·</span>
-                        about {gramsPerKgCustom} g/kg
-                      </>
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-700">Custom target</p>
+                    {grams != null && (
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        <strong className="text-gray-700">{grams} g/day</strong>
+                        {gramsPerKgCustom != null && (
+                          <>
+                            <span className="mx-1.5 text-gray-300" aria-hidden="true">·</span>
+                            about {gramsPerKgCustom} g/kg
+                          </>
+                        )}
+                      </p>
                     )}
-                  </p>
-                )}
-                <p className="mt-0.5 text-xs text-gray-400">Custom protein goal</p>
-                {goalHint && (
-                  <p className="mt-1.5 text-[11px] text-gray-400 italic">{goalHint}</p>
-                )}
-                <div className="mt-2 flex justify-end">
+                    <p className="mt-0.5 text-xs text-gray-400">Custom protein goal</p>
+                    {goalHint && (
+                      <p className="hidden sm:block mt-1.5 text-[11px] text-gray-400 italic">{goalHint}</p>
+                    )}
+                  </div>
+                  {/* Mobile: “Edit” shortcut — top-right of summary */}
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => setShowCustomInput(true)}
+                    className="sm:hidden shrink-0 mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
+                  >
+                    <PencilIcon className="h-3 w-3" />
+                    Edit
+                  </button>
+                </div>
+                {/* Desktop: “Edit custom target” link — bottom-right */}
+                <div className="hidden sm:flex mt-2 justify-end">
                   <button
                     ref={triggerRef}
                     type="button"

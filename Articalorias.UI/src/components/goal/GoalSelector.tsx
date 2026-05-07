@@ -111,7 +111,7 @@ export default function GoalSelector({ selectedKcal, onGoalChange, disabled }: G
             4-col wrapping grid makes left/right directions ambiguous. */}
         {!showCustomInput && (
           <div
-            className="hidden sm:flex select-none justify-between px-3 pb-1.5 pt-1"
+            className="flex select-none justify-between px-3 pb-1.5 pt-1"
             aria-hidden="true"
           >
             <span className="text-[10px] text-gray-400">← More deficit</span>
@@ -120,13 +120,28 @@ export default function GoalSelector({ selectedKcal, onGoalChange, disabled }: G
         )}
 
         {/* Detail row — same container, separated from scale by a thin rule */}
-        <div className="border-t border-gray-100 px-3 py-3">
+        <div className="border-t border-gray-100 px-3 py-2 sm:py-3">
 
           {/* Face 1: preset active */}
           {!showCustomInput && !isCustomActive && activePreset && (
             <>
-              <GoalSummary preset={activePreset} />
-              <div className="mt-2 flex justify-end">
+              <div className="flex items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <GoalSummary preset={activePreset} />
+                </div>
+                {/* Mobile: “Custom” shortcut — top-right of summary */}
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setShowCustomInput(true)}
+                  className="sm:hidden shrink-0 mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
+                >
+                  <PencilIcon className="h-3 w-3" />
+                  Custom
+                </button>
+              </div>
+              {/* Desktop: “Set custom target” link — bottom-right */}
+              <div className="hidden sm:flex mt-2 justify-end">
                 <button
                   type="button"
                   disabled={disabled}
@@ -149,7 +164,7 @@ export default function GoalSelector({ selectedKcal, onGoalChange, disabled }: G
                   type="button"
                   disabled={disabled}
                   onClick={() => setShowCustomInput(true)}
-                  className="inline-flex flex-shrink-0 items-center gap-1 text-xs text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
+                  className="inline-flex shrink-0 items-center gap-1 text-xs text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
                 >
                   <PencilIcon className="h-3 w-3" />
                   Edit
