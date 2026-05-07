@@ -94,27 +94,11 @@ public class HistoryController : ControllerBase
         LogDate = d.LogDate,
         TotalFoodCaloriesKcal = d.TotalFoodCaloriesKcal,
         TotalProteinGrams = d.TotalProteinGrams,
-        TotalFatGrams = d.TotalFatGrams,
-        TotalCarbsGrams = d.TotalCarbsGrams,
-        TotalAlcoholGrams = d.TotalAlcoholGrams,
-        TotalActivityCaloriesKcal = d.TotalActivityCaloriesKcal,
-        TEFKcal = d.TEFKcal,
         TotalDailyExpenditureKcal = d.TotalDailyExpenditureKcal,
-        NetBalanceKcal = d.NetBalanceKcal,
         DailyGoalDeltaKcal = d.DailyGoalDeltaKcal,
         CaloriesRemainingToDailyTargetKcal = d.CaloriesRemainingToDailyTargetKcal,
         ProteinRemainingGrams = d.ProteinRemainingGrams,
-        WeekStartDate = d.WeekStartDate,
-        WeekEndDate = d.WeekEndDate,
-        WeeklyTargetKcal = d.WeeklyTargetKcal,
-        WeeklyActualToDateKcal = d.WeeklyActualToDateKcal,
-        WeeklyExpectedToDateKcal = d.WeeklyExpectedToDateKcal,
-        WeeklyDifferenceKcal = d.WeeklyDifferenceKcal,
-        WeeklyRemainingTargetKcal = d.WeeklyRemainingTargetKcal,
         SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
-        IsFinalized = d.IsFinalized,
-        SnapshotWeightKg = d.SnapshotWeightKg,
-        SnapshotDailyBaseGoalKcal = d.SnapshotDailyBaseGoalKcal,
         SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams
     };
 
@@ -142,18 +126,6 @@ public class HistoryController : ControllerBase
     {
         MonthlySummaryId = m.MonthlySummaryId,
         YearNumber = m.YearNumber,
-        MonthNumber = m.MonthNumber,
-        TotalFoodCaloriesKcal = m.TotalFoodCaloriesKcal,
-        TotalProteinGrams = m.TotalProteinGrams,
-        TotalActivityCaloriesKcal = m.TotalActivityCaloriesKcal,
-        TotalTEFKcal = m.TotalTEFKcal,
-        TotalExpenditureKcal = m.TotalExpenditureKcal,
-        ActualMonthlyBalanceKcal = m.ActualMonthlyBalanceKcal,
-        AverageDailyFoodCaloriesKcal = m.AverageDailyFoodCaloriesKcal,
-        AverageDailyExpenditureKcal = m.AverageDailyExpenditureKcal,
-        AverageDailyBalanceKcal = m.AverageDailyBalanceKcal,
-        AverageWeeklyBalanceKcal = m.AverageWeeklyBalanceKcal,
-        EstimatedWeightChangeKg = m.EstimatedWeightChangeKg,
-        DaysLogged = m.DaysLogged
+        MonthNumber = m.MonthNumber
     };
 }

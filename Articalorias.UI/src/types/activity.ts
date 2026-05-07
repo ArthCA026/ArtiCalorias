@@ -14,7 +14,6 @@ export interface ActivityEntryResponse {
   metValue: number | null;
   calculatedCaloriesKcal: number;
   isGlobalDefault: boolean;
-  isFromSystemTemplate: boolean;
   notes: string | null;
   sortOrder: number;
   segments: ActivityEntrySegmentDto[];

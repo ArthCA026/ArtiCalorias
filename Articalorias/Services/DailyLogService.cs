@@ -17,6 +17,13 @@ public class DailyLogService : IDailyLogService
         _recalculation = recalculation;
     }
 
+    public async Task<DailyLog?> GetSummaryByDateAsync(long userId, DateOnly date)
+    {
+        return await _db.DailyLogs
+            .AsNoTracking()
+            .FirstOrDefaultAsync(d => d.UserId == userId && d.LogDate == date);
+    }
+
     public async Task<DailyLog?> GetByDateAsync(long userId, DateOnly date)
     {
         return await _db.DailyLogs
@@ -36,7 +43,7 @@ public class DailyLogService : IDailyLogService
 
     public async Task<DailyLog> GetOrCreateAsync(long userId, DateOnly date)
     {
-        var existing = await GetByDateAsync(userId, date);
+        var existing = await GetSummaryByDateAsync(userId, date);
         if (existing is not null)
             return existing;
 
@@ -133,7 +140,7 @@ public class DailyLogService : IDailyLogService
         // Run full pipeline on the new day
         await _recalculation.RecalculateFullPipelineAsync(dailyLog.DailyLogId);
 
-        return (await GetByDateAsync(userId, date))!;
+        return (await GetSummaryByDateAsync(userId, date))!;
     }
 
     public async Task RecalculateAsync(long dailyLogId)

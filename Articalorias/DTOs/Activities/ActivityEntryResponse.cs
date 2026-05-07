@@ -10,7 +10,6 @@ public class ActivityEntryResponse
     public decimal? METValue { get; set; }
     public decimal CalculatedCaloriesKcal { get; set; }
     public bool IsGlobalDefault { get; set; }
-    public bool IsFromSystemTemplate { get; set; }
     public string? Notes { get; set; }
     public int SortOrder { get; set; }
     public List<ActivityEntrySegmentDto> Segments { get; set; } = [];

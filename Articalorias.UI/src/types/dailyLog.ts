@@ -7,37 +7,14 @@ export interface DailyLogResponse {
 
   totalFoodCaloriesKcal: number;
   totalProteinGrams: number;
-  totalFatGrams: number;
-  totalCarbsGrams: number;
-  totalAlcoholGrams: number;
 
-  totalActivityCaloriesKcal: number;
-  tefKcal: number;
-  hoursRemainingInDay: number;
-  idleTimeCaloriesKcal: number;
   totalDailyExpenditureKcal: number;
 
-  netBalanceKcal: number;
   dailyGoalDeltaKcal: number;
   caloriesRemainingToDailyTargetKcal: number;
   proteinRemainingGrams: number;
-
-  weekStartDate: string;
-  weekEndDate: string;
-  weeklyTargetKcal: number;
-  weeklyActualToDateKcal: number;
-  weeklyExpectedToDateKcal: number;
-  weeklyDifferenceKcal: number;
-  weeklyRemainingTargetKcal: number;
   suggestedDailyAverageRemainingKcal: number;
 
-  isFinalized: boolean;
-
-  snapshotWeightKg: number;
-  snapshotHeightCm: number;
-  snapshotBMRKcal: number;
-  snapshotBodyFatPercent: number | null;
-  snapshotDailyBaseGoalKcal: number;
   snapshotProteinGoalGrams: number;
 }
 

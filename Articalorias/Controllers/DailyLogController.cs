@@ -66,12 +66,12 @@ public class DailyLogController : ControllerBase
     public async Task<IActionResult> Recalculate(DateOnly date)
     {
         var userId = GetUserId();
-        var log = await _dailyLogService.GetByDateAsync(userId, date);
+        var log = await _dailyLogService.GetSummaryByDateAsync(userId, date);
         if (log is null)
             return NotFound();
 
         await _recalculation.RecalculateFullPipelineAsync(log.DailyLogId);
-        log = await _dailyLogService.GetByDateAsync(userId, date);
+        log = await _dailyLogService.GetSummaryByDateAsync(userId, date);
         return Ok(MapToResponse(log!));
     }
 
@@ -80,7 +80,7 @@ public class DailyLogController : ControllerBase
     {
         var userId = GetUserId();
         await _recalculation.RefreshSnapshotAndRecalculateAsync(userId, date);
-        var log = await _dailyLogService.GetByDateAsync(userId, date);
+        var log = await _dailyLogService.GetSummaryByDateAsync(userId, date);
         if (log is null)
             return NoContent(); // No log exists yet — nothing to return, not an error.
         return Ok(MapToResponse(log));
@@ -183,7 +183,7 @@ public class DailyLogController : ControllerBase
     public async Task<IActionResult> GetFoods(DateOnly date)
     {
         var userId = GetUserId();
-        var log = await _dailyLogService.GetByDateAsync(userId, date);
+        var log = await _dailyLogService.GetSummaryByDateAsync(userId, date);
         if (log is null)
             return Ok(Array.Empty<FoodEntryResponse>());
 
@@ -269,32 +269,11 @@ public class DailyLogController : ControllerBase
         LogDate = d.LogDate,
         TotalFoodCaloriesKcal = d.TotalFoodCaloriesKcal,
         TotalProteinGrams = d.TotalProteinGrams,
-        TotalFatGrams = d.TotalFatGrams,
-        TotalCarbsGrams = d.TotalCarbsGrams,
-        TotalAlcoholGrams = d.TotalAlcoholGrams,
-        TotalActivityCaloriesKcal = d.TotalActivityCaloriesKcal,
-        TEFKcal = d.TEFKcal,
-        HoursRemainingInDay = d.HoursRemainingInDay,
-        IdleTimeCaloriesKcal = d.IdleTimeCaloriesKcal,
         TotalDailyExpenditureKcal = d.TotalDailyExpenditureKcal,
-        NetBalanceKcal = d.NetBalanceKcal,
         DailyGoalDeltaKcal = d.DailyGoalDeltaKcal,
         CaloriesRemainingToDailyTargetKcal = d.CaloriesRemainingToDailyTargetKcal,
         ProteinRemainingGrams = d.ProteinRemainingGrams,
-        WeekStartDate = d.WeekStartDate,
-        WeekEndDate = d.WeekEndDate,
-        WeeklyTargetKcal = d.WeeklyTargetKcal,
-        WeeklyActualToDateKcal = d.WeeklyActualToDateKcal,
-        WeeklyExpectedToDateKcal = d.WeeklyExpectedToDateKcal,
-        WeeklyDifferenceKcal = d.WeeklyDifferenceKcal,
-        WeeklyRemainingTargetKcal = d.WeeklyRemainingTargetKcal,
         SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
-        IsFinalized = d.IsFinalized,
-        SnapshotWeightKg = d.SnapshotWeightKg,
-        SnapshotHeightCm = d.SnapshotHeightCm,
-        SnapshotBMRKcal = d.SnapshotBMRKcal,
-        SnapshotBodyFatPercent = d.SnapshotBodyFatPercent,
-        SnapshotDailyBaseGoalKcal = d.SnapshotDailyBaseGoalKcal,
         SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams
     };
 
@@ -325,7 +304,6 @@ public class DailyLogController : ControllerBase
         METValue = a.METValue,
         CalculatedCaloriesKcal = a.CalculatedCaloriesKcal,
         IsGlobalDefault = a.IsGlobalDefault,
-        IsFromSystemTemplate = a.ActivityTemplate?.TemplateScope == "SYSTEM",
         Notes = a.Notes,
         SortOrder = a.SortOrder,
         Segments = a.Segments.Select(s => new ActivityEntrySegmentDto
@@ -346,32 +324,11 @@ public class DailyLogController : ControllerBase
         LogDate = d.LogDate,
         TotalFoodCaloriesKcal = d.TotalFoodCaloriesKcal,
         TotalProteinGrams = d.TotalProteinGrams,
-        TotalFatGrams = d.TotalFatGrams,
-        TotalCarbsGrams = d.TotalCarbsGrams,
-        TotalAlcoholGrams = d.TotalAlcoholGrams,
-        TotalActivityCaloriesKcal = d.TotalActivityCaloriesKcal,
-        TEFKcal = d.TEFKcal,
-        HoursRemainingInDay = d.HoursRemainingInDay,
-        IdleTimeCaloriesKcal = d.IdleTimeCaloriesKcal,
         TotalDailyExpenditureKcal = d.TotalDailyExpenditureKcal,
-        NetBalanceKcal = d.NetBalanceKcal,
         DailyGoalDeltaKcal = d.DailyGoalDeltaKcal,
         CaloriesRemainingToDailyTargetKcal = d.CaloriesRemainingToDailyTargetKcal,
         ProteinRemainingGrams = d.ProteinRemainingGrams,
-        WeekStartDate = d.WeekStartDate,
-        WeekEndDate = d.WeekEndDate,
-        WeeklyTargetKcal = d.WeeklyTargetKcal,
-        WeeklyActualToDateKcal = d.WeeklyActualToDateKcal,
-        WeeklyExpectedToDateKcal = d.WeeklyExpectedToDateKcal,
-        WeeklyDifferenceKcal = d.WeeklyDifferenceKcal,
-        WeeklyRemainingTargetKcal = d.WeeklyRemainingTargetKcal,
         SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
-        IsFinalized = d.IsFinalized,
-        SnapshotWeightKg = d.SnapshotWeightKg,
-        SnapshotHeightCm = d.SnapshotHeightCm,
-        SnapshotBMRKcal = d.SnapshotBMRKcal,
-        SnapshotBodyFatPercent = d.SnapshotBodyFatPercent,
-        SnapshotDailyBaseGoalKcal = d.SnapshotDailyBaseGoalKcal,
         SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams,
         FoodEntries = foods.Select(MapFoodToResponse).ToList(),
         ActivityEntries = activities.Select(MapActivityToResponse).ToList()

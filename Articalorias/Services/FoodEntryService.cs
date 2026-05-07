@@ -19,6 +19,7 @@ public class FoodEntryService : IFoodEntryService
     public async Task<IReadOnlyList<FoodEntry>> GetByDailyLogAsync(long dailyLogId)
     {
         return await _db.FoodEntries
+            .AsNoTracking()
             .Where(f => f.DailyLogId == dailyLogId)
             .OrderBy(f => f.SortOrder)
             .ToListAsync();

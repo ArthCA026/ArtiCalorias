@@ -21,7 +21,7 @@ public class ActivityService : IActivityService
     public async Task<IReadOnlyList<ActivityEntry>> GetEntriesByDailyLogAsync(long dailyLogId)
     {
         return await _db.ActivityEntries
-            .Include(a => a.ActivityTemplate)
+            .AsNoTracking()
             .Include(a => a.Segments.OrderBy(s => s.SegmentOrder))
             .Where(a => a.DailyLogId == dailyLogId)
             .OrderBy(a => a.SortOrder)

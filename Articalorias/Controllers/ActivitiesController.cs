@@ -203,7 +203,6 @@ public class ActivitiesController : ControllerBase
         METValue = a.METValue,
         CalculatedCaloriesKcal = a.CalculatedCaloriesKcal,
         IsGlobalDefault = a.IsGlobalDefault,
-        IsFromSystemTemplate = a.ActivityTemplate?.TemplateScope == "SYSTEM",
         Notes = a.Notes,
         SortOrder = a.SortOrder,
         Segments = a.Segments.Select(s => new ActivityEntrySegmentDto

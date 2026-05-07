@@ -16,7 +16,6 @@ import {
 import { historyService } from "@/services/historyService";
 import { dailyLogService } from "@/services/dailyLogService";
 import type { DailyLogResponse } from "@/types/dailyLog";
-import type { MonthlySummaryResponse } from "@/types/history";
 import { fmt, toDateString } from "@/utils/format";
 import { extractApiError } from "@/utils/apiError";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -45,7 +44,6 @@ function MonthlyView() {
   const [year, setYear] = useState(initYear);
   const [month, setMonth] = useState(initMonth);
   const [days, setDays] = useState<DailyLogResponse[]>([]);
-  const [summary, setSummary] = useState<MonthlySummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,13 +62,9 @@ function MonthlyView() {
     const lastDay = new Date(year, month, 0).getDate();
     const to = year + "-" + String(month).padStart(2, "0") + "-" + String(lastDay).padStart(2, "0");
 
-    Promise.all([
-      historyService.getDailyRange(from, to).then(({ data }) => data),
-      historyService.getMonthly(year, month).then(({ data }) => data).catch(() => null),
-    ])
-      .then(([dailyData, monthlyData]) => {
-        setDays(dailyData);
-        setSummary(monthlyData);
+    historyService.getDailyRange(from, to)
+      .then(({ data }) => {
+        setDays(data);
       })
       .catch(() => setError("Couldn't load your history — please try again."))
       .finally(() => setLoading(false));
@@ -128,63 +122,9 @@ function MonthlyView() {
           {(days.length > 0 || unloggedDays.length > 0) && (
             <DailyLogsCard days={days} unloggedDays={unloggedDays} onDayClick={(d) => navigate("/history/" + d)} onDayDeleted={load} />
           )}
-          {summary && <MonthlySummaryCard summary={summary} />}
         </>
       )}
     </div>
-  );
-}
-
-/* --- Monthly Summary Card --- */
-
-function MonthlySummaryCard({ summary: s }: { summary: MonthlySummaryResponse }) {
-  const [open, setOpen] = useState(false);
-
-  const avgBalance = s.averageDailyBalanceKcal;
-  const avgProtein = s.daysLogged > 0 ? s.totalProteinGrams / s.daysLogged : 0;
-  const weightChange = s.estimatedWeightChangeKg;
-  const today = new Date();
-  const daysInMonth = new Date(s.yearNumber, s.monthNumber, 0).getDate();
-  const isCurrent = s.yearNumber === today.getFullYear() && s.monthNumber === today.getMonth() + 1;
-  const totalDays = isCurrent ? today.getDate() : daysInMonth;
-
-  return (
-    <Card title="How your month is going" variant="primary">
-      <div className="space-y-2.5">
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 font-medium rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
-        >
-          <svg
-            className={`h-4 w-4 transition-transform ${open ? "rotate-90" : ""}`}
-            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-            strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
-          >
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-          {open ? "Hide the numbers" : "Show the numbers"}
-        </button>
-
-        {open && (
-          <div className="pt-2.5 border-t border-gray-100">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <Stat label="Days logged" value={`${s.daysLogged} of ${totalDays}`} />
-              <Stat label="Avg. daily balance" value={`${fmt(avgBalance)} kcal`} accent />
-              <Stat label="Avg. protein / day" value={`${fmt(avgProtein, 1)} g`} />
-              {weightChange != null && (
-                <Stat label="Est. weight change" value={`${weightChange <= 0 ? "−" : "+"}${fmt(Math.abs(weightChange), 2)} kg`} />
-              )}
-              <Stat label="Calories eaten" value={`${fmt(s.totalFoodCaloriesKcal)} kcal`} />
-              <Stat label="Total burned" value={`${fmt(s.totalExpenditureKcal)} kcal`} hint="BMR + activities + thermic effect" />
-              <Stat label="Net calories" value={`${fmt(s.actualMonthlyBalanceKcal)} kcal`} accent />
-              <Stat label="Avg. eaten / day" value={`${fmt(s.averageDailyFoodCaloriesKcal)} kcal`} />
-              <Stat label="Avg. burned / day" value={`${fmt(s.averageDailyExpenditureKcal)} kcal`} hint="BMR + activities + thermic effect" />
-              <Stat label="Total protein" value={`${fmt(s.totalProteinGrams, 1)} g`} />
-            </div>
-          </div>
-        )}
-      </div>
-    </Card>
   );
 }
 
@@ -226,8 +166,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
               <thead>
                 <tr className="bg-gray-50/80 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-500 sticky top-0 z-10">
                   <th className="py-2.5 px-3 text-left">Date</th>
-                  <th className="py-2.5 px-2 text-right">Result</th>
-                  <th className="py-2.5 px-2 text-right">vs. Goal</th>
+                  <th className="py-2.5 px-2 text-right">Above / Below Daily Goal</th>
                   <th className="py-2.5 px-2 text-right">Protein</th>
                   <th className="py-2.5 px-2 text-center w-10"><span className="sr-only">Actions</span></th>
                 </tr>
@@ -240,11 +179,8 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
                     className={`cursor-pointer group transition-colors hover:bg-indigo-50/30 ${idx % 2 === 1 ? "bg-gray-50/40" : ""}`}
                   >
                     <td className="py-2.5 px-3 font-medium text-indigo-600">
-                      <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${d.netBalanceKcal <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
+                      <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${d.dailyGoalDeltaKcal <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
                       {formatDayLabel(d.logDate)}
-                    </td>
-                    <td className="py-2.5 px-2 text-right">
-                      <FriendlyBalance value={d.netBalanceKcal} />
                     </td>
                     <td className="py-2.5 px-2 text-right">
                       <FriendlyGoalDelta value={d.dailyGoalDeltaKcal} />
@@ -277,11 +213,10 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
               >
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="font-medium text-indigo-600 text-sm">
-                    <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${d.netBalanceKcal <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${d.dailyGoalDeltaKcal <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
                     {formatDayLabel(d.logDate)}
                   </span>
                   <div className="flex items-center gap-2">
-                    <FriendlyBalance value={d.netBalanceKcal} />
                     {d.logDate !== todayStr && (
                       <button
                         onClick={(e) => handleDeleteClick(e, d.logDate)}
@@ -295,7 +230,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
                   <span>Protein: <span className="font-medium text-gray-700">{fmt(d.totalProteinGrams, 1)} g</span></span>
-                  <span>vs. Goal: <FriendlyGoalDelta value={d.dailyGoalDeltaKcal} /></span>
+                  <span>Above/below goal: <FriendlyGoalDelta value={d.dailyGoalDeltaKcal} /></span>
                 </div>
               </div>
             ))}
@@ -653,15 +588,6 @@ function TrashIcon() {
   );
 }
 
-function FriendlyBalance({ value }: { value: number }) {
-  const isUnder = value <= 0;
-  return (
-    <span className={"text-sm tabular-nums font-semibold " + (isUnder ? "text-green-700" : "text-amber-600")}>
-      {fmt(Math.abs(value))} kcal {isUnder ? "under" : "over"}
-    </span>
-  );
-}
-
 function FriendlyGoalDelta({ value }: { value: number }) {
   if (Math.abs(value) < 1) return <span className="text-gray-400">On target</span>;
   const isUnder = value <= 0;
@@ -696,15 +622,5 @@ function Card({ title, subtitle, variant, children }: { title: string; subtitle?
       {!subtitle && <div className="mb-2" />}
       {children}
     </section>
-  );
-}
-
-function Stat({ label, value, accent, hint }: { label: string; value: string; accent?: boolean; hint?: string }) {
-  return (
-    <div>
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className={"text-lg font-semibold " + (accent ? "text-indigo-600" : "text-gray-900")}>{value}</p>
-      {hint && <p className="text-[10px] text-gray-400/70 leading-tight">{hint}</p>}
-    </div>
   );
 }
