@@ -252,6 +252,78 @@ public class FoodParsingService : IFoodParsingService
     }
 
     // ─────────────────────────────────────────────────────
+    //  ParseImageAsync — vision-based food parsing
+    // ─────────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<ParsedFoodItem>> ParseImageAsync(
+        string imageBase64,
+        string mimeType,
+        string? freeText,
+        string? country = null)
+    {
+        if (string.IsNullOrWhiteSpace(imageBase64))
+            throw new ArgumentException("Image data is required.", nameof(imageBase64));
+
+        var systemPrompt = string.IsNullOrWhiteSpace(country)
+            ? DeveloperPrompt
+            : $"{DeveloperPrompt}\n\nThe user is located in {country}. Use typical food products, brands, and portion sizes common in {country} when estimating calories and macros.";
+
+        // Decode base64 → BinaryData for the OpenAI SDK
+        byte[] imageBytes;
+        try
+        {
+            imageBytes = Convert.FromBase64String(imageBase64);
+        }
+        catch (FormatException)
+        {
+            throw new InvalidOperationException("Image data is not valid base64.");
+        }
+
+        var imagePart = ChatMessageContentPart.CreateImagePart(
+            BinaryData.FromBytes(imageBytes),
+            mimeType);
+
+        var textContent = string.IsNullOrWhiteSpace(freeText)
+            ? "What food or drink items are in this image? Extract all visible food and provide nutritional estimates."
+            : freeText;
+
+        var textPart = ChatMessageContentPart.CreateTextPart(textContent);
+
+        var messages = new List<ChatMessage>
+        {
+            new SystemChatMessage(systemPrompt),
+            new UserChatMessage(imagePart, textPart),
+        };
+
+        var options = new ChatCompletionOptions
+        {
+            ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+        };
+
+        _logger.LogInformation(
+            "Sending image to OpenAI Vision: mimeType={MimeType}, bytes={Bytes}, hasText={HasText}",
+            mimeType, imageBytes.Length, !string.IsNullOrWhiteSpace(freeText));
+
+        ChatCompletion completion;
+        try
+        {
+            completion = await _chatClient.CompleteChatAsync(messages, options);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "OpenAI Vision API call failed");
+            throw new InvalidOperationException("Failed to analyze the image. Try again or enter food manually.");
+        }
+
+        var content = completion.Content[0].Text;
+        _logger.LogInformation("OpenAI Vision response: {Response}", content);
+
+        var items = DeserializeResponse(content);
+        var validated = Validate(items);
+        return Scale(validated);
+    }
+
+    // ─────────────────────────────────────────────────────
     //  Internal DTO for deserializing the { "items": [...] } wrapper
     // ─────────────────────────────────────────────────────
 

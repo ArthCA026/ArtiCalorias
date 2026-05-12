@@ -60,3 +60,9 @@ export interface ParsedFoodItem {
 export interface ConfirmParsedFoodsRequest {
   items: CreateFoodEntryRequest[];
 }
+
+export interface ParseFoodWithImageRequest {
+  imageBase64: string;
+  mimeType: string;
+  freeText?: string | null;
+}

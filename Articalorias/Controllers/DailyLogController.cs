@@ -97,6 +97,21 @@ public class DailyLogController : ControllerBase
         return Ok(parsed);
     }
 
+    // ── AI vision food parsing — accepts a photo (+ optional text context) ──
+
+    [HttpPost("{date}/parse-food-image")]
+    public async Task<IActionResult> ParseFoodImage(DateOnly date, [FromBody] ParseFoodWithImageRequest request)
+    {
+        var userId = GetUserId();
+        var profile = await _profileService.GetByUserIdAsync(userId);
+        var parsed = await _foodParsing.ParseImageAsync(
+            request.ImageBase64,
+            request.MimeType,
+            request.FreeText,
+            profile?.Country);
+        return Ok(parsed);
+    }
+
     // ── Batch confirm (user reviewed AI proposals and hit confirm) ──
 
     [HttpPost("{date}/foods/batch")]

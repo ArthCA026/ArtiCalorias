@@ -166,7 +166,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
               <thead>
                 <tr className="bg-gray-50/80 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-500 sticky top-0 z-10">
                   <th className="py-2.5 px-3 text-left">Date</th>
-                  <th className="py-2.5 px-2 text-right">Above / Below Daily Goal</th>
+                  <th className="py-2.5 px-2 text-right">Over / Under</th>
                   <th className="py-2.5 px-2 text-right">Protein</th>
                   <th className="py-2.5 px-2 text-center w-10"><span className="sr-only">Actions</span></th>
                 </tr>

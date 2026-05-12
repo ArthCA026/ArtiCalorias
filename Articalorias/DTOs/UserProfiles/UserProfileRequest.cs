@@ -35,4 +35,10 @@ public class UserProfileRequest
 
     [StringLength(100)]
     public string? Country { get; set; }
+
+    [Range(0, 1440)]
+    public decimal? DefaultSleepMinutes { get; set; }
+
+    [Range(0, 1440)]
+    public decimal? DefaultNeatMinutes { get; set; }
 }

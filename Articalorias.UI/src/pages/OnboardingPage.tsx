@@ -4,22 +4,16 @@ import { useNavigate } from "react-router";
 import { profileService } from "@/services/profileService";
 import type { UserProfileRequest } from "@/types";
 import { extractApiError } from "@/utils/apiError";
-
-const GOAL_PRESETS = [
-  { key: "lose-fast",     label: "Lose weight faster",           desc: "~0.75 kg per week — more aggressive", kcal: "-750" },
-  { key: "lose-moderate", label: "Lose weight",                  desc: "~0.5 kg per week — recommended",       kcal: "-500" },
-  { key: "lose-slow",     label: "Lose weight slowly",           desc: "~0.25 kg per week — gentle pace",      kcal: "-250" },
-  { key: "maintain",      label: "Maintain my current weight",   desc: "Stay where you are",                   kcal: "0" },
-  { key: "gain",          label: "Gain weight",                  desc: "~0.3 kg per week",                     kcal: "300" },
-] as const;
+import GoalSelector from "@/components/goal/GoalSelector";
+import ProteinPresetSelector from "@/components/protein/ProteinPresetSelector";
+import { PROTEIN_PRESETS, getAgeProteinMinimum } from "@/config/proteinPresets";
+import type { ProteinPresetId } from "@/config/proteinPresets";
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [goalPreset, setGoalPreset] = useState<string>("lose-moderate");
-  const [showCustomGoal, setShowCustomGoal] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const [form, setForm] = useState({
@@ -33,6 +27,7 @@ export default function OnboardingPage() {
     autoCalculateBodyFat: true,
     dailyBaseGoalKcal: "-500",
     proteinGoalGrams: "",
+    proteinPresetId: "muscle-gain",
     autoCalculateProteinGoal: true,
     country: "",
   });
@@ -45,20 +40,6 @@ export default function OnboardingPage() {
       delete next[field];
       return next;
     });
-  }
-
-  function selectGoalPreset(key: string) {
-    setGoalPreset(key);
-    setShowCustomGoal(false);
-    const preset = GOAL_PRESETS.find((p) => p.key === key);
-    if (preset) {
-      setForm((prev) => ({ ...prev, dailyBaseGoalKcal: preset.kcal }));
-    }
-  }
-
-  function switchToCustomGoal() {
-    setGoalPreset("");
-    setShowCustomGoal(true);
   }
 
   const estimate = useMemo(() => {
@@ -140,6 +121,21 @@ export default function OnboardingPage() {
     }
     setFieldErrors({});
 
+    // Resolve the final protein grams from the current (validated) weight so
+    // a stale computedGrams value stored when the preset was first clicked
+    // (possibly before weight was entered) can never reach the API.
+    let resolvedProteinGrams: number | null = null;
+    if (!form.autoCalculateProteinGoal) {
+      if (form.proteinPresetId) {
+        const preset = PROTEIN_PRESETS.find((p) => p.id === form.proteinPresetId);
+        const ageNum = form.age ? parseInt(form.age) : NaN;
+        const ageMin = !isNaN(ageNum) && ageNum > 0 ? getAgeProteinMinimum(ageNum) : 0;
+        if (preset) resolvedProteinGrams = Math.round(weight * Math.max(preset.gramsPerKg, ageMin));
+      } else {
+        resolvedProteinGrams = form.proteinGoalGrams ? parseFloat(form.proteinGoalGrams) : null;
+      }
+    }
+
     const data: UserProfileRequest = {
       currentWeightKg: weight,
       heightCm: height,
@@ -150,7 +146,7 @@ export default function OnboardingPage() {
       autoCalculateBMR: form.autoCalculateBMR,
       autoCalculateBodyFat: form.autoCalculateBodyFat,
       dailyBaseGoalKcal: form.dailyBaseGoalKcal ? parseFloat(form.dailyBaseGoalKcal) : null,
-      proteinGoalGrams: form.proteinGoalGrams ? parseFloat(form.proteinGoalGrams) : null,
+      proteinGoalGrams: resolvedProteinGrams,
       autoCalculateProteinGoal: form.autoCalculateProteinGoal,
       country: form.country || null,
     };
@@ -167,8 +163,8 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="max-w-xl mx-auto">
-      <div className="text-center mb-6 sm:mb-10">
+    <div className="w-full min-w-0">
+      <div className="text-center mb-6 sm:mb-10 max-w-xl mx-auto">
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100">
           <svg className="h-6 w-6 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
@@ -261,71 +257,39 @@ export default function OnboardingPage() {
             </div>
           </div>
 
-          {/* Goal preset cards */}
-          <fieldset className="space-y-2">
-            <legend className="sr-only">Choose your weight goal</legend>
-            {GOAL_PRESETS.map((p) => (
-              <label
-                key={p.key}
-                className={`flex items-center gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-colors ${
-                  goalPreset === p.key && !showCustomGoal
-                    ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500"
-                    : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="goalPreset"
-                  value={p.key}
-                  checked={goalPreset === p.key && !showCustomGoal}
-                  onChange={() => selectGoalPreset(p.key)}
-                  className="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                <div className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium text-gray-900">{p.label}</span>
-                  <span className="block text-xs text-gray-400">{p.desc}</span>
-                </div>
-              </label>
-            ))}
-          </fieldset>
+          <GoalSelector
+            selectedKcal={form.dailyBaseGoalKcal}
+            onGoalChange={(kcal) => set("dailyBaseGoalKcal", kcal)}
+            disabled={loading}
+          />
 
           {/* Protein target */}
           <div className="pt-2 border-t border-gray-100">
-            <label className="block text-sm font-medium text-gray-700">
-              Daily protein target{!form.autoCalculateProteinGoal && " (g) *"}
-            </label>
-            {form.autoCalculateProteinGoal ? (
-              <>
-                <div className="mt-1.5 flex items-center gap-2 rounded-md border border-indigo-100 bg-indigo-50/60 px-3 py-2.5 text-sm">
-                  <svg className="h-4 w-4 text-indigo-500 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                  <span className="text-gray-600">
-                    {estimate
-                      ? <>We'll set this to about <strong className="text-gray-900">{estimate.protein} g</strong> based on your weight</>
-                      : "Calculated automatically based on your weight"}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-xs text-gray-400">Protein helps you stay full and keep muscle while losing weight</p>
-                <button type="button" onClick={() => set("autoCalculateProteinGoal", false)} className="mt-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
-                  I want to set my own →
-                </button>
-              </>
-            ) : (
-              <>
-                <input
-                  type="number"
-                  step="1"
-                  inputMode="numeric"
-                  value={form.proteinGoalGrams}
-                  onChange={(e) => set("proteinGoalGrams", e.target.value)}
-                  placeholder="e.g. 130"
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                />
-                <p className="mt-1.5 text-xs text-gray-400">Protein helps you stay full and keep muscle while losing weight</p>
-                <button type="button" onClick={() => set("autoCalculateProteinGoal", true)} className="mt-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
-                  ← Calculate this for me
-                </button>
-              </>
-            )}
+            <p className="mb-3 text-sm font-medium text-gray-700">Daily protein target</p>
+            <ProteinPresetSelector
+              savedPresetId={form.proteinPresetId}
+              savedGrams={form.proteinGoalGrams}
+              weightKg={form.currentWeightKg}
+              goalKcal={form.dailyBaseGoalKcal}
+              age={form.age}
+              disabled={loading}
+              onPresetSelect={(presetId: ProteinPresetId, computedGrams: string) => {
+                setForm((prev) => ({
+                  ...prev,
+                  proteinPresetId: presetId,
+                  proteinGoalGrams: computedGrams,
+                  autoCalculateProteinGoal: false,
+                }));
+              }}
+              onCustomApply={(grams: string) => {
+                setForm((prev) => ({
+                  ...prev,
+                  proteinPresetId: "",
+                  proteinGoalGrams: grams,
+                  autoCalculateProteinGoal: false,
+                }));
+              }}
+            />
           </div>
         </div>
 
@@ -375,39 +339,6 @@ export default function OnboardingPage() {
 
             {showAdvanced && (
               <div className="mt-4 space-y-5">
-                {/* Custom calorie adjustment */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Daily calorie adjustment</label>
-                  {!showCustomGoal ? (
-                    <>
-                      <div className="mt-1.5 flex items-center gap-2 rounded-md border border-indigo-100 bg-indigo-50/60 px-3 py-2.5 text-sm">
-                        <svg className="h-4 w-4 text-indigo-500 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                        <span className="text-gray-600">
-                          Set by your goal: <strong className="text-gray-900">{form.dailyBaseGoalKcal} kcal/day</strong>
-                        </span>
-                      </div>
-                      <button type="button" onClick={switchToCustomGoal} className="mt-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
-                        I want to set a custom value →
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <input
-                        type="number"
-                        step="1"
-                        inputMode="numeric"
-                        value={form.dailyBaseGoalKcal}
-                        onChange={(e) => set("dailyBaseGoalKcal", e.target.value)}
-                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                      />
-                      <p className="mt-1 text-xs text-gray-400">Negative = eat less to lose weight (e.g. −500). Positive = eat more to gain weight.</p>
-                      <button type="button" onClick={() => selectGoalPreset("lose-moderate")} className="mt-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
-                        ← Back to preset goals
-                      </button>
-                    </>
-                  )}
-                </div>
-
                 {/* BMR override */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700">

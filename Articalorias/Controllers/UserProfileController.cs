@@ -49,7 +49,9 @@ public class UserProfileController : ControllerBase
             DailyBaseGoalKcal = request.DailyBaseGoalKcal ?? -500m,
             ProteinGoalGrams = request.ProteinGoalGrams,
             AutoCalculateProteinGoal = request.AutoCalculateProteinGoal,
-            Country = request.Country
+            Country = request.Country,
+            DefaultSleepMinutes = request.DefaultSleepMinutes ?? 360m,
+            DefaultNeatMinutes = request.DefaultNeatMinutes ?? 180m,
         };
 
         var result = await _profileService.CreateOrUpdateAsync(userId, profile);
@@ -78,6 +80,8 @@ public class UserProfileController : ControllerBase
         ProteinGoalGrams = p.ProteinGoalGrams,
         AutoCalculateProteinGoal = p.AutoCalculateProteinGoal,
         Country = p.Country,
-        IsOnboardingCompleted = p.IsOnboardingCompleted
+        IsOnboardingCompleted = p.IsOnboardingCompleted,
+        DefaultSleepMinutes = p.DefaultSleepMinutes,
+        DefaultNeatMinutes = p.DefaultNeatMinutes,
     };
 }

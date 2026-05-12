@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback, useMemo } from "react";
+﻿import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { dailyLogService } from "@/services/dailyLogService";
 import { foodService } from "@/services/foodService";
 import { activityService } from "@/services/activityService";
@@ -10,11 +10,13 @@ import type {
   UpdateActivityEntryRequest,
   ActivityTemplateResponse,
   ActivityTemplateRequest,
+  ParsedFoodItem,
 } from "@/types";
 import { fmt, toDateString } from "@/utils/format";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import ErrorMessage from "@/components/ErrorMessage";
 import { extractApiError, isNotFound } from "@/utils/apiError";
+import { compressImage } from "@/utils/compressImage";
 
 interface DayDashboardProps {
   date: string;
@@ -177,24 +179,85 @@ function IconBookmarkFilled({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
-/* --- Food Input (parse free text) --- */
+function IconCamera({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  );
+}
+
+/* --- Food Input (parse free text or image) --- */
 function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: () => void; isToday: boolean; noCard?: boolean }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Image state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageData, setImageData] = useState<{ base64: string; mimeType: string } | null>(null);
+
+  function autoResize(el: HTMLTextAreaElement) {
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }
+
+  function clearImage() {
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setImagePreview(null);
+    setImageData(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function handleImageSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setImagePreview(URL.createObjectURL(file));
+    try {
+      const compressed = await compressImage(file);
+      setImageData(compressed);
+    } catch {
+      setError("Failed to process the image. Please try a different file.");
+      clearImage();
+    }
+  }
 
   async function handleAdd() {
-    if (!text.trim()) return;
+    if (!imageData && !text.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      const { data } = await dailyLogService.parseFood(date, { freeText: text });
-      if (!data.length) {
-        setError("We couldn't recognize any food. Try describing it a bit differently.");
-        return;
+      let parsed: ParsedFoodItem[];
+      let sourceType: string;
+
+      if (imageData) {
+        const { data } = await dailyLogService.parseFoodWithImage(date, {
+          imageBase64: imageData.base64,
+          mimeType: imageData.mimeType,
+          freeText: text.trim() || null,
+        });
+        if (!data.length) {
+          setError("We couldn't identify any food in the image. Try adding a text description.");
+          return;
+        }
+        parsed = data;
+        sourceType = "AI_IMAGE";
+      } else {
+        const { data } = await dailyLogService.parseFood(date, { freeText: text });
+        if (!data.length) {
+          setError("We couldn't recognize any food. Try describing it a bit differently.");
+          return;
+        }
+        parsed = data;
+        sourceType = "AI";
       }
+
       await dailyLogService.confirmParsedFoods(date, {
-        items: data.map((p) => ({
+        items: parsed.map((p) => ({
           foodName: p.foodName,
           portionDescription: p.portionDescription,
           quantity: p.quantity,
@@ -204,10 +267,12 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
           fatGrams: p.fatGrams,
           carbsGrams: p.carbsGrams,
           alcoholGrams: p.alcoholGrams,
-          sourceType: "AI",
+          sourceType,
         })),
       });
       setText("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+      clearImage();
       onSaved();
     } catch (err) {
       setError(extractApiError(err, "Something went wrong adding your food. Please try again."));
@@ -216,34 +281,68 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
     }
   }
 
-  function handleKeyDown(e: React.KeyboardEvent) {
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleAdd();
     }
   }
 
+  const hasImage = imageData !== null;
+  const canSubmit = hasImage || text.trim().length > 0;
+
   const foodBody = (
     <>
-      <div className="flex gap-2">
-        <input
-          type="text"
+      {/* Hidden file input — triggers native camera on mobile via capture="environment" */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        aria-label="Attach a photo of your meal"
+        className="sr-only"
+        onChange={handleImageSelected}
+      />
+
+      <div className="flex gap-2 items-end">
+        {/* Camera button */}
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={busy}
+          aria-label="Attach a photo of your meal"
+          title="Attach a photo"
+          className={`inline-flex items-center justify-center shrink-0 rounded-lg border px-3 py-2 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed ${
+            hasImage
+              ? "border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+              : "border-gray-300 bg-gray-50/50 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          }`}
+        >
+          <IconCamera className="w-4 h-4" />
+        </button>
+
+        {/* Auto-growing textarea */}
+        <textarea
+          ref={textareaRef}
+          rows={1}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => { setText(e.target.value); autoResize(e.target); }}
           onKeyDown={handleKeyDown}
-          placeholder='e.g. "2 eggs and toast with butter"'
-          className="flex-1 min-w-0 rounded-lg border border-gray-300 bg-gray-50/50 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+          placeholder={hasImage ? 'Optional: add context (e.g. "with extra sauce")' : 'e.g. "2 eggs and toast with butter"'}
+          className="flex-1 min-w-0 rounded-lg border border-gray-300 bg-gray-50/50 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors resize-none overflow-hidden leading-normal"
           aria-label={isToday ? "Describe the food you ate" : "Describe the food you ate that day"}
         />
+
+        {/* Log button */}
         <button
           onClick={handleAdd}
-          disabled={busy || !text.trim()}
+          disabled={busy || !canSubmit}
           className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
         >
           {busy ? (
             <>
               <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-              Logging…
+              {hasImage ? "Analyzing…" : "Logging…"}
             </>
           ) : (
             <>
@@ -253,6 +352,38 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
           )}
         </button>
       </div>
+
+      {/* Image thumbnail preview */}
+      {imagePreview && (
+        <div className="mt-2 flex items-center gap-2">
+          <div className="relative shrink-0">
+            <img
+              src={imagePreview}
+              alt="Selected meal photo"
+              className="h-12 w-12 rounded-lg object-cover border border-gray-200"
+            />
+            <button
+              type="button"
+              onClick={clearImage}
+              disabled={busy}
+              aria-label="Remove photo"
+              className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-700 text-white shadow hover:bg-gray-900 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-gray-700 disabled:opacity-50"
+            >
+              <IconX className="w-2.5 h-2.5" />
+            </button>
+          </div>
+          {!imageData && (
+            <p className="text-xs text-gray-400">
+              <svg className="inline animate-spin h-3 w-3 mr-1" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              Processing…
+            </p>
+          )}
+          {imageData && (
+            <p className="text-xs text-gray-500">Photo ready · tap <strong>Log</strong> to analyze</p>
+          )}
+        </div>
+      )}
+
       {error && <p className="mt-1.5 text-sm text-red-600" role="alert">{error}</p>}
     </>
   );
@@ -261,7 +392,7 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
   return (
     <Card
       title={isToday ? "Log food" : "Add food"}
-      subtitle={isToday ? "Describe what you ate – we'll estimate the calories for you" : "Add what you ate that day – we'll estimate the calories"}
+      subtitle={isToday ? "Describe what you ate or attach a photo – we'll estimate the calories" : "Add what you ate that day – describe it or attach a photo"}
       icon={<IconUtensils className="w-5 h-5" />}
     >
       {foodBody}
@@ -287,6 +418,12 @@ function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSav
   const [templateSaved, setTemplateSaved] = useState(false);
   const [editingTemplateName, setEditingTemplateName] = useState(false);
   const [templateName, setTemplateName] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  function autoResize(el: HTMLTextAreaElement) {
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }
 
   // Auto-dismiss the template prompt after 8s if the user ignores it
   useEffect(() => {
@@ -343,6 +480,7 @@ function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSav
         })),
       })));
       setText("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
       onSaved();
     } catch (err) {
       setError(extractApiError(err, "Something went wrong adding your activity. Please try again."));
@@ -392,15 +530,16 @@ function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSav
 
   const activityBody = (
     <>
-      <div className="flex gap-2">
-        <input
-          type="text"
+      <div className="flex gap-2 items-end">
+        <textarea
+          ref={textareaRef}
+          rows={1}
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
+          onChange={(e) => { setText(e.target.value); autoResize(e.target); }}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAdd(); } }}
           placeholder='e.g. "30 min walking, 20 min cleaning"'
           aria-label="Describe the activity you did"
-          className="flex-1 min-w-0 rounded-lg border border-gray-300 bg-gray-50/50 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
+          className="flex-1 min-w-0 rounded-lg border border-gray-300 bg-gray-50/50 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors resize-none overflow-hidden leading-normal"
         />
         <button
           onClick={handleAdd}

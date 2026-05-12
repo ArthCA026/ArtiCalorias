@@ -192,7 +192,7 @@ CREATE TABLE app.FoodEntry
         REFERENCES app.DailyLog(DailyLogId)
         ON DELETE CASCADE,
 
-    CONSTRAINT CK_FoodEntry_SourceType CHECK (SourceType IN ('AI', 'MANUAL', 'MIXED'))
+    CONSTRAINT CK_FoodEntry_SourceType CHECK (SourceType IN ('AI', 'AI_IMAGE', 'MANUAL', 'MIXED'))
 );
 GO
 

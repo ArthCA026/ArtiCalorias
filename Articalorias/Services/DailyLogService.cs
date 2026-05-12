@@ -76,15 +76,22 @@ public class DailyLogService : IDailyLogService
         await _db.SaveChangesAsync();
 
         // Auto-add global default activities (Sleep, NEAT, etc.)
+        // Duration comes from the user's profile preferences (defaults: 360 min / 180 min).
         var globalSortOrder = 1;
         foreach (var gd in GlobalDefaultActivities.All)
         {
+            var durationMinutes = gd.Name == GlobalDefaultActivities.Sleep.Name
+                ? profile.DefaultSleepMinutes
+                : gd.Name == GlobalDefaultActivities.DailyMovement.Name
+                    ? profile.DefaultNeatMinutes
+                    : gd.DefaultDurationMinutes;
+
             var entry = new ActivityEntry
             {
                 DailyLogId = dailyLog.DailyLogId,
                 ActivityType = "MET_SIMPLE",
                 ActivityName = gd.Name,
-                DurationMinutes = gd.DefaultDurationMinutes,
+                DurationMinutes = durationMinutes,
                 METValue = gd.METValue,
                 IsGlobalDefault = true,
                 SortOrder = globalSortOrder++,

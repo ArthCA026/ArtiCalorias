@@ -3,6 +3,7 @@ import type {
   DailyLogResponse,
   DailyDashboardResponse,
   ParseFoodRequest,
+  ParseFoodWithImageRequest,
   ParsedFoodItem,
   ConfirmParsedFoodsRequest,
   FoodEntryResponse,
@@ -32,6 +33,10 @@ export const dailyLogService = {
 
   parseFood(date: string, data: ParseFoodRequest) {
     return api.post<ParsedFoodItem[]>(`/dailylog/${date}/parse-food`, data);
+  },
+
+  parseFoodWithImage(date: string, data: ParseFoodWithImageRequest) {
+    return api.post<ParsedFoodItem[]>(`/dailylog/${date}/parse-food-image`, data);
   },
 
   confirmParsedFoods(date: string, data: ConfirmParsedFoodsRequest) {

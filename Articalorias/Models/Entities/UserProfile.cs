@@ -22,6 +22,10 @@ public class UserProfile
 
     public string? Country { get; set; }
 
+    // Default activity durations added to each new day
+    public decimal DefaultSleepMinutes { get; set; } = 360m;
+    public decimal DefaultNeatMinutes { get; set; } = 180m;
+
     public bool IsOnboardingCompleted { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }

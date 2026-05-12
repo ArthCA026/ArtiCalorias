@@ -13,6 +13,8 @@ export interface UserProfileResponse {
   autoCalculateProteinGoal: boolean;
   country: string | null;
   isOnboardingCompleted: boolean;
+  defaultSleepMinutes: number;
+  defaultNeatMinutes: number;
 }
 
 export interface UserProfileRequest {
@@ -28,4 +30,6 @@ export interface UserProfileRequest {
   proteinGoalGrams?: number | null;
   autoCalculateProteinGoal: boolean;
   country?: string | null;
+  defaultSleepMinutes?: number | null;
+  defaultNeatMinutes?: number | null;
 }
