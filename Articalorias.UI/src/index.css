@@ -31,6 +31,15 @@ textarea:focus-visible {
   outline: none;
 }
 
+/* Suppress browser focus rings on Recharts SVG internals.
+   SVG <rect> elements receive focus on click across some browsers and show
+   a black rectangular UA outline. Recharts wraps every chart in
+   .recharts-wrapper, so this rule is scoped and won't affect anything else. */
+.recharts-wrapper *:focus,
+.recharts-wrapper *:focus-visible {
+  outline: none;
+}
+
 /* Hide number input spin buttons */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
