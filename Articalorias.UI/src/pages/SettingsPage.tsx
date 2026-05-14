@@ -96,16 +96,42 @@ interface Release {
 
 const CHANGELOG: Release[] = [
   {
+    version: "1.1.0",
+    date: "2026-05-14",
+    summary: "Lots of improvements, fixes, and new features.",
+    changes: [
+      { type: "new",      text: "Settings page" },
+      { type: "new",      text: "Changelog" },
+      { type: "new",      text: "Push notification support (demo)" },
+      { type: "new",      text: "Photo logging with gallery picker (Beta)" },
+      { type: "new",      text: "Activity logging redesigned with AI assistance" },
+      { type: "new",      text: "Configurable NEAT and sleep in profile settings" },
+      { type: "new",      text: "Calorie & protein goal selector for new users" },
+      { type: "new",      text: "Minimum adjusted calorie floor" },
+      { type: "new",      text: "Display mode toggle: Net, Goal, or Adjusted Goal" },
+      { type: "improved", text: "Today page fully redesigned, more compact" },
+      { type: "improved", text: "Profile page redesigned, more compact" },
+      { type: "improved", text: "Monthly overview section compacted" },
+      { type: "improved", text: "Profile changes now recalculate today's goals immediately" },
+      { type: "improved", text: "Database queries optimized to reduce costs" },
+      { type: "improved", text: "AI model upgraded to GPT-5.5" },
+      { type: "improved", text: "AI returns per-unit kcal; server multiplies by quantity" },
+      { type: "improved", text: "Protein goal recalibrated to realistic values" },
+      { type: "fixed",    text: "Progress bar now uses adjusted goal" },
+      { type: "fixed",    text: "Monthly \"No data\" message hidden for past months" },
+      { type: "fixed",    text: "Navigation no longer resets to current month after viewing a past day" },
+      { type: "fixed",    text: "Daily calorie bar adjusts based on weekly plan" },
+      { type: "fixed",    text: "Profile layout fixed on mobile" },
+      { type: "fixed",    text: "Chart border artifact removed" },
+      { type: "fixed",    text: "History table: \"Result\" column renamed to \"Net Balance\"" },
+    ],
+  },
+  {
     version: "1.0.0",
     date: "2025-07-01",
-    summary: "Initial public release of ArtiCalorias.",
+    summary: "ArtiCalorias is born.",
     changes: [
-      { type: "new", text: "Daily food log with AI-assisted calorie parsing" },
-      { type: "new", text: "Personal profile with BMR and protein goal calculation" },
-      { type: "new", text: "Activity templates with MET-based calorie burn estimation" },
-      { type: "new", text: "History view with per-day breakdown" },
-      { type: "new", text: "Onboarding flow for new users" },
-      { type: "new", text: "Secure authentication with JWT and refresh tokens" },
+      { type: "new", text: "ArtiCalorias is born" },
     ],
   },
 ];
@@ -436,7 +462,7 @@ export default function SettingsPage() {
         >
           <SettingRow label="Version" description="The version of ArtiCalorias you're currently running.">
             <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
-              1.0.0
+              1.1.0
             </span>
           </SettingRow>
 
@@ -468,7 +494,7 @@ export default function SettingsPage() {
             <div className="space-y-2">
               {CHANGELOG.map((release, i) => (
                 <Fragment key={release.version}>
-                  <ChangelogEntry release={release} defaultOpen={i === 0} />
+                  <ChangelogEntry release={release} defaultOpen={false} />
                 </Fragment>
               ))}
             </div>

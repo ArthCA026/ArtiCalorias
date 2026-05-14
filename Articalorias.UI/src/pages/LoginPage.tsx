@@ -92,6 +92,7 @@ export default function LoginPage() {
         Don't have an account?{" "}
         <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">Create account</Link>
       </p>
+      <p className="text-center text-xs text-gray-300">v1.1.0</p>
     </form>
   );
 }
