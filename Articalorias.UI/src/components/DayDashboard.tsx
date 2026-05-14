@@ -62,11 +62,11 @@ export default function DayDashboard({ date }: DayDashboardProps) {
 function CompactDayProgress({ dash, isToday }: { dash: DailyDashboardResponse | null; isToday: boolean }) {
   if (!dash) return null;
 
-  const calRemaining = isToday
-    // Today: use the week-adjusted budget so past-day surplus/deficit is reflected
-    ? (dash.totalDailyExpenditureKcal + dash.suggestedDailyAverageRemainingKcal) - dash.totalFoodCaloriesKcal
-    // Past day: use the original snapshot goal for an accurate historical view
-    : dash.caloriesRemainingToDailyTargetKcal;
+  // Weekly-adjusted budget — for today it redistributes the week's surplus/deficit;
+  // for past days it reflects what the adjusted target was at that point in time.
+  const dailyBudget = dash.totalDailyExpenditureKcal + dash.suggestedDailyAverageRemainingKcal;
+  const foodCal = dash.totalFoodCaloriesKcal;
+  const calRemaining = dailyBudget - foodCal;
   const calOver = calRemaining < 0;
   const calAbs = Math.abs(calRemaining);
 
@@ -75,8 +75,6 @@ function CompactDayProgress({ dash, isToday }: { dash: DailyDashboardResponse | 
   const protAbs = Math.abs(protRemaining);
 
   // Status line – a quick, human-friendly take on the numbers
-  const foodCal = dash.totalFoodCaloriesKcal;
-  const dailyBudget = foodCal + calRemaining;
   const protPct = dash.snapshotProteinGoalGrams > 0 ? dash.totalProteinGrams / dash.snapshotProteinGoalGrams : 1;
 
   const calPct = dailyBudget > 0 ? Math.round((foodCal / dailyBudget) * 100) : 0;
@@ -97,7 +95,7 @@ function CompactDayProgress({ dash, isToday }: { dash: DailyDashboardResponse | 
           <div className="h-2 rounded-full bg-gray-100 overflow-hidden" role="progressbar" aria-valuenow={foodCal} aria-valuemin={0} aria-valuemax={dailyBudget} aria-label="Calorie budget progress">
             <div className={`h-full rounded-full transition-all duration-500 ${calOver ? "bg-amber-400" : "bg-green-500"}`} style={{ width: `${Math.min(calPct, 100)}%` }} />
           </div>
-          <p className="text-[11px] tabular-nums text-gray-400">{calPct}% · {fmt(foodCal)} of {fmt(dailyBudget)} kcal spent</p>
+          <p className="text-[11px] tabular-nums text-gray-400">{calPct}% · {fmt(foodCal)} of {fmt(dailyBudget)} kcal spent{!isToday && <span className="ml-1 opacity-50">· weekly adjusted</span>}</p>
         </div>
 
         {/* Protein row */}
@@ -394,10 +392,8 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
 /* --- Activity Input (parse free text) --- */
 interface LastLoggedActivity {
   activityName: string;
-  activityType: string;
   durationMinutes: number | null;
   metValue: number | null;
-  segments: { segmentOrder: number; segmentName: string; metValue: number; durationMinutes: number }[];
 }
 
 function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: () => void; isToday: boolean; noCard?: boolean }) {
@@ -445,30 +441,15 @@ function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSav
         return;
       }
       const items = data.map((p) => ({
-        activityType: p.activityType,
         activityName: p.activityName,
         durationMinutes: p.durationMinutes,
         metValue: p.metValue,
-        notes: p.notes,
-        segments: p.segments.map((s) => ({
-          segmentOrder: s.segmentOrder,
-          segmentName: s.segmentName,
-          metValue: s.metValue,
-          durationMinutes: s.durationMinutes,
-        })),
       }));
       await dailyLogService.confirmParsedActivities(date, { items });
       setLastLogged(data.map((p) => ({
         activityName: p.activityName,
-        activityType: p.activityType,
         durationMinutes: p.durationMinutes,
         metValue: p.metValue,
-        segments: p.segments.map((s) => ({
-          segmentOrder: s.segmentOrder,
-          segmentName: s.segmentName,
-          metValue: s.metValue,
-          durationMinutes: s.durationMinutes,
-        })),
       })));
       setText("");
       if (textareaRef.current) textareaRef.current.style.height = "auto";
@@ -495,12 +476,10 @@ function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSav
       for (const a of lastLogged) {
         const req: ActivityTemplateRequest = {
           templateScope: "USER",
-          activityType: a.activityType,
           templateName: lastLogged.length === 1 ? name : a.activityName,
           autoAddToNewDay: false,
           defaultDurationMinutes: a.durationMinutes,
           defaultMET: a.metValue,
-          segments: a.segments,
         };
         await activityService.createTemplate(req);
       }
@@ -959,6 +938,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
   const [selectKey, setSelectKey] = useState(0);
   const [addError, setAddError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [addingFromTemplate, setAddingFromTemplate] = useState(false);
   const [alwaysShowAdvanced] = useState(() => {
     try { return localStorage.getItem("articalorias:showAdvancedActivity") === "true"; } catch { return false; }
   });
@@ -977,21 +957,14 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
     const t = templates.find((tpl) => tpl.activityTemplateId === +id);
     if (!t) return;
     setBusy(true);
+    setAddingFromTemplate(true);
     setAddError(null);
     try {
       await activityService.create(date, {
         activityTemplateId: t.activityTemplateId,
-        activityType: t.activityType,
         activityName: t.templateName,
         durationMinutes: t.defaultDurationMinutes,
         metValue: t.defaultMET,
-        notes: null,
-        segments: t.segments.map((s) => ({
-          segmentOrder: s.segmentOrder,
-          segmentName: s.segmentName,
-          metValue: s.metValue,
-          durationMinutes: s.durationMinutes,
-        })),
       });
       setSelectKey(k => k + 1);
       onChanged();
@@ -999,6 +972,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
       setAddError(extractApiError(err, "Failed to add activity. Please try again."));
     }
     setBusy(false);
+    setAddingFromTemplate(false);
   }
 
   function startEditActivity(a: ActivityEntryResponse) {
@@ -1006,17 +980,9 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
     setEditDurationUnit("minutes");
     setShowEditAdvanced(false);
     setEditForm({
-      activityType: a.activityType,
       activityName: a.activityName,
       durationMinutes: a.durationMinutes,
       metValue: a.metValue,
-      notes: a.notes,
-      segments: a.segments.map((s) => ({
-        segmentOrder: s.segmentOrder,
-        segmentName: s.segmentName,
-        metValue: s.metValue,
-        durationMinutes: s.durationMinutes,
-      })),
     });
   }
 
@@ -1065,17 +1031,10 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
     try {
       const req: ActivityTemplateRequest = {
         templateScope: "USER",
-        activityType: templateSaveTarget.activityType,
         templateName: name,
         autoAddToNewDay: false,
         defaultDurationMinutes: templateSaveTarget.durationMinutes,
         defaultMET: templateSaveTarget.metValue,
-        segments: templateSaveTarget.segments.map((s) => ({
-          segmentOrder: s.segmentOrder,
-          segmentName: s.segmentName,
-          metValue: s.metValue,
-          durationMinutes: s.durationMinutes,
-        })),
       };
       await activityService.createTemplate(req);
       activityService.getTemplates().then(({ data }) => setTemplates(data)).catch(() => {});
@@ -1085,7 +1044,9 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
     setBusy(false);
   }
 
-  const userActivities = activities.filter(a => !a.isGlobalDefault);
+  const userActivities = activities.filter(a =>
+    a.activityName !== "Daily movement"
+  );
   const savedTemplateNames = new Set(
     templates.filter(t => t.isActive).map(t => t.templateName.toLowerCase()),
   );
@@ -1311,7 +1272,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
             className="rounded-md border border-indigo-300 bg-white px-2 py-1.5 text-sm text-indigo-700 font-medium w-full focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none disabled:opacity-50 cursor-pointer"
           >
             <option value="" disabled>
-              {busy ? "Adding…" : "+ Add activity from templates"}
+              {addingFromTemplate ? "Adding…" : "+ Add activity from templates"}
             </option>
             {templates.filter((t) => t.isActive).map((t) => (
               <option key={t.activityTemplateId} value={t.activityTemplateId}>{t.templateName}</option>
@@ -1361,7 +1322,7 @@ function DailyLogWorkspace({
   const foods = dash?.foodEntries ?? [];
   const activities = dash?.activityEntries ?? [];
   const mealCount = foods.length;
-  const activityCount = activities.filter((a) => !a.isGlobalDefault).length;
+  const activityCount = activities.length;
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -1420,10 +1381,59 @@ function DailyLogWorkspace({
         </div>
         <div className={`space-y-2.5${tab !== "activities" ? " hidden" : ""}`}>
           <ActivityInput date={date} onSaved={onChanged} isToday={isToday} noCard />
-          {activities.length > 0 && <div className="border-t border-gray-100 pt-2" />}
+          {(activities.length > 0 || dash?.snapshotSleepHours != null) && <div className="border-t border-gray-100 pt-2" />}
+          {dash?.snapshotSleepHours != null && (
+            <FixedDailyCosts
+              snapshotSleepHours={dash.snapshotSleepHours}
+              snapshotNeatHours={dash.snapshotNeatHours}
+              sleepCaloriesKcal={dash.sleepCaloriesKcal}
+              neatCaloriesKcal={dash.neatCaloriesKcal}
+            />
+          )}
           <ActivitySection date={date} activities={activities} onChanged={onChanged} isToday={isToday} noCard />
         </div>
       </div>
+    </div>
+  );
+}
+
+
+
+function FixedDailyCosts({
+  snapshotSleepHours,
+  snapshotNeatHours,
+  sleepCaloriesKcal,
+  neatCaloriesKcal,
+}: {
+  snapshotSleepHours: number;
+  snapshotNeatHours: number | null;
+  sleepCaloriesKcal: number;
+  neatCaloriesKcal: number;
+}) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 px-1">Fixed daily</p>
+      <div className="rounded-lg border border-gray-100 bg-gray-50/60 divide-y divide-gray-100">
+        <div className="flex items-center justify-between px-3 py-2">
+          <span className="text-sm text-gray-500">
+            Sleep &mdash; {snapshotSleepHours}h
+          </span>
+          <span className={`text-sm font-medium tabular-nums ${sleepCaloriesKcal < 0 ? "text-amber-600" : "text-indigo-600"}`}>
+            {sleepCaloriesKcal >= 0 ? "+" : ""}{Math.round(sleepCaloriesKcal)} kcal
+          </span>
+        </div>
+        {snapshotNeatHours != null && (
+          <div className="flex items-center justify-between px-3 py-2">
+            <span className="text-sm text-gray-500">
+              NEAT &mdash; {snapshotNeatHours}h
+            </span>
+            <span className="text-sm font-medium tabular-nums text-indigo-600">
+              +{Math.round(neatCaloriesKcal)} kcal
+            </span>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-gray-400 px-1">Adjust hours &amp; MET values in Profile settings.</p>
     </div>
   );
 }

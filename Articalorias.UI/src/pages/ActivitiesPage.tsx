@@ -30,26 +30,11 @@ export default function ActivitiesPage() {
 
   const [form, setForm] = useState<ActivityTemplateRequest>({
     templateScope: "USER",
-    activityType: "MET_SIMPLE",
     templateName: "",
     autoAddToNewDay: false,
     defaultDurationMinutes: null,
     defaultMET: null,
-    segments: [],
   });
-
-  function friendlyName(name: string) {
-    const map: Record<string, string> = { Sleep: "Sleep" };
-    return map[name] ?? name;
-  }
-
-  function friendlyHint(name: string): string | null {
-    const hints: Record<string, string> = {
-      "Daily movement": "Walking around, chores, errands, and other non-exercise movement",
-      Sleep: "Rest and recovery — your body uses less energy while sleeping than when awake, so this reduces your daily estimate",
-    };
-    return hints[name] ?? null;
-  }
 
   function load() {
     setLoading(true);
@@ -113,17 +98,10 @@ export default function ActivitiesPage() {
       for (const p of aiParsed) {
         await activityService.createTemplate({
           templateScope: "USER",
-          activityType: p.activityType,
           templateName: p.activityName,
           autoAddToNewDay: false,
           defaultDurationMinutes: p.durationMinutes,
           defaultMET: p.metValue,
-          segments: p.segments.map((s) => ({
-            segmentOrder: s.segmentOrder,
-            segmentName: s.segmentName,
-            metValue: s.metValue,
-            durationMinutes: s.durationMinutes,
-          })),
         });
       }
       setAiText("");
@@ -181,17 +159,10 @@ export default function ActivitiesPage() {
     setShowAdd(true);
     setForm({
       templateScope: t.templateScope,
-      activityType: t.activityType,
       templateName: t.templateName,
       autoAddToNewDay: t.autoAddToNewDay,
       defaultDurationMinutes: t.defaultDurationMinutes,
       defaultMET: t.defaultMET,
-      segments: t.segments.map((s) => ({
-        segmentOrder: s.segmentOrder,
-        segmentName: s.segmentName,
-        metValue: s.metValue,
-        durationMinutes: s.durationMinutes,
-      })),
     });
     setAutoMet(!t.defaultMET);
     setMetExplanation(null);
@@ -223,7 +194,7 @@ export default function ActivitiesPage() {
   function resetForm() {
     setShowAdd(false);
     setEditingTemplateId(null);
-    setForm({ templateScope: "USER", activityType: "MET_SIMPLE", templateName: "", autoAddToNewDay: false, defaultDurationMinutes: null, defaultMET: null, segments: [] });
+    setForm({ templateScope: "USER", templateName: "", autoAddToNewDay: false, defaultDurationMinutes: null, defaultMET: null });
     setDurationUnit("minutes");
     setMetExplanation(null);
     setShowManualAdvanced(false);
@@ -529,7 +500,7 @@ export default function ActivitiesPage() {
               {userTemplates.map((t) => (
                 <div key={t.activityTemplateId} className="flex items-center justify-between bg-white px-4 py-3 hover:bg-indigo-50/30 transition-colors group">
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-gray-900 text-sm">{friendlyName(t.templateName)}</p>
+                    <p className="font-medium text-gray-900 text-sm">{t.templateName}</p>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {t.defaultDurationMinutes != null ? (t.defaultDurationMinutes >= 60 ? `Usually ${+(t.defaultDurationMinutes / 60).toFixed(1)} h` : `Usually ${fmt(t.defaultDurationMinutes)} min`) : "No duration set"}
                       {t.autoAddToNewDay && (
@@ -541,10 +512,10 @@ export default function ActivitiesPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button onClick={() => handleEditTemplate(t)} disabled={busy} title="Edit" aria-label={`Edit ${friendlyName(t.templateName)}`} className="rounded-md p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">
+                    <button onClick={() => handleEditTemplate(t)} disabled={busy} title="Edit" aria-label={`Edit ${t.templateName}`} className="rounded-md p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">
                       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                     </button>
-                    <button onClick={() => handleDelete(t.activityTemplateId)} disabled={busy} title="Delete" aria-label={`Delete ${friendlyName(t.templateName)}`} className="rounded-md p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500">
+                    <button onClick={() => handleDelete(t.activityTemplateId)} disabled={busy} title="Delete" aria-label={`Delete ${t.templateName}`} className="rounded-md p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500">
                       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                     </button>
                   </div>
@@ -578,16 +549,13 @@ export default function ActivitiesPage() {
               <div key={t.activityTemplateId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 hover:bg-gray-50 transition-colors">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-medium text-gray-700 text-sm">{friendlyName(t.templateName)}</p>
+                    <p className="font-medium text-gray-700 text-sm">{t.templateName}</p>
                     <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 ring-1 ring-inset ring-gray-200">built-in</span>
                   </div>
                   {t.defaultDurationMinutes != null && (
                     <p className="text-xs text-gray-400 mt-0.5">
                       Usually {t.defaultDurationMinutes >= 60 ? `${+(t.defaultDurationMinutes / 60).toFixed(1)} h` : `${fmt(t.defaultDurationMinutes)} min`}
                     </p>
-                  )}
-                  {friendlyHint(t.templateName) && (
-                    <p className="text-xs text-gray-400 italic mt-0.5">{friendlyHint(t.templateName)}</p>
                   )}
                 </div>
                 <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none flex-shrink-0 group whitespace-nowrap">
@@ -600,12 +568,10 @@ export default function ActivitiesPage() {
                       try {
                         await activityService.updateTemplate(t.activityTemplateId, {
                           templateScope: t.templateScope,
-                          activityType: t.activityType,
                           templateName: t.templateName,
                           autoAddToNewDay: !t.autoAddToNewDay,
                           defaultDurationMinutes: t.defaultDurationMinutes,
                           defaultMET: t.defaultMET,
-                          segments: t.segments ?? [],
                         });
                         load();
                       } catch (err) {

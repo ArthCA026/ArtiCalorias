@@ -25,8 +25,9 @@ type FormState = {
   proteinPresetId: string;  // one of ProteinPresetId or "" for custom
   autoCalculateProteinGoal: boolean;
   country: string;
-  defaultSleepHours: string;
-  defaultNeatHours: string;
+  // Sleep & NEAT
+  sleepHours: string;
+  neatHours: string;
 };
 
 const emptyForm: FormState = {
@@ -34,7 +35,7 @@ const emptyForm: FormState = {
   bmrKcal: "", bodyFatPercent: "", autoCalculateBMR: true, autoCalculateBodyFat: true,
   dailyBaseGoalKcal: String(kgPerWeekToKcal(-0.50)), proteinGoalGrams: "",
   proteinPresetId: "muscle-gain", autoCalculateProteinGoal: true, country: "",
-  defaultSleepHours: "6", defaultNeatHours: "3",
+  sleepHours: "8", neatHours: "3",
 };
 
 
@@ -73,8 +74,8 @@ function toFormState(data: UserProfileResponse): FormState {
     proteinPresetId: detectProteinPresetId(data),
     autoCalculateProteinGoal: data.autoCalculateProteinGoal,
     country: data.country ?? "",
-    defaultSleepHours: String(data.defaultSleepMinutes / 60),
-    defaultNeatHours: String(data.defaultNeatMinutes / 60),
+    sleepHours: String(data.sleepHours),
+    neatHours: String(data.neatHours),
   };
 }
 
@@ -92,8 +93,8 @@ function buildRequest(f: FormState): UserProfileRequest {
     proteinGoalGrams: f.proteinGoalGrams ? parseFloat(f.proteinGoalGrams) : null,
     autoCalculateProteinGoal: f.autoCalculateProteinGoal,
     country: f.country || null,
-    defaultSleepMinutes: f.defaultSleepHours ? parseFloat(f.defaultSleepHours) * 60 : null,
-    defaultNeatMinutes: f.defaultNeatHours ? parseFloat(f.defaultNeatHours) * 60 : null,
+    sleepHours: parseFloat(f.sleepHours) || 8,
+    neatHours: parseFloat(f.neatHours) || 3,
   };
 }
 
@@ -119,6 +120,14 @@ function validateAll(f: FormState): Record<string, string> {
     if (!f.bodyFatPercent || isNaN(bf)) errors.bodyFatPercent = "Enter a value, or use the estimate";
     else if (bf < 3) errors.bodyFatPercent = "Too low — minimum is 3%";
     else if (bf > 60) errors.bodyFatPercent = "Too high — maximum is 60%";
+  }
+  const sleepH = parseFloat(f.sleepHours);
+  const neatH  = parseFloat(f.neatHours);
+  if (isNaN(sleepH) || sleepH < 0 || sleepH > 23) errors.sleepHours = "Enter a value between 0 and 23";
+  if (isNaN(neatH)  || neatH  < 0 || neatH  > 23) errors.neatHours  = "Enter a value between 0 and 23";
+  if (!isNaN(sleepH) && !isNaN(neatH) && sleepH + neatH > 23) {
+    errors.sleepHours = "Sleep + NEAT cannot exceed 23 hours";
+    errors.neatHours  = "Sleep + NEAT cannot exceed 23 hours";
   }
   return errors;
 }
@@ -435,63 +444,6 @@ export default function ProfilePage() {
             />
           </div>
 
-          {/* ── Daily activity defaults ── */}
-          <div className="p-4 sm:p-5 space-y-3">
-            <div>
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Daily activity defaults</h2>
-              <p className="mt-0.5 text-xs text-gray-400">
-                Hours of sleep and low-intensity movement added automatically to each new day.
-                Changes apply from today onwards — past days are not affected.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <FieldWrap
-                label="Sleep"
-                dirty={dirtyFields.has("defaultSleepHours")}
-                saving={savingField === "defaultSleepHours"}
-                error={fieldErrors.defaultSleepHours}
-                onConfirm={() => confirmField("defaultSleepHours")}
-                onRevert={() => revertField("defaultSleepHours")}
-                hint="Typical range: 5–10 h"
-              >
-                <div className="relative mt-1">
-                  <input
-                    type="number" step="0.5" inputMode="decimal" min="0" max="24"
-                    value={form.defaultSleepHours}
-                    onChange={(e) => setField("defaultSleepHours", e.target.value)}
-                    disabled={isSaving}
-                    aria-label="Default sleep hours per day"
-                    className={suffixInputCls(!!fieldErrors.defaultSleepHours, dirtyFields.has("defaultSleepHours"))}
-                  />
-                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 select-none" aria-hidden="true">h</span>
-                </div>
-              </FieldWrap>
-
-              <FieldWrap
-                label="Daily movement (NEAT)"
-                dirty={dirtyFields.has("defaultNeatHours")}
-                saving={savingField === "defaultNeatHours"}
-                error={fieldErrors.defaultNeatHours}
-                onConfirm={() => confirmField("defaultNeatHours")}
-                onRevert={() => revertField("defaultNeatHours")}
-                hint="Non-exercise activity: cooking, walking, chores, etc."
-              >
-                <div className="relative mt-1">
-                  <input
-                    type="number" step="0.5" inputMode="decimal" min="0" max="24"
-                    value={form.defaultNeatHours}
-                    onChange={(e) => setField("defaultNeatHours", e.target.value)}
-                    disabled={isSaving}
-                    aria-label="Default NEAT hours per day"
-                    className={suffixInputCls(!!fieldErrors.defaultNeatHours, dirtyFields.has("defaultNeatHours"))}
-                  />
-                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 select-none" aria-hidden="true">h</span>
-                </div>
-              </FieldWrap>
-            </div>
-          </div>
-
           {/* ── Personalization ── */}
           <div className="p-4 sm:p-5 space-y-3">
             <div>
@@ -515,6 +467,72 @@ export default function ProfilePage() {
                 placeholder="e.g. Mexico, Spain, USA"
                 className={fieldCls(false, dirtyFields.has("country"))}
               />
+            </FieldWrap>
+          </div>
+
+          {/* ── Sleep & NEAT ── */}
+          <div className="p-4 sm:p-5 space-y-3">
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Sleep &amp; NEAT</h2>
+              <p className="mt-0.5 text-xs text-gray-400">
+                Daily hours reserved for sleep and non-exercise activity (NEAT). Both reduce idle time and contribute their own calorie estimates.
+              </p>
+            </div>
+
+            {(() => {
+              const sh = parseFloat(form.sleepHours);
+              const nh = parseFloat(form.neatHours);
+              if (!isNaN(sh) && !isNaN(nh) && sh + nh > 23) {
+                return (
+                  <p className="text-xs text-amber-500">
+                    Sleep + NEAT total {(sh + nh).toFixed(1)}h — combined cannot exceed 23 hours.
+                  </p>
+                );
+              }
+              return null;
+            })()}
+
+            <FieldWrap
+              label="Sleep hours"
+              dirty={dirtyFields.has("sleepHours")}
+              saving={savingField === "sleepHours"}
+              onConfirm={() => confirmField("sleepHours")}
+              onRevert={() => revertField("sleepHours")}
+              error={fieldErrors.sleepHours}
+            >
+              <div className="relative">
+                <input
+                  type="number"
+                  min={0} max={23} step={0.5}
+                  value={form.sleepHours}
+                  onChange={(e) => setField("sleepHours", e.target.value)}
+                  disabled={isSaving}
+                  className={suffixInputCls(!!fieldErrors.sleepHours, dirtyFields.has("sleepHours"))}
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400">hrs</span>
+              </div>
+            </FieldWrap>
+
+            <FieldWrap
+              label="NEAT hours"
+              dirty={dirtyFields.has("neatHours")}
+              saving={savingField === "neatHours"}
+              onConfirm={() => confirmField("neatHours")}
+              onRevert={() => revertField("neatHours")}
+              error={fieldErrors.neatHours}
+              hint="Non-exercise activity thermogenesis — daily movement outside formal exercise."
+            >
+              <div className="relative">
+                <input
+                  type="number"
+                  min={0} max={23} step={0.5}
+                  value={form.neatHours}
+                  onChange={(e) => setField("neatHours", e.target.value)}
+                  disabled={isSaving}
+                  className={suffixInputCls(!!fieldErrors.neatHours, dirtyFields.has("neatHours"))}
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400">hrs</span>
+              </div>
             </FieldWrap>
           </div>
 

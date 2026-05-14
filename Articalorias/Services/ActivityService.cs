@@ -22,7 +22,6 @@ public class ActivityService : IActivityService
     {
         return await _db.ActivityEntries
             .AsNoTracking()
-            .Include(a => a.Segments.OrderBy(s => s.SegmentOrder))
             .Where(a => a.DailyLogId == dailyLogId)
             .OrderBy(a => a.SortOrder)
             .ToListAsync();
@@ -35,15 +34,19 @@ public class ActivityService : IActivityService
 
         CalculateActivityCalories(entry, dailyLog.SnapshotWeightKg);
 
-        // Validate 24-hour cap
+        // Validate available-time cap: 24h minus reserved sleep & NEAT hours
+        var reservedMinutes = ((dailyLog.SnapshotSleepHours ?? 0m) + (dailyLog.SnapshotNeatHours ?? 0m)) * 60m;
+        var availableMinutes = 1440m - reservedMinutes;
         var existingMinutes = await _db.ActivityEntries
             .Where(a => a.DailyLogId == entry.DailyLogId)
             .SumAsync(a => a.DurationMinutes ?? 0m);
         var newEntryMinutes = entry.DurationMinutes ?? 0m;
 
-        if (existingMinutes + newEntryMinutes > 1440m)
+        if (existingMinutes + newEntryMinutes > availableMinutes)
             throw new InvalidOperationException(
-                $"Cannot exceed 24 hours of activities per day. " +
+                $"Cannot exceed available activity time per day. " +
+                $"Reserved for sleep/NEAT: {reservedMinutes / 60m:F1}h. " +
+                $"Available: {availableMinutes / 60m:F1}h. " +
                 $"Already logged: {existingMinutes / 60m:F1}h. " +
                 $"Attempted to add: {newEntryMinutes / 60m:F1}h.");
 
@@ -62,7 +65,6 @@ public class ActivityService : IActivityService
     public async Task<ActivityEntry> UpdateEntryAsync(ActivityEntry entry)
     {
         var existing = await _db.ActivityEntries
-            .Include(a => a.Segments)
             .Include(a => a.ActivityTemplate)
             .FirstOrDefaultAsync(a => a.ActivityEntryId == entry.ActivityEntryId)
             ?? throw new InvalidOperationException("ActivityEntry not found.");
@@ -70,8 +72,7 @@ public class ActivityService : IActivityService
         var dailyLog = await _db.DailyLogs.FindAsync(existing.DailyLogId)
             ?? throw new InvalidOperationException("DailyLog not found.");
 
-        var isDurationOnly = existing.IsGlobalDefault
-            || existing.ActivityTemplate?.TemplateScope == "SYSTEM";
+        var isDurationOnly = existing.ActivityTemplate?.TemplateScope == "SYSTEM";
 
         if (isDurationOnly)
         {
@@ -80,34 +81,27 @@ public class ActivityService : IActivityService
         }
         else
         {
-            existing.ActivityType = entry.ActivityType;
             existing.ActivityName = entry.ActivityName;
             existing.DurationMinutes = entry.DurationMinutes;
-            existing.DirectCaloriesKcal = entry.DirectCaloriesKcal;
             existing.METValue = entry.METValue;
-            existing.Notes = entry.Notes;
-
-            // Replace segments
-            _db.ActivityEntrySegments.RemoveRange(existing.Segments);
-            foreach (var seg in entry.Segments)
-            {
-                seg.ActivityEntryId = existing.ActivityEntryId;
-                _db.ActivityEntrySegments.Add(seg);
-            }
         }
 
         existing.UpdatedAtUtc = DateTime.UtcNow;
         CalculateActivityCalories(existing, dailyLog.SnapshotWeightKg);
 
-        // Validate 24-hour cap (exclude current entry from existing total)
+        // Validate available-time cap: 24h minus reserved sleep & NEAT hours
+        var reservedMinutes = ((dailyLog.SnapshotSleepHours ?? 0m) + (dailyLog.SnapshotNeatHours ?? 0m)) * 60m;
+        var availableMinutes = 1440m - reservedMinutes;
         var otherMinutes = await _db.ActivityEntries
             .Where(a => a.DailyLogId == existing.DailyLogId && a.ActivityEntryId != existing.ActivityEntryId)
             .SumAsync(a => a.DurationMinutes ?? 0m);
         var updatedMinutes = existing.DurationMinutes ?? 0m;
 
-        if (otherMinutes + updatedMinutes > 1440m)
+        if (otherMinutes + updatedMinutes > availableMinutes)
             throw new InvalidOperationException(
-                $"Cannot exceed 24 hours of activities per day. " +
+                $"Cannot exceed available activity time per day. " +
+                $"Reserved for sleep/NEAT: {reservedMinutes / 60m:F1}h. " +
+                $"Available: {availableMinutes / 60m:F1}h. " +
                 $"Other activities: {otherMinutes / 60m:F1}h. " +
                 $"This entry: {updatedMinutes / 60m:F1}h.");
 
@@ -134,7 +128,6 @@ public class ActivityService : IActivityService
     public async Task<IReadOnlyList<ActivityTemplate>> GetTemplatesAsync(long? userId)
     {
         return await _db.ActivityTemplates
-            .Include(t => t.Segments.OrderBy(s => s.SegmentOrder))
             .Where(t => t.IsActive && (t.TemplateScope == "SYSTEM" || t.UserId == userId))
             .OrderBy(t => t.TemplateName)
             .ToListAsync();
@@ -150,7 +143,6 @@ public class ActivityService : IActivityService
     public async Task<ActivityTemplate> UpdateTemplateAsync(ActivityTemplate template)
     {
         var existing = await _db.ActivityTemplates
-            .Include(t => t.Segments)
             .FirstOrDefaultAsync(t => t.ActivityTemplateId == template.ActivityTemplateId)
             ?? throw new InvalidOperationException("ActivityTemplate not found.");
 
@@ -160,30 +152,16 @@ public class ActivityService : IActivityService
             existing.AutoAddToNewDay = template.AutoAddToNewDay;
             existing.UpdatedAtUtc = DateTime.UtcNow;
             await _db.SaveChangesAsync();
-            await _db.Entry(existing).Collection(t => t.Segments).LoadAsync();
             return existing;
         }
 
         existing.TemplateName = template.TemplateName;
-        existing.ActivityType = template.ActivityType;
         existing.AutoAddToNewDay = template.AutoAddToNewDay;
         existing.DefaultDurationMinutes = template.DefaultDurationMinutes;
-        existing.DefaultDirectCaloriesKcal = template.DefaultDirectCaloriesKcal;
         existing.DefaultMET = template.DefaultMET;
         existing.UpdatedAtUtc = DateTime.UtcNow;
 
-        // Replace segments
-        _db.ActivityTemplateSegments.RemoveRange(existing.Segments);
-        foreach (var seg in template.Segments)
-        {
-            seg.ActivityTemplateId = existing.ActivityTemplateId;
-            _db.ActivityTemplateSegments.Add(seg);
-        }
-
         await _db.SaveChangesAsync();
-
-        // Reload segments for the response
-        await _db.Entry(existing).Collection(t => t.Segments).LoadAsync();
         return existing;
     }
 
@@ -207,28 +185,11 @@ public class ActivityService : IActivityService
         // Formula: Calories = (MET - 1) × weight(kg) × duration(hours)
         // We subtract 1 MET because BMR (≈ 1 MET) is already accounted for
         // separately in the total daily expenditure calculation.
-        switch (entry.ActivityType)
+        if (entry.METValue.HasValue && entry.DurationMinutes.HasValue)
         {
-            case "MET_SIMPLE":
-                if (entry.METValue.HasValue && entry.DurationMinutes.HasValue)
-                {
-                    var netMet = Math.Max(0m, entry.METValue.Value - 1m);
-                    entry.CalculatedCaloriesKcal =
-                        netMet * weightKg * (entry.DurationMinutes.Value / 60m);
-                }
-                break;
-
-            case "MET_MULTIPLE":
-                decimal total = 0;
-                foreach (var seg in entry.Segments)
-                {
-                    var netSegMet = Math.Max(0m, seg.METValue - 1m);
-                    seg.CalculatedCaloriesKcal = netSegMet * weightKg * (seg.DurationMinutes / 60m);
-                    total += seg.CalculatedCaloriesKcal;
-                }
-                entry.CalculatedCaloriesKcal = total;
-                entry.DurationMinutes = entry.Segments.Sum(s => s.DurationMinutes);
-                break;
+            var netMet = entry.METValue.Value - 1m;
+            entry.CalculatedCaloriesKcal =
+                netMet * weightKg * (entry.DurationMinutes.Value / 60m);
         }
     }
 }

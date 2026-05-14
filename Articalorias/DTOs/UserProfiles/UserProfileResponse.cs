@@ -16,6 +16,8 @@ public class UserProfileResponse
     public bool AutoCalculateProteinGoal { get; set; }
     public string? Country { get; set; }
     public bool IsOnboardingCompleted { get; set; }
-    public decimal DefaultSleepMinutes { get; set; }
-    public decimal DefaultNeatMinutes { get; set; }
+
+    // Sleep & NEAT fixed daily costs
+    public decimal SleepHours { get; set; }
+    public decimal NeatHours { get; set; }
 }

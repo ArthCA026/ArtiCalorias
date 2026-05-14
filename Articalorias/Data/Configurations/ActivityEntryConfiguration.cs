@@ -11,16 +11,12 @@ public class ActivityEntryConfiguration : IEntityTypeConfiguration<ActivityEntry
         builder.ToTable("ActivityEntry", "app");
         builder.HasKey(a => a.ActivityEntryId);
 
-        builder.Property(a => a.ActivityType).HasMaxLength(20).IsUnicode(false).IsRequired();
         builder.Property(a => a.ActivityName).HasMaxLength(150).IsRequired();
 
         builder.Property(a => a.DurationMinutes).HasColumnType("decimal(10,2)");
-        builder.Property(a => a.DirectCaloriesKcal).HasColumnType("decimal(10,2)");
         builder.Property(a => a.METValue).HasColumnType("decimal(8,3)");
 
         builder.Property(a => a.CalculatedCaloriesKcal).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
-        builder.Property(a => a.IsGlobalDefault).HasDefaultValue(false);
-        builder.Property(a => a.Notes).HasMaxLength(500);
         builder.Property(a => a.SortOrder).HasDefaultValue(0);
 
         builder.Property(a => a.CreatedAtUtc).HasColumnType("datetime2(0)").HasDefaultValueSql("SYSUTCDATETIME()");

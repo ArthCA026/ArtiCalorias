@@ -1,4 +1,3 @@
-using Articalorias.Configuration;
 using Articalorias.Data;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
@@ -29,7 +28,6 @@ public class DailyLogService : IDailyLogService
         return await _db.DailyLogs
             .Include(d => d.FoodEntries.OrderBy(f => f.SortOrder))
             .Include(d => d.ActivityEntries.OrderBy(a => a.SortOrder))
-                .ThenInclude(a => a.Segments.OrderBy(s => s.SegmentOrder))
             .FirstOrDefaultAsync(d => d.UserId == userId && d.LogDate == date);
     }
 
@@ -67,6 +65,8 @@ public class DailyLogService : IDailyLogService
             SnapshotBodyFatPercent = profile.BodyFatPercent,
             SnapshotDailyBaseGoalKcal = profile.DailyBaseGoalKcal,
             SnapshotProteinGoalGrams = proteinGoal,
+            SnapshotSleepHours = profile.SleepHours,
+            SnapshotNeatHours = profile.NeatHours,
 
             WeekStartDate = weekStart,
             WeekEndDate = weekEnd
@@ -75,66 +75,24 @@ public class DailyLogService : IDailyLogService
         _db.DailyLogs.Add(dailyLog);
         await _db.SaveChangesAsync();
 
-        // Auto-add global default activities (Sleep, NEAT, etc.)
-        // Duration comes from the user's profile preferences (defaults: 360 min / 180 min).
-        var globalSortOrder = 1;
-        foreach (var gd in GlobalDefaultActivities.All)
-        {
-            var durationMinutes = gd.Name == GlobalDefaultActivities.Sleep.Name
-                ? profile.DefaultSleepMinutes
-                : gd.Name == GlobalDefaultActivities.DailyMovement.Name
-                    ? profile.DefaultNeatMinutes
-                    : gd.DefaultDurationMinutes;
-
-            var entry = new ActivityEntry
-            {
-                DailyLogId = dailyLog.DailyLogId,
-                ActivityType = "MET_SIMPLE",
-                ActivityName = gd.Name,
-                DurationMinutes = durationMinutes,
-                METValue = gd.METValue,
-                IsGlobalDefault = true,
-                SortOrder = globalSortOrder++,
-            };
-
-            CalculateActivityCalories(entry, dailyLog.SnapshotWeightKg);
-            _db.ActivityEntries.Add(entry);
-        }
-
-        await _db.SaveChangesAsync();
-
-        // Auto-add activity entries from templates with AutoAddToNewDay = true,
-        // but skip any whose name already matches a global default we just added.
-        var globalNames = GlobalDefaultActivities.All.Select(g => g.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Auto-add activity entries from templates with AutoAddToNewDay = true.
         var autoAddTemplates = await _db.ActivityTemplates
-            .Include(t => t.Segments)
             .Where(t => t.IsActive && t.AutoAddToNewDay && (t.TemplateScope == "SYSTEM" || t.UserId == userId))
             .ToListAsync();
-        autoAddTemplates = autoAddTemplates
-            .Where(t => !globalNames.Contains(t.TemplateName))
-            .ToList();
 
         if (autoAddTemplates.Count > 0)
         {
-            var sortOrder = GlobalDefaultActivities.All.Count + 1;
+            var sortOrder = 1;
             foreach (var template in autoAddTemplates)
             {
                 var entry = new ActivityEntry
                 {
                     DailyLogId = dailyLog.DailyLogId,
                     ActivityTemplateId = template.ActivityTemplateId,
-                    ActivityType = template.ActivityType,
                     ActivityName = template.TemplateName,
                     DurationMinutes = template.DefaultDurationMinutes,
                     METValue = template.DefaultMET,
                     SortOrder = sortOrder++,
-                    Segments = template.Segments.Select(s => new ActivityEntrySegment
-                    {
-                        SegmentOrder = s.SegmentOrder,
-                        SegmentName = s.SegmentName,
-                        METValue = s.METValue,
-                        DurationMinutes = s.DefaultDurationMinutes
-                    }).ToList()
                 };
 
                 CalculateActivityCalories(entry, dailyLog.SnapshotWeightKg);
@@ -191,28 +149,11 @@ public class DailyLogService : IDailyLogService
         // Subtract 1 MET: BMR is already counted separately in total expenditure.
         // Activities with MET < 1 (e.g. Sleep at 0.9) yield negative net calories,
         // meaning they burn less than the resting baseline and reduce total expenditure.
-        switch (entry.ActivityType)
+        if (entry.METValue.HasValue && entry.DurationMinutes.HasValue)
         {
-            case "MET_SIMPLE":
-                if (entry.METValue.HasValue && entry.DurationMinutes.HasValue)
-                {
-                    var netMet = entry.METValue.Value - 1m;
-                    entry.CalculatedCaloriesKcal =
-                        netMet * weightKg * (entry.DurationMinutes.Value / 60m);
-                }
-                break;
-
-            case "MET_MULTIPLE":
-                decimal total = 0;
-                foreach (var seg in entry.Segments)
-                {
-                    var netSegMet = seg.METValue - 1m;
-                    seg.CalculatedCaloriesKcal = netSegMet * weightKg * (seg.DurationMinutes / 60m);
-                    total += seg.CalculatedCaloriesKcal;
-                }
-                entry.CalculatedCaloriesKcal = total;
-                entry.DurationMinutes = entry.Segments.Sum(s => s.DurationMinutes);
-                break;
+            var netMet = entry.METValue.Value - 1m;
+            entry.CalculatedCaloriesKcal =
+                netMet * weightKg * (entry.DurationMinutes.Value / 60m);
         }
     }
 }

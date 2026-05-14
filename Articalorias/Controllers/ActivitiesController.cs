@@ -48,18 +48,9 @@ public class ActivitiesController : ControllerBase
         {
             DailyLogId = log.DailyLogId,
             ActivityTemplateId = request.ActivityTemplateId,
-            ActivityType = request.ActivityType,
             ActivityName = request.ActivityName,
             DurationMinutes = request.DurationMinutes,
-            METValue = request.METValue,
-            Notes = request.Notes,
-            Segments = request.Segments.Select(s => new ActivityEntrySegment
-            {
-                SegmentOrder = s.SegmentOrder,
-                SegmentName = s.SegmentName,
-                METValue = s.METValue,
-                DurationMinutes = s.DurationMinutes
-            }).ToList()
+            METValue = request.METValue
         };
 
         var created = await _activityService.CreateEntryAsync(entry);
@@ -72,18 +63,9 @@ public class ActivitiesController : ControllerBase
         var entry = new ActivityEntry
         {
             ActivityEntryId = activityEntryId,
-            ActivityType = request.ActivityType,
             ActivityName = request.ActivityName,
             DurationMinutes = request.DurationMinutes,
-            METValue = request.METValue,
-            Notes = request.Notes,
-            Segments = request.Segments.Select(s => new ActivityEntrySegment
-            {
-                SegmentOrder = s.SegmentOrder,
-                SegmentName = s.SegmentName,
-                METValue = s.METValue,
-                DurationMinutes = s.DurationMinutes
-            }).ToList()
+            METValue = request.METValue
         };
 
         var updated = await _activityService.UpdateEntryAsync(entry);
@@ -116,19 +98,11 @@ public class ActivitiesController : ControllerBase
         {
             UserId = request.TemplateScope == "SYSTEM" ? null : userId,
             TemplateScope = request.TemplateScope,
-            ActivityType = request.ActivityType,
             TemplateName = request.TemplateName,
             AutoAddToNewDay = request.AutoAddToNewDay,
             DefaultDurationMinutes = request.DefaultDurationMinutes,
             DefaultMET = request.DefaultMET,
-            IsActive = true,
-            Segments = request.Segments.Select(s => new ActivityTemplateSegment
-            {
-                SegmentOrder = s.SegmentOrder,
-                SegmentName = s.SegmentName,
-                METValue = s.METValue,
-                DefaultDurationMinutes = s.DurationMinutes
-            }).ToList()
+            IsActive = true
         };
 
         var created = await _activityService.CreateTemplateAsync(template);
@@ -141,18 +115,10 @@ public class ActivitiesController : ControllerBase
         var template = new ActivityTemplate
         {
             ActivityTemplateId = templateId,
-            ActivityType = request.ActivityType,
             TemplateName = request.TemplateName,
             AutoAddToNewDay = request.AutoAddToNewDay,
             DefaultDurationMinutes = request.DefaultDurationMinutes,
-            DefaultMET = request.DefaultMET,
-            Segments = request.Segments.Select(s => new ActivityTemplateSegment
-            {
-                SegmentOrder = s.SegmentOrder,
-                SegmentName = s.SegmentName,
-                METValue = s.METValue,
-                DefaultDurationMinutes = s.DurationMinutes
-            }).ToList()
+            DefaultMET = request.DefaultMET
         };
 
         var updated = await _activityService.UpdateTemplateAsync(template);
@@ -197,39 +163,21 @@ public class ActivitiesController : ControllerBase
     {
         ActivityEntryId = a.ActivityEntryId,
         ActivityTemplateId = a.ActivityTemplateId,
-        ActivityType = a.ActivityType,
         ActivityName = a.ActivityName,
         DurationMinutes = a.DurationMinutes,
         METValue = a.METValue,
         CalculatedCaloriesKcal = a.CalculatedCaloriesKcal,
-        IsGlobalDefault = a.IsGlobalDefault,
-        Notes = a.Notes,
-        SortOrder = a.SortOrder,
-        Segments = a.Segments.Select(s => new ActivityEntrySegmentDto
-        {
-            SegmentOrder = s.SegmentOrder,
-            SegmentName = s.SegmentName,
-            METValue = s.METValue,
-            DurationMinutes = s.DurationMinutes
-        }).ToList()
+        SortOrder = a.SortOrder
     };
 
     private static ActivityTemplateResponse MapTemplateToResponse(ActivityTemplate t) => new()
     {
         ActivityTemplateId = t.ActivityTemplateId,
         TemplateScope = t.TemplateScope,
-        ActivityType = t.ActivityType,
         TemplateName = t.TemplateName,
         AutoAddToNewDay = t.AutoAddToNewDay,
         IsActive = t.IsActive,
         DefaultDurationMinutes = t.DefaultDurationMinutes,
-        DefaultMET = t.DefaultMET,
-        Segments = t.Segments.Select(s => new ActivityTemplateSegmentDto
-        {
-            SegmentOrder = s.SegmentOrder,
-            SegmentName = s.SegmentName,
-            METValue = s.METValue,
-            DurationMinutes = s.DefaultDurationMinutes
-        }).ToList()
+        DefaultMET = t.DefaultMET
     };
 }

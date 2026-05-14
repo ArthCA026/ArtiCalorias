@@ -29,7 +29,6 @@ public class RecalculationService : IRecalculationService
         var log = await _db.DailyLogs
             .Include(d => d.FoodEntries)
             .Include(d => d.ActivityEntries)
-                .ThenInclude(a => a.Segments)
             .FirstOrDefaultAsync(d => d.DailyLogId == dailyLogId)
             ?? throw new InvalidOperationException("DailyLog not found.");
 
@@ -46,9 +45,22 @@ public class RecalculationService : IRecalculationService
         // ── Step 3b: Recompute idle-time expenditure (unregistered hours) ──
         var totalActivityMinutes = log.ActivityEntries.Sum(a => a.DurationMinutes ?? 0m);
         var totalActivityHours = totalActivityMinutes / 60m;
-        log.HoursRemainingInDay = Math.Max(0m, 24m - totalActivityHours);
+        // Sleep & NEAT hours reduce idle time (NULL = log predates the feature; treat as 0)
+        var sleepH = log.SnapshotSleepHours ?? 0m;
+        var neatH  = log.SnapshotNeatHours  ?? 0m;
+        var totalKnownHours = totalActivityHours + sleepH + neatH;
+        log.HoursRemainingInDay = Math.Max(0m, 24m - totalKnownHours);
         // Idle MET 1.2 minus 1 MET (resting component already in BMR) = 0.2 net
         log.IdleTimeCaloriesKcal = (1.2m - 1m) * log.SnapshotWeightKg * log.HoursRemainingInDay;
+        // Sleep & NEAT calories: (MET - 1) × weight × hours  (same formula as ActivityEntry)
+        // MET constants: Sleep = 0.9, NEAT = 3.0 (not user-configurable)
+        // Skipped when snapshots are NULL so old daily logs are never retroactively changed.
+        log.SleepCaloriesKcal = log.SnapshotSleepHours.HasValue
+            ? (0.9m - 1m) * log.SnapshotWeightKg * sleepH
+            : 0m;
+        log.NeatCaloriesKcal = log.SnapshotNeatHours.HasValue
+            ? (3.0m - 1m) * log.SnapshotWeightKg * neatH
+            : 0m;
 
         // ── Step 4: Recompute TEF (per-macro business logic) ──
         log.TEFKcal = TefConstants.Calculate(
@@ -61,6 +73,8 @@ public class RecalculationService : IRecalculationService
         log.TotalDailyExpenditureKcal = log.SnapshotBMRKcal
             + log.TotalActivityCaloriesKcal
             + log.IdleTimeCaloriesKcal
+            + log.SleepCaloriesKcal
+            + log.NeatCaloriesKcal
             + log.TEFKcal;
 
         // ── Step 6: Recompute net balance ──
@@ -79,10 +93,7 @@ public class RecalculationService : IRecalculationService
         log.UpdatedAtUtc = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        // ── Step 9: Update WeeklySummary ──
-        await RecalculateWeeklySummary(log.UserId, log.WeekStartDate, log.WeekEndDate, log.SnapshotDailyBaseGoalKcal);
-
-        // ── Step 10: Update MonthlySummary ──
+        // ── Step 9: Update MonthlySummary ──
         await RecalculateMonthlySummary(log.UserId, log.LogDate.Year, log.LogDate.Month);
 
         // ── Step 11: Cascade — keep sibling days in the same week in sync ──
@@ -128,6 +139,8 @@ public class RecalculationService : IRecalculationService
         log.SnapshotBodyFatPercent    = profile.BodyFatPercent;
         log.SnapshotDailyBaseGoalKcal = profile.DailyBaseGoalKcal;
         log.SnapshotProteinGoalGrams  = proteinGoal;
+        log.SnapshotSleepHours        = profile.SleepHours;
+        log.SnapshotNeatHours         = profile.NeatHours;
 
         await _db.SaveChangesAsync();
 
@@ -144,18 +157,6 @@ public class RecalculationService : IRecalculationService
 
         foreach (var logId in remainingWeekLogIds)
             await RecalculateFullPipelineAsync(logId, cascade: false);
-
-        if (remainingWeekLogIds.Count == 0)
-        {
-            // No more days in this week — remove the stale weekly summary
-            var weeklySummary = await _db.WeeklySummaries
-                .FirstOrDefaultAsync(w => w.UserId == userId && w.WeekStartDate == weekStart);
-            if (weeklySummary is not null)
-            {
-                _db.WeeklySummaries.Remove(weeklySummary);
-                await _db.SaveChangesAsync();
-            }
-        }
 
         // Always recalculate the monthly summary for the deleted date's month
         // (handles cross-month weeks where no remaining days fall in the same month)
@@ -191,79 +192,74 @@ public class RecalculationService : IRecalculationService
         var pastDaysCount = weekLogs.Count;
         var daysRemainingIncludingToday = 7 - pastDaysCount;
 
-        log.SuggestedDailyAverageRemainingKcal = daysRemainingIncludingToday > 0
+        var rawSuggested = daysRemainingIncludingToday > 0
             ? (log.WeeklyTargetKcal - pastDaysBalance) / daysRemainingIncludingToday
             : log.SnapshotDailyBaseGoalKcal;
+
+        // ── Safety floor — never suggest eating below physiologically safe intake ──
+        // BiologicalSex is not snapshotted on DailyLog (effectively immutable),
+        // so we do a single lightweight SELECT from the user's profile.
+        var biologicalSex = await _db.UserProfiles
+            .Where(p => p.UserId == log.UserId)
+            .Select(p => p.BiologicalSex)
+            .FirstOrDefaultAsync();
+
+        var minIntakeKcal = CalculateMinimumDailyIntakeKcal(log, biologicalSex);
+        // Convert intake floor → net-balance floor (SuggestedDailyAverageRemainingKcal is
+        // a net-balance target: negative = deficit, positive = surplus vs. expenditure)
+        var minNetBalance = minIntakeKcal - log.TotalDailyExpenditureKcal;
+
+        log.SuggestedDailyAverageRemainingKcal = Math.Max(rawSuggested, minNetBalance);
     }
 
-    // ─────────────────────────────────────────────────────
-    //  Step 9 — Persist WeeklySummary
-    // ─────────────────────────────────────────────────────
-
-    private async Task RecalculateWeeklySummary(long userId, DateOnly weekStart, DateOnly weekEnd, decimal baseDailyGoal)
+    /// <summary>
+    /// Calculates the minimum safe daily calorie intake for a given day using three floors,
+    /// returning the highest (most protective) of the three:
+    ///
+    ///  1. Sex-based absolute floor (1 200 kcal / female, 1 500 kcal / male) — widely cited
+    ///     lower bound below which intake should only occur under medical supervision.
+    ///
+    ///  2. Energy-availability floor — 30 kcal per kg of fat-free mass plus that day's
+    ///     exercise calories. Below ~30 kcal/kg FFM the body may enter low-energy-availability
+    ///     (LEA), impairing hormonal and physiological function.
+    ///     Falls back to full BMR when body-fat % is unavailable.
+    ///
+    ///  3. BMR safety floor — 80 % of the snapshotted BMR. Prevents absurd suggestions
+    ///     for people whose BMR is high enough to make the sex floor alone too permissive.
+    /// </summary>
+    private static decimal CalculateMinimumDailyIntakeKcal(DailyLog log, string? biologicalSex)
     {
-        var logs = await _db.DailyLogs
-            .Where(d => d.UserId == userId && d.LogDate >= weekStart && d.LogDate <= weekEnd)
-            .AsNoTracking()
-            .ToListAsync();
+        // 1. Sex-based absolute floor
+        var sexFloor = biologicalSex == "F" ? 1200m : 1500m;
 
-        var summary = await _db.WeeklySummaries
-            .FirstOrDefaultAsync(w => w.UserId == userId && w.WeekStartDate == weekStart);
+        // 2. BMR safety floor
+        var bmrFloor = log.SnapshotBMRKcal * 0.8m;
 
-        if (summary is null)
+        // 3. Energy-availability floor (requires body-fat % to compute FFM)
+        decimal eaFloor;
+        if (log.SnapshotBodyFatPercent is > 0)
         {
-            summary = new WeeklySummary
-            {
-                UserId = userId,
-                WeekStartDate = weekStart,
-                WeekEndDate = weekEnd,
-                BaseDailyGoalKcalUsed = baseDailyGoal,
-                ExpectedWeeklyTargetKcal = baseDailyGoal * 7
-            };
-            _db.WeeklySummaries.Add(summary);
+            var ffmKg = log.SnapshotWeightKg * (1m - log.SnapshotBodyFatPercent.Value / 100m);
+            eaFloor = 30m * ffmKg + log.TotalActivityCaloriesKcal;
+        }
+        else
+        {
+            // Body fat unknown — fall back to full BMR so we still protect against
+            // dangerously low suggestions even without body-composition data.
+            eaFloor = log.SnapshotBMRKcal;
         }
 
-        summary.TotalFoodCaloriesKcal = logs.Sum(d => d.TotalFoodCaloriesKcal);
-        summary.TotalProteinGrams = logs.Sum(d => d.TotalProteinGrams);
-        summary.TotalFatGrams = logs.Sum(d => d.TotalFatGrams);
-        summary.TotalCarbsGrams = logs.Sum(d => d.TotalCarbsGrams);
-        summary.TotalAlcoholGrams = logs.Sum(d => d.TotalAlcoholGrams);
-        summary.TotalActivityCaloriesKcal = logs.Sum(d => d.TotalActivityCaloriesKcal);
-        summary.TotalTEFKcal = logs.Sum(d => d.TEFKcal);
-        summary.TotalExpenditureKcal = logs.Sum(d => d.TotalDailyExpenditureKcal);
-        summary.ActualWeeklyBalanceKcal = logs.Sum(d => d.NetBalanceKcal);
-        summary.DaysLogged = logs.Count;
-
-        summary.DifferenceVsTargetKcal = summary.ActualWeeklyBalanceKcal - summary.ExpectedWeeklyTargetKcal;
-
-        var daysRemaining = 7 - summary.DaysLogged;
-        summary.RemainingTargetKcal = summary.ExpectedWeeklyTargetKcal - summary.ActualWeeklyBalanceKcal;
-        summary.RequiredDailyAverageRemainingKcal = daysRemaining > 0
-            ? summary.RemainingTargetKcal / daysRemaining
-            : 0m;
-
-        // 1 kg ≈ 7700 kcal
-        summary.EstimatedWeightChangeKg = summary.ActualWeeklyBalanceKcal / 7700m;
-
-        summary.LastCalculatedAtUtc = DateTime.UtcNow;
-        summary.UpdatedAtUtc = DateTime.UtcNow;
-
-        await _db.SaveChangesAsync();
+        return Math.Max(sexFloor, Math.Max(eaFloor, bmrFloor));
     }
 
     // ─────────────────────────────────────────────────────
-    //  Step 10 — Persist MonthlySummary
+    //  Step 9 — Persist MonthlySummary (shell record only)
     // ─────────────────────────────────────────────────────
 
     private async Task RecalculateMonthlySummary(long userId, int year, int month)
     {
         var monthStart = new DateOnly(year, month, 1);
         var monthEnd = monthStart.AddMonths(1).AddDays(-1);
-
-        var logs = await _db.DailyLogs
-            .Where(d => d.UserId == userId && d.LogDate >= monthStart && d.LogDate <= monthEnd)
-            .AsNoTracking()
-            .ToListAsync();
 
         var summary = await _db.MonthlySummaries
             .FirstOrDefaultAsync(m => m.UserId == userId && m.YearNumber == year && m.MonthNumber == month);
@@ -281,29 +277,8 @@ public class RecalculationService : IRecalculationService
             _db.MonthlySummaries.Add(summary);
         }
 
-        summary.TotalFoodCaloriesKcal = logs.Sum(d => d.TotalFoodCaloriesKcal);
-        summary.TotalProteinGrams = logs.Sum(d => d.TotalProteinGrams);
-        summary.TotalFatGrams = logs.Sum(d => d.TotalFatGrams);
-        summary.TotalCarbsGrams = logs.Sum(d => d.TotalCarbsGrams);
-        summary.TotalAlcoholGrams = logs.Sum(d => d.TotalAlcoholGrams);
-        summary.TotalActivityCaloriesKcal = logs.Sum(d => d.TotalActivityCaloriesKcal);
-        summary.TotalTEFKcal = logs.Sum(d => d.TEFKcal);
-        summary.TotalExpenditureKcal = logs.Sum(d => d.TotalDailyExpenditureKcal);
-        summary.ActualMonthlyBalanceKcal = logs.Sum(d => d.NetBalanceKcal);
-        summary.DaysLogged = logs.Count;
-
-        if (summary.DaysLogged > 0)
-        {
-            summary.AverageDailyFoodCaloriesKcal = summary.TotalFoodCaloriesKcal / summary.DaysLogged;
-            summary.AverageDailyExpenditureKcal = summary.TotalExpenditureKcal / summary.DaysLogged;
-            summary.AverageDailyBalanceKcal = summary.ActualMonthlyBalanceKcal / summary.DaysLogged;
-            summary.AverageWeeklyBalanceKcal = summary.AverageDailyBalanceKcal * 7;
-        }
-
-        // 1 kg ≈ 7700 kcal
-        summary.EstimatedWeightChangeKg = summary.ActualMonthlyBalanceKcal / 7700m;
-
-        summary.LastCalculatedAtUtc = DateTime.UtcNow;
+        summary.MonthStartDate = monthStart;
+        summary.MonthEndDate = monthEnd;
         summary.UpdatedAtUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();

@@ -14,16 +14,13 @@ namespace Articalorias.Controllers;
 public class HistoryController : ControllerBase
 {
     private readonly IDailyLogService _dailyLogService;
-    private readonly IWeeklySummaryService _weeklySummaryService;
     private readonly IMonthlySummaryService _monthlySummaryService;
 
     public HistoryController(
         IDailyLogService dailyLogService,
-        IWeeklySummaryService weeklySummaryService,
         IMonthlySummaryService monthlySummaryService)
     {
         _dailyLogService = dailyLogService;
-        _weeklySummaryService = weeklySummaryService;
         _monthlySummaryService = monthlySummaryService;
     }
 
@@ -35,27 +32,6 @@ public class HistoryController : ControllerBase
         var userId = GetUserId();
         var logs = await _dailyLogService.GetRangeAsync(userId, from, to);
         return Ok(logs.Select(MapDailyLogToResponse));
-    }
-
-    // ── Weekly summaries ──
-
-    [HttpGet("weekly")]
-    public async Task<IActionResult> GetWeeklyRange([FromQuery] DateOnly from, [FromQuery] DateOnly to)
-    {
-        var userId = GetUserId();
-        var summaries = await _weeklySummaryService.GetRangeAsync(userId, from, to);
-        return Ok(summaries.Select(MapWeeklyToResponse));
-    }
-
-    [HttpGet("weekly/{weekStartDate}")]
-    public async Task<IActionResult> GetWeekly(DateOnly weekStartDate)
-    {
-        var userId = GetUserId();
-        var summary = await _weeklySummaryService.GetByWeekAsync(userId, weekStartDate);
-        if (summary is null)
-            return NotFound();
-
-        return Ok(MapWeeklyToResponse(summary));
     }
 
     // ── Monthly summaries ──
@@ -100,26 +76,6 @@ public class HistoryController : ControllerBase
         ProteinRemainingGrams = d.ProteinRemainingGrams,
         SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
         SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams
-    };
-
-    private static WeeklySummaryResponse MapWeeklyToResponse(WeeklySummary w) => new()
-    {
-        WeeklySummaryId = w.WeeklySummaryId,
-        WeekStartDate = w.WeekStartDate,
-        WeekEndDate = w.WeekEndDate,
-        BaseDailyGoalKcalUsed = w.BaseDailyGoalKcalUsed,
-        ExpectedWeeklyTargetKcal = w.ExpectedWeeklyTargetKcal,
-        TotalFoodCaloriesKcal = w.TotalFoodCaloriesKcal,
-        TotalProteinGrams = w.TotalProteinGrams,
-        TotalActivityCaloriesKcal = w.TotalActivityCaloriesKcal,
-        TotalTEFKcal = w.TotalTEFKcal,
-        TotalExpenditureKcal = w.TotalExpenditureKcal,
-        ActualWeeklyBalanceKcal = w.ActualWeeklyBalanceKcal,
-        DifferenceVsTargetKcal = w.DifferenceVsTargetKcal,
-        RemainingTargetKcal = w.RemainingTargetKcal,
-        RequiredDailyAverageRemainingKcal = w.RequiredDailyAverageRemainingKcal,
-        DaysLogged = w.DaysLogged,
-        EstimatedWeightChangeKg = w.EstimatedWeightChangeKg
     };
 
     private static MonthlySummaryResponse MapMonthlyToResponse(MonthlySummary m) => new()

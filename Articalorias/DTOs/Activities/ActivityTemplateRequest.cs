@@ -9,10 +9,6 @@ public class ActivityTemplateRequest
     public string TemplateScope { get; set; } = "USER";
 
     [Required]
-    [StringLength(20)]
-    public string ActivityType { get; set; } = "MET_SIMPLE";
-
-    [Required]
     [StringLength(200)]
     public string TemplateName { get; set; } = string.Empty;
 
@@ -23,6 +19,4 @@ public class ActivityTemplateRequest
 
     [Range(0.5, 50)]
     public decimal? DefaultMET { get; set; }
-
-    public List<ActivityTemplateSegmentDto> Segments { get; set; } = [];
 }

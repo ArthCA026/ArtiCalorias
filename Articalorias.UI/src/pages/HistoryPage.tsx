@@ -179,11 +179,11 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
                     className={`cursor-pointer group transition-colors hover:bg-indigo-50/30 ${idx % 2 === 1 ? "bg-gray-50/40" : ""}`}
                   >
                     <td className="py-2.5 px-3 font-medium text-indigo-600">
-                      <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${d.dailyGoalDeltaKcal <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
+                      <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${getAdjustedDelta(d) <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
                       {formatDayLabel(d.logDate)}
                     </td>
                     <td className="py-2.5 px-2 text-right">
-                      <FriendlyGoalDelta value={d.dailyGoalDeltaKcal} />
+                      <FriendlyGoalDelta value={getAdjustedDelta(d)} />
                     </td>
                     <td className="py-2.5 px-2 text-right tabular-nums font-medium text-gray-700">{fmt(d.totalProteinGrams, 1)} g</td>
                     <td className="py-2.5 px-2 text-center">
@@ -213,7 +213,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
               >
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="font-medium text-indigo-600 text-sm">
-                    <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${d.dailyGoalDeltaKcal <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${getAdjustedDelta(d) <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
                     {formatDayLabel(d.logDate)}
                   </span>
                   <div className="flex items-center gap-2">
@@ -230,7 +230,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
                   <span>Protein: <span className="font-medium text-gray-700">{fmt(d.totalProteinGrams, 1)} g</span></span>
-                  <span>Above/below goal: <FriendlyGoalDelta value={d.dailyGoalDeltaKcal} /></span>
+                  <span>Above/below plan: <FriendlyGoalDelta value={getAdjustedDelta(d)} /></span>
                 </div>
               </div>
             ))}
@@ -287,11 +287,53 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
 
 /* --- Balance Trend Chart --- */
 
+type ChartMode = "net" | "goal" | "adjusted";
+
+const CHART_MODES: { key: ChartMode; label: string }[] = [
+  { key: "adjusted", label: "Weekly Plan" },
+  { key: "goal",     label: "Daily Goal" },
+  { key: "net",      label: "Net Balance" },
+];
+
+const CHART_MODE_CONFIG: Record<ChartMode, {
+  zeroLabel: string;
+  zeroLabelShort: string;
+  subtitle: string;
+  tooltipZero: string;
+  tooltipUnder: string;
+  tooltipOver: string;
+}> = {
+  net: {
+    zeroLabel: "Maintenance",
+    zeroLabelShort: "Maint.",
+    subtitle: "Calories eaten minus calories burned each day. Zero means you broke even with your TDEE.",
+    tooltipZero: "Perfectly balanced",
+    tooltipUnder: "kcal deficit",
+    tooltipOver: "kcal surplus",
+  },
+  goal: {
+    zeroLabel: "Your goal",
+    zeroLabelShort: "Goal",
+    subtitle: "How far above or below your fixed daily calorie goal you were. Adjusts automatically when your settings change.",
+    tooltipZero: "Right on goal",
+    tooltipUnder: "kcal under goal",
+    tooltipOver: "kcal over goal",
+  },
+  adjusted: {
+    zeroLabel: "Weekly plan",
+    zeroLabelShort: "Plan",
+    subtitle: "Each day compared to the weekly-adjusted target — redistributes this week's surplus or deficit so you finish the week on track.",
+    tooltipZero: "Right on plan",
+    tooltipUnder: "kcal under plan",
+    tooltipOver: "kcal over plan",
+  },
+};
+
 interface TrendPoint {
   date: string;
   label: string;
-  /** How far above/below the user's personal goal for *this specific day* (dailyGoalDeltaKcal). Zero = exactly on goal. */
-  goalDelta: number;
+  /** Deviation from zero for the active chart mode. Negative = below target. */
+  value: number;
   rollingAvg: number | null;
 }
 
@@ -299,12 +341,6 @@ function calculateRollingAverage(values: number[], index: number, window = 7): n
   const start = Math.max(0, index - window + 1);
   const slice = values.slice(start, index + 1);
   return slice.reduce((s, v) => s + v, 0) / slice.length;
-}
-
-function formatCalorieDelta(value: number): string {
-  const abs = Math.abs(Math.round(value));
-  if (abs < 5) return "Right on goal";
-  return value <= 0 ? `${abs} kcal under goal` : `${abs} kcal over goal`;
 }
 
 function getTrendColor(rollingAvg: number | null): string {
@@ -334,14 +370,14 @@ function calculateSymmetricDomain(values: number[]): {
   return { yMin: -bound, yMax: bound, step, ticks };
 }
 
-function formatYAxisTick(value: number): string {
-  if (value === 0) return "Goal";
+function formatYAxisTick(value: number, zeroLabel = "Goal"): string {
+  if (value === 0) return zeroLabel;
   const abs = Math.abs(value);
   return value < 0 ? `${abs} under` : `${abs} over`;
 }
 
-function formatYAxisTickMobile(value: number): string {
-  if (value === 0) return "Goal";
+function formatYAxisTickMobile(value: number, zeroLabel = "Goal"): string {
+  if (value === 0) return zeroLabel;
   const abs = Math.abs(value);
   const label = abs >= 1000 ? `${abs / 1000}k` : `${abs}`;
   return value < 0 ? `−${label}` : `+${label}`;
@@ -357,28 +393,38 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
     return () => window.removeEventListener("resize", handler);
   }, []);
 
+  const [chartMode, setChartMode] = useState<ChartMode>(() => {
+    const saved = localStorage.getItem("ac-chart-mode");
+    return (saved === "net" || saved === "goal" || saved === "adjusted") ? saved : "adjusted";
+  });
+  useEffect(() => { localStorage.setItem("ac-chart-mode", chartMode); }, [chartMode]);
+
+  const cfg = CHART_MODE_CONFIG[chartMode];
+
+  function getChartValue(d: DailyLogResponse): number {
+    if (chartMode === "net")  return d.totalFoodCaloriesKcal - d.totalDailyExpenditureKcal;
+    if (chartMode === "goal") return d.dailyGoalDeltaKcal;
+    // adjusted: net balance minus the weekly-adjusted target
+    return (d.totalFoodCaloriesKcal - d.totalDailyExpenditureKcal) - d.suggestedDailyAverageRemainingKcal;
+  }
+
   const sorted = [...days].sort((a, b) => a.logDate.localeCompare(b.logDate));
-  // goalDelta = how far above/below the user's personal goal for THAT day.
-  // Uses each day's snapshotted goal so goal changes mid-month are handled correctly.
-  // Zero = hit goal exactly. Negative = better than goal. Positive = fell short.
-  const goalDeltas = sorted.map((d) => d.dailyGoalDeltaKcal);
+  const values = sorted.map(getChartValue);
   const hasEnoughForFullWindow = days.length >= 7;
 
   const points: TrendPoint[] = sorted.map((d, i) => ({
     date: d.logDate,
     label: new Date(d.logDate + "T00:00:00").toLocaleDateString("default", { month: "short", day: "numeric" }),
-    goalDelta: d.dailyGoalDeltaKcal,
-    rollingAvg: calculateRollingAverage(goalDeltas, i, 7),
+    value: getChartValue(d),
+    rollingAvg: calculateRollingAverage(values, i, 7),
   }));
 
   const lastRolling = points[points.length - 1]?.rollingAvg ?? null;
   const lineColor = getTrendColor(lastRolling);
 
-  // Symmetric domain with clean step — same absolute bound above and below zero
-  const allValues = points.flatMap((p) => [p.goalDelta, p.rollingAvg ?? p.goalDelta]);
+  const allValues = points.flatMap((p) => [p.value, p.rollingAvg ?? p.value]);
   const domain = calculateSymmetricDomain(allValues);
 
-  // X-axis tick thinning for mobile
   const tickStep = points.length <= 10 ? 1 : points.length <= 20 ? 2 : Math.ceil(points.length / 10);
   const xTicks = points.filter((_, i) => i % tickStep === 0).map((p) => p.label);
 
@@ -386,26 +432,50 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
     if (!active || !payload || payload.length === 0) return null;
     const point = payload[0]?.payload;
     if (!point) return null;
-    const daily = point.goalDelta;
+    const daily = point.value;
+    const abs = Math.abs(Math.round(daily));
+    const text =
+      abs < 5    ? cfg.tooltipZero
+      : daily <= 0 ? `${abs} ${cfg.tooltipUnder}`
+      :               `${abs} ${cfg.tooltipOver}`;
     return (
       <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-lg text-xs max-w-[180px]">
         <p className="font-semibold text-gray-700 mb-1">{point.label}</p>
         <p className="text-gray-400">
           That day:{" "}
           <span className={daily <= 0 ? "text-green-600 font-semibold" : "text-orange-500 font-semibold"}>
-            {formatCalorieDelta(daily)}
+            {text}
           </span>
         </p>
       </div>
     );
   }
 
+  const underLabel = chartMode === "net" ? "Deficit" : "Under";
+  const overLabel  = chartMode === "net" ? "Surplus" : "Over";
+
   return (
-    <Card
-      title="Are you staying on track?"
-      subtitle="Each bar shows how far above or below your personal calorie goal you were. Adjusts automatically when your settings change."
-      variant="muted"
-    >
+    <Card title="Are you staying on track?" subtitle={cfg.subtitle} variant="muted">
+      {/* Mode toggle */}
+      <div className="mb-3 flex justify-end">
+        <div role="group" aria-label="Chart view" className="flex rounded-lg bg-gray-100 p-0.5 gap-0.5">
+          {CHART_MODES.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setChartMode(key)}
+              aria-pressed={chartMode === key}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 ${
+                chartMode === key
+                  ? "bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {points.length < 2 ? (
         <p className="text-xs text-gray-400 text-center py-4">Log at least 2 days to see the trend.</p>
       ) : (
@@ -418,9 +488,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
 
           <div className="w-full" style={{ height: isMobile ? 220 : 200 }}>
             <ResponsiveContainer width="100%" height="100%">
-              {/* tabIndex={-1} + outline none prevents the browser focus ring on click */}
               <ComposedChart data={points} margin={{ top: 4, right: isMobile ? 8 : 16, left: 4, bottom: 4 }} barCategoryGap="30%" style={{ outline: "none" }} tabIndex={-1}>
-                {/* Background zones */}
                 <ReferenceArea y1={0} y2={domain.yMax} fill="#fef3c7" fillOpacity={0.3} ifOverflow="hidden" />
                 <ReferenceArea y1={domain.yMin} y2={0} fill="#dcfce7" fillOpacity={0.3} ifOverflow="hidden" />
 
@@ -438,16 +506,18 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
                   tick={{ fontSize: 9, fill: "#9ca3af" }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={isMobile ? formatYAxisTickMobile : formatYAxisTick}
+                  tickFormatter={isMobile
+                    ? (v) => formatYAxisTickMobile(v, cfg.zeroLabelShort)
+                    : (v) => formatYAxisTick(v, cfg.zeroLabelShort)
+                  }
                   width={isMobile ? 40 : 68}
                 />
-                {/* Goal line — zero is the user's personal calorie goal for each specific day */}
                 <ReferenceLine
                   y={0}
                   stroke="#6b7280"
                   strokeWidth={1.5}
                   strokeDasharray="5 3"
-                  label={{ value: "Your goal", position: "insideTopRight", fontSize: 9, fill: "#6b7280", fontWeight: 600 }}
+                  label={{ value: cfg.zeroLabel, position: "insideTopRight", fontSize: 9, fill: "#6b7280", fontWeight: 600 }}
                 />
                 <Tooltip
                   content={<TooltipContent />}
@@ -456,18 +526,16 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
                   wrapperStyle={{ zIndex: 10 }}
                 />
 
-                {/* Daily deviation bars — green = under goal, orange = over goal */}
-                <Bar dataKey="goalDelta" name="daily" maxBarSize={18} radius={[2, 2, 2, 2]}>
+                <Bar dataKey="value" name="daily" maxBarSize={18} radius={[2, 2, 2, 2]}>
                   {points.map((p) => (
                     <Cell
                       key={p.date}
-                      fill={p.goalDelta <= 0 ? "#86efac" : "#fdba74"}
+                      fill={p.value <= 0 ? "#86efac" : "#fdba74"}
                       fillOpacity={0.85}
                     />
                   ))}
                 </Bar>
 
-                {/* Rolling average — main trend line drawn on top of bars */}
                 <Line
                   type="monotone"
                   dataKey="rollingAvg"
@@ -486,11 +554,11 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
           <div className="mt-1 flex justify-center gap-4 text-[10px] text-gray-400">
             <span className="flex items-center gap-1">
               <span className="inline-block h-3 w-2.5 rounded-sm bg-green-300" />
-              Under goal
+              {underLabel}
             </span>
             <span className="flex items-center gap-1">
               <span className="inline-block h-3 w-2.5 rounded-sm bg-orange-200" />
-              Over goal
+              {overLabel}
             </span>
             <span className="flex items-center gap-1">
               <span className="inline-block h-0.5 w-4 rounded" style={{ backgroundColor: lineColor }} />
@@ -586,6 +654,10 @@ function TrashIcon() {
       <line x1="14" y1="11" x2="14" y2="17" />
     </svg>
   );
+}
+
+function getAdjustedDelta(d: DailyLogResponse): number {
+  return (d.totalFoodCaloriesKcal - d.totalDailyExpenditureKcal) - d.suggestedDailyAverageRemainingKcal;
 }
 
 function FriendlyGoalDelta({ value }: { value: number }) {

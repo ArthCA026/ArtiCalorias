@@ -26,6 +26,11 @@ public class DailyLog
     public decimal TEFKcal { get; set; }
     public decimal HoursRemainingInDay { get; set; }
     public decimal IdleTimeCaloriesKcal { get; set; }
+    // Sleep & NEAT snapshots (nullable: NULL = log predates this feature, skip computation)
+    public decimal? SnapshotSleepHours { get; set; }
+    public decimal? SnapshotNeatHours { get; set; }
+    public decimal SleepCaloriesKcal { get; set; }
+    public decimal NeatCaloriesKcal { get; set; }
     public decimal TotalDailyExpenditureKcal { get; set; }
 
     // Balance / objetivos
@@ -45,7 +50,6 @@ public class DailyLog
     public decimal SuggestedDailyAverageRemainingKcal { get; set; }
 
     // Estado
-    public bool IsFinalized { get; set; }
     public DateTime? LastRecalculatedAtUtc { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }

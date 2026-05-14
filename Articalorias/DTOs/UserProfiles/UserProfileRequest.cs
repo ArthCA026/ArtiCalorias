@@ -36,9 +36,10 @@ public class UserProfileRequest
     [StringLength(100)]
     public string? Country { get; set; }
 
-    [Range(0, 1440)]
-    public decimal? DefaultSleepMinutes { get; set; }
+    // Sleep & NEAT fixed daily costs
+    [Range(0, 23)]
+    public decimal SleepHours { get; set; } = 8.0m;
 
-    [Range(0, 1440)]
-    public decimal? DefaultNeatMinutes { get; set; }
+    [Range(0, 23)]
+    public decimal NeatHours { get; set; } = 3.0m;
 }

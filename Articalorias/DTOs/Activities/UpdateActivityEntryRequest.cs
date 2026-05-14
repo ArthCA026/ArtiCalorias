@@ -5,10 +5,6 @@ namespace Articalorias.DTOs.Activities;
 public class UpdateActivityEntryRequest
 {
     [Required]
-    [StringLength(20)]
-    public string ActivityType { get; set; } = "MET_SIMPLE";
-
-    [Required]
     [StringLength(200)]
     public string ActivityName { get; set; } = string.Empty;
 
@@ -17,9 +13,4 @@ public class UpdateActivityEntryRequest
 
     [Range(0.5, 50)]
     public decimal? METValue { get; set; }
-
-    [StringLength(500)]
-    public string? Notes { get; set; }
-
-    public List<ActivityEntrySegmentDto> Segments { get; set; } = [];
 }

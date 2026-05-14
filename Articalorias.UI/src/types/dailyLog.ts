@@ -21,4 +21,8 @@ export interface DailyLogResponse {
 export interface DailyDashboardResponse extends DailyLogResponse {
   foodEntries: FoodEntryResponse[];
   activityEntries: ActivityEntryResponse[];
+  sleepCaloriesKcal: number;
+  neatCaloriesKcal: number;
+  snapshotSleepHours: number | null;
+  snapshotNeatHours: number | null;
 }

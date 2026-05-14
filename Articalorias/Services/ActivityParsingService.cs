@@ -263,31 +263,12 @@ public class ActivityParsingService : IActivityParsingService
             if (string.IsNullOrWhiteSpace(item.ActivityName))
                 continue;
 
-            // Normalize activity type
-            var validTypes = new[] { "MET_SIMPLE", "MET_MULTIPLE" };
-            if (!validTypes.Contains(item.ActivityType))
-                item.ActivityType = "MET_SIMPLE";
-
             // Clamp values
             if (item.DurationMinutes.HasValue)
                 item.DurationMinutes = Math.Clamp(item.DurationMinutes.Value, 0, 1440);
 
             if (item.MetValue.HasValue)
                 item.MetValue = Math.Clamp(item.MetValue.Value, 0.5m, 50m);
-
-            // Validate segments for MET_MULTIPLE
-            if (item.ActivityType == "MET_MULTIPLE" && item.Segments.Count > 0)
-            {
-                foreach (var seg in item.Segments)
-                {
-                    seg.MetValue = Math.Clamp(seg.MetValue, 0.5m, 50m);
-                    seg.DurationMinutes = Math.Clamp(seg.DurationMinutes, 0.1m, 1440m);
-                }
-            }
-            else if (item.ActivityType != "MET_MULTIPLE")
-            {
-                item.Segments = [];
-            }
 
             validated.Add(item);
         }

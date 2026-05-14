@@ -23,8 +23,8 @@ public class UserProfileConfiguration : IEntityTypeConfiguration<UserProfile>
         builder.Property(p => p.ProteinGoalGrams).HasColumnType("decimal(10,2)");
         builder.Property(p => p.AutoCalculateProteinGoal).HasDefaultValue(true);
         builder.Property(p => p.Country).HasMaxLength(100);
-        builder.Property(p => p.DefaultSleepMinutes).HasColumnType("decimal(8,2)").HasDefaultValue(360m);
-        builder.Property(p => p.DefaultNeatMinutes).HasColumnType("decimal(8,2)").HasDefaultValue(180m);
+        builder.Property(p => p.SleepHours).HasColumnType("decimal(5,2)").HasDefaultValue(8.0m);
+        builder.Property(p => p.NeatHours).HasColumnType("decimal(5,2)").HasDefaultValue(3.0m);
         builder.Property(p => p.IsOnboardingCompleted).HasDefaultValue(false);
         builder.Property(p => p.CreatedAtUtc).HasColumnType("datetime2(0)").HasDefaultValueSql("SYSUTCDATETIME()");
         builder.Property(p => p.UpdatedAtUtc).HasColumnType("datetime2(0)").HasDefaultValueSql("SYSUTCDATETIME()");

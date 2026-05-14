@@ -25,7 +25,13 @@ public class DailyDashboardResponse
     public decimal TEFKcal { get; set; }
     public decimal HoursRemainingInDay { get; set; }
     public decimal IdleTimeCaloriesKcal { get; set; }
+    public decimal SleepCaloriesKcal { get; set; }
+    public decimal NeatCaloriesKcal { get; set; }
     public decimal TotalDailyExpenditureKcal { get; set; }
+
+    // Snapshot sleep/NEAT (null = log predates this feature)
+    public decimal? SnapshotSleepHours { get; set; }
+    public decimal? SnapshotNeatHours { get; set; }
 
     // Balance
     public decimal NetBalanceKcal { get; set; }

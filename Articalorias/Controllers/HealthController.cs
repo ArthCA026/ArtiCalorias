@@ -36,10 +36,7 @@ public class HealthController : ControllerBase
                 DailyLogs = await _db.DailyLogs.CountAsync(),
                 FoodEntries = await _db.FoodEntries.CountAsync(),
                 ActivityTemplates = await _db.ActivityTemplates.CountAsync(),
-                ActivityTemplateSegments = await _db.ActivityTemplateSegments.CountAsync(),
                 ActivityEntries = await _db.ActivityEntries.CountAsync(),
-                ActivityEntrySegments = await _db.ActivityEntrySegments.CountAsync(),
-                WeeklySummaries = await _db.WeeklySummaries.CountAsync(),
                 MonthlySummaries = await _db.MonthlySummaries.CountAsync()
             };
 

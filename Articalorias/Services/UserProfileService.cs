@@ -1,4 +1,3 @@
-using Articalorias.Configuration;
 using Articalorias.Data;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
@@ -30,14 +29,12 @@ public class UserProfileService : IUserProfileService
         {
             profile.UserId = userId;
             profile.IsOnboardingCompleted = true;
+            ValidateSleepNeatHours(profile.SleepHours, profile.NeatHours);
             ApplyAutoCalculations(profile);
             _db.UserProfiles.Add(profile);
         }
         else
         {
-            var prevSleepMinutes = existing.DefaultSleepMinutes;
-            var prevNeatMinutes = existing.DefaultNeatMinutes;
-
             existing.CurrentWeightKg = profile.CurrentWeightKg;
             existing.HeightCm = profile.HeightCm;
             existing.Age = profile.Age;
@@ -50,19 +47,14 @@ public class UserProfileService : IUserProfileService
             existing.ProteinGoalGrams = profile.ProteinGoalGrams;
             existing.AutoCalculateProteinGoal = profile.AutoCalculateProteinGoal;
             existing.Country = profile.Country;
-            existing.DefaultSleepMinutes = profile.DefaultSleepMinutes;
-            existing.DefaultNeatMinutes = profile.DefaultNeatMinutes;
+            existing.SleepHours = profile.SleepHours;
+            existing.NeatHours = profile.NeatHours;
             existing.IsOnboardingCompleted = true;
             existing.UpdatedAtUtc = DateTime.UtcNow;
+            ValidateSleepNeatHours(existing.SleepHours, existing.NeatHours);
             ApplyAutoCalculations(existing);
 
             await _db.SaveChangesAsync();
-
-            // Update today's global-default activity entries if durations changed
-            var sleepChanged = existing.DefaultSleepMinutes != prevSleepMinutes;
-            var neatChanged  = existing.DefaultNeatMinutes  != prevNeatMinutes;
-            if (sleepChanged || neatChanged)
-                await UpdateTodayDefaultActivitiesAsync(userId, existing, sleepChanged, neatChanged);
 
             return existing;
         }
@@ -71,61 +63,12 @@ public class UserProfileService : IUserProfileService
         return existing ?? profile;
     }
 
-    /// <summary>
-    /// When the user changes their default Sleep or NEAT duration, update all
-    /// daily logs from yesterday UTC onwards (today + any future logs the user
-    /// already opened). The 1-day look-back handles users in any UTC-offset
-    /// timezone whose local date may lag the server UTC date.
-    /// Past logs (older than that) are never touched.
-    /// </summary>
-    private async Task UpdateTodayDefaultActivitiesAsync(
-        long userId, UserProfile profile, bool updateSleep, bool updateNeat)
+    private static void ValidateSleepNeatHours(decimal sleepHours, decimal neatHours)
     {
-        // Use yesterday UTC as the lower bound so users in UTC−X timezones
-        // (whose local today = UTC yesterday) still have their log updated.
-        var utcToday = DateOnly.FromDateTime(DateTime.UtcNow);
-        var logs = await _db.DailyLogs
-            .Include(d => d.ActivityEntries)
-            .Where(d => d.UserId == userId && d.LogDate >= utcToday.AddDays(-1))
-            .ToListAsync();
-
-        if (logs.Count == 0) return;
-
-        bool anyChanged = false;
-        foreach (var log in logs)
-        {
-            foreach (var entry in log.ActivityEntries.Where(a => a.IsGlobalDefault))
-            {
-                if (updateSleep && entry.ActivityName == GlobalDefaultActivities.Sleep.Name)
-                {
-                    entry.DurationMinutes = profile.DefaultSleepMinutes;
-                    var netMet = GlobalDefaultActivities.Sleep.METValue - 1m;
-                    entry.CalculatedCaloriesKcal =
-                        netMet * log.SnapshotWeightKg * (profile.DefaultSleepMinutes / 60m);
-                    anyChanged = true;
-                }
-                else if (updateNeat && entry.ActivityName == GlobalDefaultActivities.DailyMovement.Name)
-                {
-                    entry.DurationMinutes = profile.DefaultNeatMinutes;
-                    var netMet = GlobalDefaultActivities.DailyMovement.METValue - 1m;
-                    entry.CalculatedCaloriesKcal =
-                        netMet * log.SnapshotWeightKg * (profile.DefaultNeatMinutes / 60m);
-                    anyChanged = true;
-                }
-            }
-        }
-
-        if (!anyChanged) return;
-
-        await _db.SaveChangesAsync();
-
-        // Clear the EF Core change tracker so RecalculateFullPipelineAsync
-        // loads fresh entity instances from the database instead of relying on
-        // the already-tracked (potentially stale) identity-map entries.
-        _db.ChangeTracker.Clear();
-
-        foreach (var log in logs)
-            await _recalculation.RecalculateFullPipelineAsync(log.DailyLogId);
+        if (sleepHours + neatHours > 23m)
+            throw new InvalidOperationException(
+                $"Sleep ({sleepHours}h) + NEAT ({neatHours}h) cannot exceed 23 hours per day. " +
+                "At least 1 hour must remain for other activities.");
     }
 
     /// <summary>

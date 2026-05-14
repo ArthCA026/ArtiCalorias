@@ -22,9 +22,9 @@ public class UserProfile
 
     public string? Country { get; set; }
 
-    // Default activity durations added to each new day
-    public decimal DefaultSleepMinutes { get; set; } = 360m;
-    public decimal DefaultNeatMinutes { get; set; } = 180m;
+    // Sleep & NEAT fixed daily costs
+    public decimal SleepHours { get; set; } = 8.0m;
+    public decimal NeatHours { get; set; } = 3.0m;
 
     public bool IsOnboardingCompleted { get; set; }
     public DateTime CreatedAtUtc { get; set; }

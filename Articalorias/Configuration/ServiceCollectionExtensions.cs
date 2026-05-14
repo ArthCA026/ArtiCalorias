@@ -39,7 +39,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDailyLogService, DailyLogService>();
         services.AddScoped<IFoodEntryService, FoodEntryService>();
         services.AddScoped<IActivityService, ActivityService>();
-        services.AddScoped<IWeeklySummaryService, WeeklySummaryService>();
         services.AddScoped<IMonthlySummaryService, MonthlySummaryService>();
 
         // Recalculation pipeline — the heart of the system

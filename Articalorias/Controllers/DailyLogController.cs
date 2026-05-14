@@ -171,18 +171,9 @@ public class DailyLogController : ControllerBase
             {
                 DailyLogId = log.DailyLogId,
                 ActivityTemplateId = item.ActivityTemplateId,
-                ActivityType = item.ActivityType,
                 ActivityName = item.ActivityName,
                 DurationMinutes = item.DurationMinutes,
-                METValue = item.METValue,
-                Notes = item.Notes,
-                Segments = item.Segments.Select(s => new ActivityEntrySegment
-                {
-                    SegmentOrder = s.SegmentOrder,
-                    SegmentName = s.SegmentName,
-                    METValue = s.METValue,
-                    DurationMinutes = s.DurationMinutes
-                }).ToList()
+                METValue = item.METValue
             };
 
             var created = await _activityService.CreateEntryAsync(entry);
@@ -313,21 +304,11 @@ public class DailyLogController : ControllerBase
     {
         ActivityEntryId = a.ActivityEntryId,
         ActivityTemplateId = a.ActivityTemplateId,
-        ActivityType = a.ActivityType,
         ActivityName = a.ActivityName,
         DurationMinutes = a.DurationMinutes,
         METValue = a.METValue,
         CalculatedCaloriesKcal = a.CalculatedCaloriesKcal,
-        IsGlobalDefault = a.IsGlobalDefault,
-        Notes = a.Notes,
-        SortOrder = a.SortOrder,
-        Segments = a.Segments.Select(s => new ActivityEntrySegmentDto
-        {
-            SegmentOrder = s.SegmentOrder,
-            SegmentName = s.SegmentName,
-            METValue = s.METValue,
-            DurationMinutes = s.DurationMinutes
-        }).ToList()
+        SortOrder = a.SortOrder
     };
 
     private static DailyDashboardResponse MapToDashboard(
@@ -346,6 +327,10 @@ public class DailyLogController : ControllerBase
         SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
         SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams,
         FoodEntries = foods.Select(MapFoodToResponse).ToList(),
-        ActivityEntries = activities.Select(MapActivityToResponse).ToList()
+        ActivityEntries = activities.Select(MapActivityToResponse).ToList(),
+        SleepCaloriesKcal = d.SleepCaloriesKcal,
+        NeatCaloriesKcal = d.NeatCaloriesKcal,
+        SnapshotSleepHours = d.SnapshotSleepHours,
+        SnapshotNeatHours = d.SnapshotNeatHours,
     };
 }

@@ -149,6 +149,8 @@ export default function OnboardingPage() {
       proteinGoalGrams: resolvedProteinGrams,
       autoCalculateProteinGoal: form.autoCalculateProteinGoal,
       country: form.country || null,
+      sleepHours: 8,
+      neatHours: 3,
     };
 
     setLoading(true);

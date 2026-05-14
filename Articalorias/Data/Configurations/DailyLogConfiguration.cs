@@ -31,6 +31,10 @@ public class DailyLogConfiguration : IEntityTypeConfiguration<DailyLog>
         builder.Property(d => d.TEFKcal).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
         builder.Property(d => d.HoursRemainingInDay).HasColumnType("decimal(6,2)").HasDefaultValue(0m);
         builder.Property(d => d.IdleTimeCaloriesKcal).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
+        builder.Property(d => d.SnapshotSleepHours).HasColumnType("decimal(5,2)");
+        builder.Property(d => d.SnapshotNeatHours).HasColumnType("decimal(5,2)");
+        builder.Property(d => d.SleepCaloriesKcal).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
+        builder.Property(d => d.NeatCaloriesKcal).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
         builder.Property(d => d.TotalDailyExpenditureKcal).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
 
         // Balance
@@ -48,7 +52,6 @@ public class DailyLogConfiguration : IEntityTypeConfiguration<DailyLog>
         builder.Property(d => d.SuggestedDailyAverageRemainingKcal).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
 
         // Estado
-        builder.Property(d => d.IsFinalized).HasDefaultValue(false);
         builder.Property(d => d.LastRecalculatedAtUtc).HasColumnType("datetime2(0)");
         builder.Property(d => d.CreatedAtUtc).HasColumnType("datetime2(0)").HasDefaultValueSql("SYSUTCDATETIME()");
         builder.Property(d => d.UpdatedAtUtc).HasColumnType("datetime2(0)").HasDefaultValueSql("SYSUTCDATETIME()");

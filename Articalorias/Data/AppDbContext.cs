@@ -12,10 +12,7 @@ public class AppDbContext : DbContext
     public DbSet<DailyLog> DailyLogs => Set<DailyLog>();
     public DbSet<FoodEntry> FoodEntries => Set<FoodEntry>();
     public DbSet<ActivityTemplate> ActivityTemplates => Set<ActivityTemplate>();
-    public DbSet<ActivityTemplateSegment> ActivityTemplateSegments => Set<ActivityTemplateSegment>();
     public DbSet<ActivityEntry> ActivityEntries => Set<ActivityEntry>();
-    public DbSet<ActivityEntrySegment> ActivityEntrySegments => Set<ActivityEntrySegment>();
-    public DbSet<WeeklySummary> WeeklySummaries => Set<WeeklySummary>();
     public DbSet<MonthlySummary> MonthlySummaries => Set<MonthlySummary>();
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
 

@@ -12,14 +12,12 @@ public class ActivityTemplateConfiguration : IEntityTypeConfiguration<ActivityTe
         builder.HasKey(a => a.ActivityTemplateId);
 
         builder.Property(a => a.TemplateScope).HasMaxLength(20).IsUnicode(false).IsRequired();
-        builder.Property(a => a.ActivityType).HasMaxLength(20).IsUnicode(false).IsRequired();
         builder.Property(a => a.TemplateName).HasMaxLength(150).IsRequired();
 
         builder.Property(a => a.AutoAddToNewDay).HasDefaultValue(false);
         builder.Property(a => a.IsActive).HasDefaultValue(true);
 
         builder.Property(a => a.DefaultDurationMinutes).HasColumnType("decimal(10,2)");
-        builder.Property(a => a.DefaultDirectCaloriesKcal).HasColumnType("decimal(10,2)");
         builder.Property(a => a.DefaultMET).HasColumnType("decimal(8,3)");
 
         builder.Property(a => a.CreatedAtUtc).HasColumnType("datetime2(0)").HasDefaultValueSql("SYSUTCDATETIME()");
