@@ -1423,59 +1423,10 @@ function DailyLogWorkspace({
         </div>
         <div className={`space-y-2.5${tab !== "activities" ? " hidden" : ""}`}>
           <ActivityInput date={date} onSaved={onChanged} isToday={isToday} noCard />
-          {(activities.length > 0 || dash?.snapshotSleepHours != null) && <div className="border-t border-gray-100 pt-2" />}
-          {dash?.snapshotSleepHours != null && (
-            <FixedDailyCosts
-              snapshotSleepHours={dash.snapshotSleepHours}
-              snapshotNeatHours={dash.snapshotNeatHours}
-              sleepCaloriesKcal={dash.sleepCaloriesKcal}
-              neatCaloriesKcal={dash.neatCaloriesKcal}
-            />
-          )}
+          {activities.length > 0 && <div className="border-t border-gray-100 pt-2" />}
           <ActivitySection date={date} activities={activities} onChanged={onChanged} isToday={isToday} noCard />
         </div>
       </div>
-    </div>
-  );
-}
-
-
-
-function FixedDailyCosts({
-  snapshotSleepHours,
-  snapshotNeatHours,
-  sleepCaloriesKcal,
-  neatCaloriesKcal,
-}: {
-  snapshotSleepHours: number;
-  snapshotNeatHours: number | null;
-  sleepCaloriesKcal: number;
-  neatCaloriesKcal: number;
-}) {
-  return (
-    <div className="space-y-1">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 px-1">Fixed daily</p>
-      <div className="rounded-lg border border-gray-100 bg-gray-50/60 divide-y divide-gray-100">
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-sm text-gray-500">
-            Sleep &mdash; {snapshotSleepHours}h
-          </span>
-          <span className={`text-sm font-medium tabular-nums ${sleepCaloriesKcal < 0 ? "text-amber-600" : "text-indigo-600"}`}>
-            {sleepCaloriesKcal >= 0 ? "+" : ""}{Math.round(sleepCaloriesKcal)} kcal
-          </span>
-        </div>
-        {snapshotNeatHours != null && (
-          <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-sm text-gray-500">
-              NEAT &mdash; {snapshotNeatHours}h
-            </span>
-            <span className="text-sm font-medium tabular-nums text-indigo-600">
-              +{Math.round(neatCaloriesKcal)} kcal
-            </span>
-          </div>
-        )}
-      </div>
-      <p className="text-[10px] text-gray-400 px-1">Adjust hours &amp; MET values in Profile settings.</p>
     </div>
   );
 }
