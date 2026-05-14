@@ -22,11 +22,24 @@ interface DayDashboardProps {
   date: string;
 }
 
+type ChartMode = "net" | "goal" | "adjusted";
+
+const CHART_MODES: { key: ChartMode; label: string }[] = [
+  { key: "adjusted", label: "Weekly Plan" },
+  { key: "goal",     label: "Daily Goal" },
+  { key: "net",      label: "Net Balance" },
+];
+
 export default function DayDashboard({ date }: DayDashboardProps) {
   const [dash, setDash] = useState<DailyDashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"meals" | "activities">("meals");
+  const [chartMode, setChartMode] = useState<ChartMode>(() => {
+    const saved = localStorage.getItem("ac-table-mode");
+    return (saved === "net" || saved === "goal" || saved === "adjusted") ? saved : "adjusted";
+  });
+  useEffect(() => { localStorage.setItem("ac-table-mode", chartMode); }, [chartMode]);
   const isToday = useMemo(() => date === toDateString(), [date]);
 
   const load = useCallback(() => {
@@ -52,19 +65,29 @@ export default function DayDashboard({ date }: DayDashboardProps) {
 
   return (
     <div className="space-y-2">
-      <CompactDayProgress dash={dash} isToday={isToday} />
+      <CompactDayProgress dash={dash} isToday={isToday} chartMode={chartMode} onModeChange={setChartMode} />
       <DailyLogWorkspace date={date} dash={dash} onChanged={load} isToday={isToday} activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   );
 }
 
 /* --- Compact Day Progress --- */
-function CompactDayProgress({ dash, isToday }: { dash: DailyDashboardResponse | null; isToday: boolean }) {
+function CompactDayProgress({ dash, isToday, chartMode, onModeChange }: { dash: DailyDashboardResponse | null; isToday: boolean; chartMode: ChartMode; onModeChange: (m: ChartMode) => void }) {
   if (!dash) return null;
 
-  // Weekly-adjusted budget — for today it redistributes the week's surplus/deficit;
-  // for past days it reflects what the adjusted target was at that point in time.
-  const dailyBudget = dash.totalDailyExpenditureKcal + dash.suggestedDailyAverageRemainingKcal;
+  // Today always uses the weekly-adjusted budget — the toggle is hidden for today.
+  // Past days use whichever mode the toggle is set to.
+  const effectiveMode = isToday ? "adjusted" : chartMode;
+
+  const dailyBudget =
+    effectiveMode === "net"  ? dash.totalDailyExpenditureKcal :
+    effectiveMode === "goal" ? dash.totalFoodCaloriesKcal + dash.caloriesRemainingToDailyTargetKcal :
+    dash.totalDailyExpenditureKcal + dash.suggestedDailyAverageRemainingKcal;
+
+  const budgetNote =
+    effectiveMode === "net"  ? "· vs. TDEE" :
+    effectiveMode === "goal" ? "· daily goal" :
+    "· weekly adjusted";
   const foodCal = dash.totalFoodCaloriesKcal;
   const calRemaining = dailyBudget - foodCal;
   const calOver = calRemaining < 0;
@@ -80,8 +103,27 @@ function CompactDayProgress({ dash, isToday }: { dash: DailyDashboardResponse | 
   const calPct = dailyBudget > 0 ? Math.round((foodCal / dailyBudget) * 100) : 0;
   const protPctDisplay = Math.round(protPct * 100);
 
+  const modeToggle = !isToday ? (
+    <div role="group" aria-label="Calorie view" className="flex rounded-lg bg-indigo-50 p-0.5 gap-0.5">
+      {CHART_MODES.map(({ key, label }) => (
+        <button
+          key={key}
+          onClick={() => onModeChange(key)}
+          aria-pressed={chartMode === key}
+          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 ${
+            chartMode === key
+              ? "bg-white text-indigo-700 shadow-sm ring-1 ring-indigo-100"
+              : "text-indigo-400 hover:text-indigo-600"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  ) : undefined;
+
   return (
-    <Card title={isToday ? "Today" : "Day summary"} variant="primary" compact>
+    <Card title={isToday ? "Today" : "Day summary"} variant="primary" compact headerAction={modeToggle}>
       <div className="space-y-1.5">
 
         {/* Calorie row */}
@@ -95,7 +137,7 @@ function CompactDayProgress({ dash, isToday }: { dash: DailyDashboardResponse | 
           <div className="h-2 rounded-full bg-gray-100 overflow-hidden" role="progressbar" aria-valuenow={foodCal} aria-valuemin={0} aria-valuemax={dailyBudget} aria-label="Calorie budget progress">
             <div className={`h-full rounded-full transition-all duration-500 ${calOver ? "bg-amber-400" : "bg-green-500"}`} style={{ width: `${Math.min(calPct, 100)}%` }} />
           </div>
-          <p className="text-[11px] tabular-nums text-gray-400">{calPct}% · {fmt(foodCal)} of {fmt(dailyBudget)} kcal spent{!isToday && <span className="ml-1 opacity-50">· weekly adjusted</span>}</p>
+          <p className="text-[11px] tabular-nums text-gray-400">{calPct}% · {fmt(foodCal)} of {fmt(dailyBudget)} kcal spent<span className="ml-1 opacity-50">{budgetNote}</span></p>
         </div>
 
         {/* Protein row */}
@@ -1440,7 +1482,7 @@ function FixedDailyCosts({
 
 
 
-function Card({ title, subtitle, icon, compact, variant, children }: { title: string; subtitle?: string; icon?: React.ReactNode; compact?: boolean; variant?: "primary" | "muted"; children: React.ReactNode }) {
+function Card({ title, subtitle, icon, compact, variant, headerAction, children }: { title: string; subtitle?: string; icon?: React.ReactNode; compact?: boolean; variant?: "primary" | "muted"; headerAction?: React.ReactNode; children: React.ReactNode }) {
   const sectionClass = variant === "primary"
     ? "rounded-xl border-2 border-indigo-200 bg-white shadow-md ring-1 ring-indigo-100"
     : variant === "muted"
@@ -1454,9 +1496,12 @@ function Card({ title, subtitle, icon, compact, variant, children }: { title: st
 
   return (
     <section className={`${sectionClass} ${compact ? "p-3 sm:p-3.5" : "p-4 sm:p-5"}`}>
-      <div className="flex items-center gap-2 mb-1">
-        {icon && <span className="text-indigo-500 flex-shrink-0">{icon}</span>}
-        <h2 className={titleClass}>{title}</h2>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-2">
+          {icon && <span className="text-indigo-500 flex-shrink-0">{icon}</span>}
+          <h2 className={titleClass}>{title}</h2>
+        </div>
+        {headerAction && <div className="flex items-center">{headerAction}</div>}
       </div>
       {subtitle && <p className="mb-3 text-xs text-gray-400">{subtitle}</p>}
       {!subtitle && <div className="mb-2" />}

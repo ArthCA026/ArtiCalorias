@@ -209,7 +209,17 @@ public class RecalculationService : IRecalculationService
         // a net-balance target: negative = deficit, positive = surplus vs. expenditure)
         var minNetBalance = minIntakeKcal - log.TotalDailyExpenditureKcal;
 
-        log.SuggestedDailyAverageRemainingKcal = Math.Max(rawSuggested, minNetBalance);
+        // Only set the adjusted goal for today or for a past day that has never had one
+        // set before (i.e. its first-ever calculation, indicated by the DB default of 0).
+        // Past days that already have a value must keep it frozen — their adjusted budget
+        // reflected the week's reality at that point in time and must not be retroactively
+        // rewritten when food or activities are changed on any day in the same week.
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var isPastDay = log.LogDate < today;
+        var alreadySet = log.SuggestedDailyAverageRemainingKcal != 0m;
+
+        if (!isPastDay || !alreadySet)
+            log.SuggestedDailyAverageRemainingKcal = Math.Max(rawSuggested, minNetBalance);
     }
 
     /// <summary>

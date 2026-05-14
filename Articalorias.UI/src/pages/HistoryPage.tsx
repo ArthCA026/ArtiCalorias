@@ -136,6 +136,16 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const todayStr = toDateString();
+  const [chartMode, setChartMode] = useState<ChartMode>(() => {
+    const saved = localStorage.getItem("ac-table-mode");
+    return (saved === "net" || saved === "goal" || saved === "adjusted") ? saved : "adjusted";
+  });
+  useEffect(() => { localStorage.setItem("ac-table-mode", chartMode); }, [chartMode]);
+
+  const tableColumnLabel =
+    chartMode === "net" ? "Net Balance" :
+    chartMode === "goal" ? "vs. Daily Goal" :
+    "Over / Under";
 
   function handleDeleteClick(e: React.MouseEvent, date: string) {
     e.stopPropagation();
@@ -156,6 +166,26 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
 
   return (
     <Card title="Your logged days" subtitle="Click any day to see how it went">
+      {/* Mode toggle */}
+      <div className="mb-3 flex justify-end">
+        <div role="group" aria-label="Table view" className="flex rounded-lg bg-gray-100 p-0.5 gap-0.5">
+          {CHART_MODES.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setChartMode(key)}
+              aria-pressed={chartMode === key}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 ${
+                chartMode === key
+                  ? "bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {days.length === 0 ? (
         <EmptyState message="No logged days yet — you can add a missed day below." />
       ) : (
@@ -166,7 +196,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
               <thead>
                 <tr className="bg-gray-50/80 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-500 sticky top-0 z-10">
                   <th className="py-2.5 px-3 text-left">Date</th>
-                  <th className="py-2.5 px-2 text-right">Over / Under</th>
+                  <th className="py-2.5 px-2 text-right">{tableColumnLabel}</th>
                   <th className="py-2.5 px-2 text-right">Protein</th>
                   <th className="py-2.5 px-2 text-center w-10"><span className="sr-only">Actions</span></th>
                 </tr>
@@ -179,11 +209,11 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
                     className={`cursor-pointer group transition-colors hover:bg-indigo-50/30 ${idx % 2 === 1 ? "bg-gray-50/40" : ""}`}
                   >
                     <td className="py-2.5 px-3 font-medium text-indigo-600">
-                      <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${getAdjustedDelta(d) <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
+                      <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${getTableDelta(d, chartMode) <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
                       {formatDayLabel(d.logDate)}
                     </td>
                     <td className="py-2.5 px-2 text-right">
-                      <FriendlyGoalDelta value={getAdjustedDelta(d)} />
+                      <FriendlyGoalDelta value={getTableDelta(d, chartMode)} />
                     </td>
                     <td className="py-2.5 px-2 text-right tabular-nums font-medium text-gray-700">{fmt(d.totalProteinGrams, 1)} g</td>
                     <td className="py-2.5 px-2 text-center">
@@ -213,7 +243,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
               >
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="font-medium text-indigo-600 text-sm">
-                    <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${getAdjustedDelta(d) <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${getTableDelta(d, chartMode) <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
                     {formatDayLabel(d.logDate)}
                   </span>
                   <div className="flex items-center gap-2">
@@ -230,7 +260,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
                   <span>Protein: <span className="font-medium text-gray-700">{fmt(d.totalProteinGrams, 1)} g</span></span>
-                  <span>Above/below plan: <FriendlyGoalDelta value={getAdjustedDelta(d)} /></span>
+                  <span>{tableColumnLabel}: <FriendlyGoalDelta value={getTableDelta(d, chartMode)} /></span>
                 </div>
               </div>
             ))}
@@ -395,7 +425,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
 
   const [chartMode, setChartMode] = useState<ChartMode>(() => {
     const saved = localStorage.getItem("ac-chart-mode");
-    return (saved === "net" || saved === "goal" || saved === "adjusted") ? saved : "adjusted";
+    return (saved === "net" || saved === "goal" || saved === "adjusted") ? saved : "goal";
   });
   useEffect(() => { localStorage.setItem("ac-chart-mode", chartMode); }, [chartMode]);
 
@@ -658,6 +688,12 @@ function TrashIcon() {
 
 function getAdjustedDelta(d: DailyLogResponse): number {
   return (d.totalFoodCaloriesKcal - d.totalDailyExpenditureKcal) - d.suggestedDailyAverageRemainingKcal;
+}
+
+function getTableDelta(d: DailyLogResponse, mode: ChartMode): number {
+  if (mode === "net")  return d.totalFoodCaloriesKcal - d.totalDailyExpenditureKcal;
+  if (mode === "goal") return d.dailyGoalDeltaKcal;
+  return getAdjustedDelta(d);
 }
 
 function FriendlyGoalDelta({ value }: { value: number }) {
