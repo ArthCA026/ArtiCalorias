@@ -217,15 +217,6 @@ export default function ActivitiesPage() {
 
   return (
     <div className="space-y-3 overflow-x-hidden">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Your Saved Activities</h1>
-        <p className="mt-1.5 text-sm text-gray-400">
-          Create shortcuts for the activities you do regularly — they'll show up on your{" "}
-          <a href="/today" className="font-medium text-indigo-600 hover:text-indigo-800 transition-colors">Daily page</a>
-          {" "}so you can log them in one tap.
-        </p>
-      </div>
 
       {/* Quick create — AI-powered */}
       <Card

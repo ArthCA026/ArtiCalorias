@@ -96,6 +96,18 @@ interface Release {
 
 const CHANGELOG: Release[] = [
   {
+    version: "1.1.1",
+    date: "2026-05-14",
+    summary: "UI polish and navigation improvements.",
+    changes: [
+      { type: "improved", text: "Calorie mode chooser changed from toggle buttons to a dropdown in chart, history table, and past day view" },
+      { type: "improved", text: "\"Logged days\" header and mode dropdown now share the same row" },
+      { type: "improved", text: "\"Your logged days\" renamed to \"Logged days\"; subtitle removed for a more compact layout" },
+      { type: "improved", text: "Page title headers standardized across all pages" },
+      { type: "improved", text: "ArtiCalorias logo centered on Today page; other pages show their title in the header" },
+    ],
+  },
+  {
     version: "1.1.0",
     date: "2026-05-14",
     summary: "Lots of improvements, fixes, and new features.",
@@ -233,30 +245,6 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-xl mx-auto">
-      {/* ── Page header ── */}
-      <div className="text-center mb-6 sm:mb-10">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100">
-          <svg
-            className="h-6 w-6 text-indigo-600"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-        </div>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">
-          Settings
-        </h1>
-        <p className="mt-3 text-base text-gray-500 max-w-md mx-auto">
-          Customise how ArtiCalorias looks and behaves for you.
-        </p>
-      </div>
-
       <div className="space-y-6 sm:space-y-8">
 
         {/* ── Section 1: Appearance ── */}
@@ -492,7 +480,7 @@ export default function SettingsPage() {
               </p>
             </div>
             <div className="space-y-2">
-              {CHANGELOG.map((release, i) => (
+              {CHANGELOG.map((release) => (
                 <Fragment key={release.version}>
                   <ChangelogEntry release={release} defaultOpen={false} />
                 </Fragment>

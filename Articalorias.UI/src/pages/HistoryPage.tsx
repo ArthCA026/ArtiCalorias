@@ -99,18 +99,27 @@ function MonthlyView() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Your Month 📅</h1>
-          <div className="flex items-center gap-3">
-            <button onClick={goPrev} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">&larr; Prev</button>
-            <span className="min-w-[160px] text-center text-sm font-semibold text-gray-700">{monthLabel}</span>
-            <button onClick={goNext} disabled={isCurrentMonth} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">Next &rarr;</button>
-          </div>
+      <div className="flex justify-center">
+        <div className="inline-flex items-center rounded-full bg-gray-100 p-1 gap-0.5">
+          <button
+            onClick={goPrev}
+            aria-label="Previous month"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-gray-500 hover:bg-white hover:text-gray-900 hover:shadow-sm transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+          </button>
+          <span className="min-w-[148px] text-center text-sm font-semibold text-gray-800 select-none px-1">
+            {monthLabel}
+          </span>
+          <button
+            onClick={goNext}
+            disabled={isCurrentMonth}
+            aria-label="Next month"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-gray-500 hover:bg-white hover:text-gray-900 hover:shadow-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
+          </button>
         </div>
-        <p className="mt-1.5 text-sm text-gray-400">
-          See how your month is shaping up. The more days you log, the clearer the picture gets.
-        </p>
       </div>
 
       {loading && <LoadingSpinner message="Loading your month..." />}
@@ -164,27 +173,21 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
       .finally(() => setDeleting(false));
   }
 
+  const tableDropdown = (
+    <select
+      value={chartMode}
+      onChange={(e) => setChartMode(e.target.value as ChartMode)}
+      aria-label="Table view"
+      className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-gray-600 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+    >
+      {CHART_MODES.map(({ key, label }) => (
+        <option key={key} value={key}>{label}</option>
+      ))}
+    </select>
+  );
+
   return (
-    <Card title="Your logged days" subtitle="Click any day to see how it went">
-      {/* Mode toggle */}
-      <div className="mb-3 flex justify-end">
-        <div role="group" aria-label="Table view" className="flex rounded-lg bg-gray-100 p-0.5 gap-0.5">
-          {CHART_MODES.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setChartMode(key)}
-              aria-pressed={chartMode === key}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 ${
-                chartMode === key
-                  ? "bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+    <Card title="Logged days" headerAction={tableDropdown}>
 
       {days.length === 0 ? (
         <EmptyState message="No logged days yet — you can add a missed day below." />
@@ -484,27 +487,21 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
   const underLabel = chartMode === "net" ? "Deficit" : "Under";
   const overLabel  = chartMode === "net" ? "Surplus" : "Over";
 
+  const chartDropdown = (
+    <select
+      value={chartMode}
+      onChange={(e) => setChartMode(e.target.value as ChartMode)}
+      aria-label="Chart view"
+      className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-gray-600 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+    >
+      {CHART_MODES.map(({ key, label }) => (
+        <option key={key} value={key}>{label}</option>
+      ))}
+    </select>
+  );
+
   return (
-    <Card title="Are you staying on track?" subtitle={cfg.subtitle} variant="muted">
-      {/* Mode toggle */}
-      <div className="mb-3 flex justify-end">
-        <div role="group" aria-label="Chart view" className="flex rounded-lg bg-gray-100 p-0.5 gap-0.5">
-          {CHART_MODES.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setChartMode(key)}
-              aria-pressed={chartMode === key}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 ${
-                chartMode === key
-                  ? "bg-white text-indigo-700 shadow-sm ring-1 ring-gray-200"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+    <Card title="Are you staying on track?" subtitle={cfg.subtitle} variant="muted" headerAction={chartDropdown}>
 
       {points.length < 2 ? (
         <p className="text-xs text-gray-400 text-center py-4">Log at least 2 days to see the trend.</p>
@@ -711,7 +708,7 @@ function formatDayLabel(dateStr: string): string {
   return d.toLocaleDateString("default", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 }
 
-function Card({ title, subtitle, variant, children }: { title: string; subtitle?: string; variant?: "primary" | "muted"; children: React.ReactNode }) {
+function Card({ title, subtitle, variant, headerAction, children }: { title: string; subtitle?: string; variant?: "primary" | "muted"; headerAction?: React.ReactNode; children: React.ReactNode }) {
   const sectionClass = variant === "primary"
     ? "rounded-xl border-2 border-indigo-200 bg-white shadow-md ring-1 ring-indigo-100"
     : variant === "muted"
@@ -725,7 +722,10 @@ function Card({ title, subtitle, variant, children }: { title: string; subtitle?
 
   return (
     <section className={`${sectionClass} p-4 sm:p-5`}>
-      <h2 className={`${titleClass} mb-1`}>{title}</h2>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <h2 className={titleClass}>{title}</h2>
+        {headerAction && <div className="flex items-center">{headerAction}</div>}
+      </div>
       {subtitle && <p className="mb-3 text-xs text-gray-400">{subtitle}</p>}
       {!subtitle && <div className="mb-2" />}
       {children}

@@ -258,13 +258,6 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-3 w-full min-w-0">
-      <div>
-        <h1 className="text-xl font-semibold text-gray-900">Your profile</h1>
-        <p className="mt-0.5 text-sm text-gray-400">
-          These details help estimate your daily calories and protein target.
-        </p>
-      </div>
-
       <div className="space-y-3">
         {error && (
           <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>

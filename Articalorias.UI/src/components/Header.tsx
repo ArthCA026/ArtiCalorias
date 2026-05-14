@@ -1,6 +1,7 @@
-﻿import { NavLink, useNavigate } from 'react-router';
+﻿import { NavLink, useNavigate, useLocation } from 'react-router';
 import { useAuth } from '@/hooks/useAuth';
 import { useState } from 'react';
+import type { ReactElement } from 'react';
 
 const navItems = [
   { to: '/today', label: 'Today' },
@@ -10,10 +11,46 @@ const navItems = [
   { to: '/settings', label: 'Settings (WIP)' },
 ];
 
+const PAGE_TITLES: { path: string; label: string }[] = [
+  { path: '/history', label: 'History' },
+  { path: '/activities', label: 'Activities' },
+  { path: '/profile', label: 'Profile' },
+  { path: '/settings', label: 'Settings' },
+];
+
+const PAGE_ICONS: Record<string, ReactElement> = {
+  '/history': (
+    <svg className="h-[15px] w-[15px] flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  ),
+  '/activities': (
+    <svg className="h-[15px] w-[15px] flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    </svg>
+  ),
+  '/profile': (
+    <svg className="h-[15px] w-[15px] flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+    </svg>
+  ),
+  '/settings': (
+    <svg className="h-[15px] w-[15px] flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 7h-9" /><path d="M14 17H5" /><circle cx="17" cy="17" r="3" /><circle cx="7" cy="7" r="3" />
+    </svg>
+  ),
+};
+
 export default function Header() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const isToday = location.pathname === '/today' || location.pathname === '/';
+  const currentPage = PAGE_TITLES.find(({ path }) => location.pathname.startsWith(path));
+  const pageTitle = currentPage?.label;
+  const pageIcon = currentPage ? PAGE_ICONS[currentPage.path] : null;
 
   function handleLogout() {
     logout();
@@ -22,10 +59,42 @@ export default function Header() {
 
   return (
     <header className="border-b border-gray-200 bg-white">
-      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-        <NavLink to="/today" className="text-lg font-bold text-indigo-600 flex-shrink-0">
-          ArtiCalorias
-        </NavLink>
+      <div className="relative mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
+        {/* Desktop left slot: logo/title always on the left */}
+        <div className="flex-shrink-0">
+          {isToday ? (
+            <NavLink to="/today" className="hidden md:flex items-center gap-1.5 text-lg font-bold text-indigo-600">
+              <svg className="h-[15px] w-[15px] flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+              </svg>
+              ArtiCalorias
+            </NavLink>
+          ) : (
+            <span className="hidden md:flex items-center gap-1.5 text-base font-semibold text-gray-900 truncate max-w-[200px]">
+              {pageIcon}
+              {pageTitle ?? ''}
+            </span>
+          )}
+          {/* Mobile invisible spacer to balance the hamburger button */}
+          <div className="md:hidden w-10" aria-hidden="true" />
+        </div>
+
+        {/* Mobile-only: title absolutely centered */}
+        <div className="md:hidden absolute left-1/2 -translate-x-1/2">
+          {isToday ? (
+            <NavLink to="/today" className="flex items-center gap-1.5 text-lg font-bold text-indigo-600 whitespace-nowrap">
+              <svg className="h-[15px] w-[15px] flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+              </svg>
+              ArtiCalorias
+            </NavLink>
+          ) : (
+            <span className="flex items-center gap-1.5 text-base font-semibold text-gray-900 whitespace-nowrap">
+              {pageIcon}
+              {pageTitle ?? ''}
+            </span>
+          )}
+        </div>
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-1">

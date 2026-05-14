@@ -104,22 +104,16 @@ function CompactDayProgress({ dash, isToday, chartMode, onModeChange }: { dash: 
   const protPctDisplay = Math.round(protPct * 100);
 
   const modeToggle = !isToday ? (
-    <div role="group" aria-label="Calorie view" className="flex rounded-lg bg-indigo-50 p-0.5 gap-0.5">
+    <select
+      value={chartMode}
+      onChange={(e) => onModeChange(e.target.value as ChartMode)}
+      aria-label="Calorie view"
+      className="rounded-md border border-indigo-100 bg-white px-2 py-0.5 text-xs font-medium text-indigo-600 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+    >
       {CHART_MODES.map(({ key, label }) => (
-        <button
-          key={key}
-          onClick={() => onModeChange(key)}
-          aria-pressed={chartMode === key}
-          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 ${
-            chartMode === key
-              ? "bg-white text-indigo-700 shadow-sm ring-1 ring-indigo-100"
-              : "text-indigo-400 hover:text-indigo-600"
-          }`}
-        >
-          {label}
-        </button>
+        <option key={key} value={key}>{label}</option>
       ))}
-    </div>
+    </select>
   ) : undefined;
 
   return (
