@@ -228,6 +228,16 @@ function IconCamera({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
+function IconPhoto({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <polyline points="21 15 16 10 5 21" />
+    </svg>
+  );
+}
+
 /* --- Food Input (parse free text or image) --- */
 function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: () => void; isToday: boolean; noCard?: boolean }) {
   const [text, setText] = useState("");
@@ -237,6 +247,7 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
 
   // Image state
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageData, setImageData] = useState<{ base64: string; mimeType: string } | null>(null);
 
@@ -250,13 +261,14 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
     setImagePreview(null);
     setImageData(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (galleryInputRef.current) galleryInputRef.current.value = "";
   }
 
   async function handleImageSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
-    setImagePreview(URL.createObjectURL(file));
+    setImagePreview(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(file); });
     try {
       const compressed = await compressImage(file);
       setImageData(compressed);
@@ -339,7 +351,16 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
         type="file"
         accept="image/*"
         capture="environment"
-        aria-label="Attach a photo of your meal"
+        aria-label="Take a photo of your meal"
+        className="sr-only"
+        onChange={handleImageSelected}
+      />
+      {/* Hidden file input — opens gallery/file picker (no capture attribute) */}
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        aria-label="Choose a photo from gallery"
         className="sr-only"
         onChange={handleImageSelected}
       />
@@ -350,8 +371,8 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={busy}
-          aria-label="Attach a photo of your meal"
-          title="Attach a photo"
+          aria-label="Take a photo of your meal"
+          title="Take a photo"
           className={`inline-flex items-center justify-center shrink-0 w-9 h-9 rounded-full border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed ${
             hasImage
               ? "border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
@@ -361,6 +382,22 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
           <IconCamera className="w-4 h-4" />
         </button>
 
+        {/* Gallery button */}
+        <button
+          type="button"
+          onClick={() => galleryInputRef.current?.click()}
+          disabled={busy}
+          aria-label="Choose a photo from gallery"
+          title="Choose from gallery"
+          className={`inline-flex items-center justify-center shrink-0 w-9 h-9 rounded-full border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed ${
+            hasImage
+              ? "border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+              : "border-gray-300 bg-gray-50/50 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          }`}
+        >
+          <IconPhoto className="w-4 h-4" />
+        </button>
+
         {/* Auto-growing textarea */}
         <textarea
           ref={textareaRef}
@@ -368,7 +405,7 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
           value={text}
           onChange={(e) => { setText(e.target.value); autoResize(e.target); }}
           onKeyDown={handleKeyDown}
-          placeholder={hasImage ? 'Optional: add context (e.g. "with extra sauce")' : 'e.g. "2 eggs and toast with butter"'}
+          placeholder={hasImage ? 'e.g. "with extra sauce"' : 'e.g. "2 eggs, toast"'}
           className="flex-1 min-w-0 rounded-lg border border-gray-300 bg-gray-50/50 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors resize-none overflow-hidden leading-normal"
           aria-label={isToday ? "Describe the food you ate" : "Describe the food you ate that day"}
         />
@@ -1416,14 +1453,12 @@ function DailyLogWorkspace({
 
       {/* Tab content – both panels stay mounted to preserve typed input on tab switch */}
       <div className="p-3">
-        <div className={`space-y-2.5${tab !== "meals" ? " hidden" : ""}`}>
+        <div className={`space-y-4${tab !== "meals" ? " hidden" : ""}`}>
           <FoodInput date={date} onSaved={onChanged} isToday={isToday} noCard />
-          {foods.length > 0 && <div className="border-t border-gray-100 pt-2" />}
           <MealsTable date={date} foods={foods} onChanged={onChanged} isToday={isToday} noCard />
         </div>
-        <div className={`space-y-2.5${tab !== "activities" ? " hidden" : ""}`}>
+        <div className={`space-y-4${tab !== "activities" ? " hidden" : ""}`}>
           <ActivityInput date={date} onSaved={onChanged} isToday={isToday} noCard />
-          {activities.length > 0 && <div className="border-t border-gray-100 pt-2" />}
           <ActivitySection date={date} activities={activities} onChanged={onChanged} isToday={isToday} noCard />
         </div>
       </div>
