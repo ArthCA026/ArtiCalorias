@@ -14,9 +14,6 @@ public class UpdateFoodEntryRequest
     [Range(0, 100000)]
     public decimal? Quantity { get; set; }
 
-    [StringLength(50)]
-    public string? Unit { get; set; }
-
     [Range(0, 50000)]
     public decimal CaloriesKcal { get; set; }
 
@@ -34,4 +31,10 @@ public class UpdateFoodEntryRequest
 
     [StringLength(500)]
     public string? Notes { get; set; }
+
+    /// <summary>
+    /// When true, the API ignores the submitted macro values and instead scales
+    /// the existing stored macros by (new Quantity / old Quantity).
+    /// </summary>
+    public bool ScaleByQuantity { get; set; } = false;
 }

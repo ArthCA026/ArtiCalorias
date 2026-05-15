@@ -7,6 +7,6 @@ public interface IFoodEntryService
     Task<IReadOnlyList<FoodEntry>> GetByDailyLogAsync(long dailyLogId);
     Task<FoodEntry> CreateAsync(FoodEntry entry);
     Task<IReadOnlyList<FoodEntry>> CreateBatchAsync(long dailyLogId, IReadOnlyList<FoodEntry> entries);
-    Task<FoodEntry> UpdateAsync(FoodEntry entry);
+    Task<FoodEntry> UpdateAsync(FoodEntry entry, bool scaleByQuantity = false);
     Task DeleteAsync(long foodEntryId);
 }

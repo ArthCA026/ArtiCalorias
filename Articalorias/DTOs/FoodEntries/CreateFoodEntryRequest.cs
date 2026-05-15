@@ -14,9 +14,6 @@ public class CreateFoodEntryRequest
     [Range(0, 100000)]
     public decimal? Quantity { get; set; }
 
-    [StringLength(50)]
-    public string? Unit { get; set; }
-
     [Range(0, 50000)]
     public decimal CaloriesKcal { get; set; }
 

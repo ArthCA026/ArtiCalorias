@@ -3,7 +3,6 @@ export interface FoodEntryResponse {
   foodName: string;
   portionDescription: string | null;
   quantity: number | null;
-  unit: string | null;
   caloriesKcal: number;
   proteinGrams: number;
   fatGrams: number;
@@ -18,7 +17,6 @@ export interface CreateFoodEntryRequest {
   foodName: string;
   portionDescription?: string | null;
   quantity?: number | null;
-  unit?: string | null;
   caloriesKcal: number;
   proteinGrams: number;
   fatGrams: number;
@@ -32,13 +30,14 @@ export interface UpdateFoodEntryRequest {
   foodName: string;
   portionDescription?: string | null;
   quantity?: number | null;
-  unit?: string | null;
   caloriesKcal: number;
   proteinGrams: number;
   fatGrams: number;
   carbsGrams: number;
   alcoholGrams: number;
   notes?: string | null;
+  /** When true the API scales existing macros by newQty/oldQty instead of using the submitted macro values. */
+  scaleByQuantity?: boolean;
 }
 
 export interface ParseFoodRequest {
@@ -49,7 +48,6 @@ export interface ParsedFoodItem {
   foodName: string;
   portionDescription: string | null;
   quantity: number | null;
-  unit: string | null;
   caloriesKcal: number;
   proteinGrams: number;
   fatGrams: number;

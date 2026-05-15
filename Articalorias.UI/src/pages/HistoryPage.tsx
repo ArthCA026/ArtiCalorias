@@ -129,7 +129,7 @@ function MonthlyView() {
         <>
           {days.length >= 1 && <BalanceTrend days={days} />}
           {(days.length > 0 || unloggedDays.length > 0) && (
-            <DailyLogsCard days={days} unloggedDays={unloggedDays} onDayClick={(d) => navigate("/history/" + d)} onDayDeleted={load} />
+            <DailyLogsCard days={days} unloggedDays={unloggedDays} onDayClick={(d) => navigate(d === toDateString() ? "/today" : "/history/" + d)} onDayDeleted={load} />
           )}
         </>
       )}

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Articalorias.Configuration;
 using Articalorias.DTOs.FoodParsing;
 using Articalorias.Interfaces;
@@ -77,8 +78,8 @@ public class FoodParsingService : IFoodParsingService
         // 3. Validate — bad AI output never reaches the frontend
         var validated = Validate(items);
 
-        // 4. Scale per-unit nutrition by quantity
-        return Scale(validated);
+        // 4. Scale per-unit nutrition by quantity, then normalize portion descriptions
+        return NormalizePortions(Scale(validated));
     }
 
     // ─────────────────────────────────────────────────────
@@ -163,9 +164,8 @@ public class FoodParsingService : IFoodParsingService
             Each item must contain exactly these fields:
 
             - foodName (string)
-            - portionDescription (string) — describe ONE unit (e.g. "1 huevo entero", "1 rebanada")
+            - portionDescription (string) — describe ONE unit WITHOUT a leading number prefix (e.g. "huevo entero", "rebanada de pan"). Only include a leading number if the portion inherently implies a specific count greater than 1 (e.g. "3 galletas").
             - quantity (number) — how many units the user specified
-            - unit (string)
             - caloriesKcal (number) — for ONE unit only, never multiplied by quantity
             - proteinGrams (number) — for ONE unit only, never multiplied by quantity
             - fatGrams (number) — for ONE unit only, never multiplied by quantity
@@ -320,8 +320,24 @@ public class FoodParsingService : IFoodParsingService
 
         var items = DeserializeResponse(content);
         var validated = Validate(items);
-        return Scale(validated);
+        return NormalizePortions(Scale(validated));
     }
+
+    // ─────────────────────────────────────────────────────
+    //  Portion description normalization
+    // ─────────────────────────────────────────────────────
+
+    private static readonly Regex LeadingOnePattern = new(@"^1\s+", RegexOptions.Compiled);
+
+    private static IReadOnlyList<ParsedFoodItem> NormalizePortions(IReadOnlyList<ParsedFoodItem> items)
+    {
+        foreach (var item in items)
+            item.PortionDescription = NormalizePortionDescription(item.PortionDescription);
+        return items;
+    }
+
+    private static string? NormalizePortionDescription(string? s)
+        => string.IsNullOrWhiteSpace(s) ? s : LeadingOnePattern.Replace(s, string.Empty);
 
     // ─────────────────────────────────────────────────────
     //  Internal DTO for deserializing the { "items": [...] } wrapper

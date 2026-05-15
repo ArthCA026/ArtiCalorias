@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Articalorias.Data;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
@@ -63,21 +64,39 @@ public class FoodEntryService : IFoodEntryService
         return entries;
     }
 
-    public async Task<FoodEntry> UpdateAsync(FoodEntry entry)
+    public async Task<FoodEntry> UpdateAsync(FoodEntry entry, bool scaleByQuantity = false)
     {
         var existing = await _db.FoodEntries.FindAsync(entry.FoodEntryId)
             ?? throw new InvalidOperationException("FoodEntry not found.");
 
+        var oldQuantity = existing.Quantity;
+
         existing.FoodName = entry.FoodName;
-        existing.PortionDescription = entry.PortionDescription;
+        existing.PortionDescription = NormalizePortionDescription(entry.PortionDescription);
         existing.Quantity = entry.Quantity;
-        existing.Unit = entry.Unit;
-        existing.CaloriesKcal = entry.CaloriesKcal;
-        existing.ProteinGrams = entry.ProteinGrams;
-        existing.FatGrams = entry.FatGrams;
-        existing.CarbsGrams = entry.CarbsGrams;
-        existing.AlcoholGrams = entry.AlcoholGrams;
         existing.Notes = entry.Notes;
+
+        if (scaleByQuantity
+            && entry.Quantity.HasValue
+            && oldQuantity.HasValue
+            && oldQuantity.Value != 0m)
+        {
+            var ratio = entry.Quantity.Value / oldQuantity.Value;
+            existing.CaloriesKcal = Math.Round(existing.CaloriesKcal * ratio, 2);
+            existing.ProteinGrams = Math.Round(existing.ProteinGrams * ratio, 2);
+            existing.FatGrams = Math.Round(existing.FatGrams * ratio, 2);
+            existing.CarbsGrams = Math.Round(existing.CarbsGrams * ratio, 2);
+            existing.AlcoholGrams = Math.Round(existing.AlcoholGrams * ratio, 2);
+        }
+        else
+        {
+            existing.CaloriesKcal = entry.CaloriesKcal;
+            existing.ProteinGrams = entry.ProteinGrams;
+            existing.FatGrams = entry.FatGrams;
+            existing.CarbsGrams = entry.CarbsGrams;
+            existing.AlcoholGrams = entry.AlcoholGrams;
+        }
+
         existing.UpdatedAtUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -97,4 +116,9 @@ public class FoodEntryService : IFoodEntryService
 
         await _recalculation.RecalculateFullPipelineAsync(dailyLogId);
     }
+
+    private static readonly Regex LeadingOnePattern = new(@"^1\s+", RegexOptions.Compiled);
+
+    private static string? NormalizePortionDescription(string? s)
+        => string.IsNullOrWhiteSpace(s) ? s : LeadingOnePattern.Replace(s, string.Empty);
 }

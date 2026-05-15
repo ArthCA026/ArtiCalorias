@@ -129,7 +129,6 @@ public class DailyLogController : ControllerBase
             FoodName = i.FoodName,
             PortionDescription = i.PortionDescription,
             Quantity = i.Quantity,
-            Unit = i.Unit,
             CaloriesKcal = i.CaloriesKcal,
             ProteinGrams = i.ProteinGrams,
             FatGrams = i.FatGrams,
@@ -209,7 +208,6 @@ public class DailyLogController : ControllerBase
             FoodName = request.FoodName,
             PortionDescription = request.PortionDescription,
             Quantity = request.Quantity,
-            Unit = request.Unit,
             CaloriesKcal = request.CaloriesKcal,
             ProteinGrams = request.ProteinGrams,
             FatGrams = request.FatGrams,
@@ -232,7 +230,6 @@ public class DailyLogController : ControllerBase
             FoodName = request.FoodName,
             PortionDescription = request.PortionDescription,
             Quantity = request.Quantity,
-            Unit = request.Unit,
             CaloriesKcal = request.CaloriesKcal,
             ProteinGrams = request.ProteinGrams,
             FatGrams = request.FatGrams,
@@ -241,7 +238,7 @@ public class DailyLogController : ControllerBase
             Notes = request.Notes
         };
 
-        var updated = await _foodEntryService.UpdateAsync(entry);
+        var updated = await _foodEntryService.UpdateAsync(entry, request.ScaleByQuantity);
         return Ok(MapFoodToResponse(updated));
     }
 
@@ -289,7 +286,6 @@ public class DailyLogController : ControllerBase
         FoodName = f.FoodName,
         PortionDescription = f.PortionDescription,
         Quantity = f.Quantity,
-        Unit = f.Unit,
         CaloriesKcal = f.CaloriesKcal,
         ProteinGrams = f.ProteinGrams,
         FatGrams = f.FatGrams,

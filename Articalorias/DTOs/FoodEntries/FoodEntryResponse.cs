@@ -6,7 +6,6 @@ public class FoodEntryResponse
     public string FoodName { get; set; } = string.Empty;
     public string? PortionDescription { get; set; }
     public decimal? Quantity { get; set; }
-    public string? Unit { get; set; }
     public decimal CaloriesKcal { get; set; }
     public decimal ProteinGrams { get; set; }
     public decimal FatGrams { get; set; }

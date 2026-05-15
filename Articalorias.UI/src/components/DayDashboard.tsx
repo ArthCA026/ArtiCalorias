@@ -307,7 +307,6 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
           foodName: p.foodName,
           portionDescription: p.portionDescription,
           quantity: p.quantity,
-          unit: p.unit,
           caloriesKcal: p.caloriesKcal,
           proteinGrams: p.proteinGrams,
           fatGrams: p.fatGrams,
@@ -720,29 +719,37 @@ function MealMobileCard({
   onEdit,
   onDelete,
   busy,
+  isQtyEditing,
+  qtyEditValue,
+  qtyBusy,
+  onQtyEditStart,
+  onQtyEditChange,
+  onQtyEditConfirm,
+  onQtyEditCancel,
 }: {
   f: FoodEntryResponse;
   onEdit: () => void;
   onDelete: () => void;
   busy: boolean;
+  isQtyEditing: boolean;
+  qtyEditValue: string;
+  qtyBusy: boolean;
+  onQtyEditStart: () => void;
+  onQtyEditChange: (v: string) => void;
+  onQtyEditConfirm: () => void;
+  onQtyEditCancel: () => void;
 }) {
   return (
-    <div className="rounded-lg border border-gray-100 bg-white p-3 shadow-sm">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="font-medium text-gray-900 text-sm leading-snug">{f.foodName}</p>
-          <p className="text-xs text-gray-400 mt-0.5">
-            {f.quantity != null ? fmt(f.quantity, 1) : "\u2013"}{" "}
-            <span className="text-gray-300">&middot;</span>{" "}
-            {f.portionDescription ?? "\u2013"}
-          </p>
-        </div>
-        <div className="flex gap-1.5 flex-shrink-0">
+    <div className="rounded-lg border border-gray-100 bg-white shadow-sm overflow-hidden">
+      {/* Header: name + actions */}
+      <div className="flex items-start justify-between gap-2 px-3 pt-2 pb-0.5">
+        <p className="font-medium text-gray-900 text-sm leading-snug">{f.foodName}</p>
+        <div className="flex gap-0.5 shrink-0 -mt-0.5">
           <button
             onClick={onEdit}
             title="Edit"
             aria-label={`Edit ${f.foodName}`}
-            className="rounded-md p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+            className="rounded-md p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
           >
             <IconEdit className="w-4 h-4" />
           </button>
@@ -751,17 +758,92 @@ function MealMobileCard({
             disabled={busy}
             title="Delete"
             aria-label={`Delete ${f.foodName}`}
-            className="rounded-md p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
+            className="rounded-md p-1.5 text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
           >
             <IconTrash className="w-4 h-4" />
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-4 gap-2 mt-2 pt-2 border-t border-gray-50">
-        <MobileStat label={f.quantity != null && f.quantity > 1 ? "Total kcal" : "Kcal"} value={fmt(f.caloriesKcal)} accent />
-        <MobileStat label="Prot" value={fmt(f.proteinGrams, 1)} />
-        <MobileStat label="Fat" value={fmt(f.fatGrams, 1)} />
-        <MobileStat label="Carbs" value={fmt(f.carbsGrams, 1)} />
+      {/* Qty row — tappable chip */}
+      <div className="px-3 pb-1.5">
+        {isQtyEditing ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              step="0.1"
+              autoFocus
+              value={qtyEditValue}
+              onChange={(e) => onQtyEditChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onQtyEditConfirm();
+                if (e.key === "Escape") onQtyEditCancel();
+              }}
+              disabled={qtyBusy}
+              className="w-16 rounded-md border border-indigo-300 px-2 py-1 text-sm font-semibold text-center focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+              aria-label="Quantity"
+            />
+            <button
+              onClick={onQtyEditConfirm}
+              disabled={qtyBusy}
+              title="Save quantity"
+              aria-label="Save quantity"
+              className="rounded-full p-1 bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+            >
+              {qtyBusy ? (
+                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              ) : (
+                <IconCheck className="w-3 h-3" />
+              )}
+            </button>
+            <button
+              onClick={onQtyEditCancel}
+              title="Cancel"
+              aria-label="Cancel quantity edit"
+              className="rounded-full p-1 text-gray-400 hover:bg-gray-100 transition-colors"
+            >
+              <IconX className="w-3 h-3" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={onQtyEditStart}
+              title="Tap to change quantity — scales all macros"
+              aria-label={`Quantity: ${f.quantity != null ? fmt(f.quantity, 1) : "not set"}. Tap to edit.`}
+              className="inline-flex items-center gap-1 group/qty rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-left hover:border-indigo-400 hover:bg-indigo-100 transition-colors"
+            >
+              <span className="text-sm font-semibold text-indigo-700 group-hover/qty:text-indigo-900 tabular-nums transition-colors leading-snug">
+                {f.quantity != null ? fmt(f.quantity, 1) : "\u2013"}
+              </span>
+              <IconEdit className="w-2.5 h-2.5 text-indigo-300 group-hover/qty:text-indigo-500 transition-colors" />
+            </button>
+            {f.portionDescription && (
+              <>
+                <span aria-hidden="true" className="text-gray-300 select-none text-xs">·</span>
+                <span className="text-xs text-gray-500">{f.portionDescription}</span>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+      {/* Macros grid */}
+      <div className="grid grid-cols-4 border-t border-gray-100">
+        <div className="text-center py-1.5">
+          <p className="text-[10px] uppercase tracking-wide text-gray-400">Kcal</p>
+          <p className="text-sm font-semibold text-gray-900">{fmt(f.caloriesKcal)}</p>
+        </div>
+        <div className="text-center py-1.5 border-l border-gray-100">
+          <p className="text-[10px] uppercase tracking-wide text-gray-400">Prot</p>
+          <p className="text-sm font-semibold text-gray-600">{fmt(f.proteinGrams, 1)}</p>
+        </div>
+        <div className="text-center py-1.5 border-l border-gray-100">
+          <p className="text-[10px] uppercase tracking-wide text-gray-400">Fat</p>
+          <p className="text-sm font-semibold text-gray-600">{fmt(f.fatGrams, 1)}</p>
+        </div>
+        <div className="text-center py-1.5 border-l border-gray-100">
+          <p className="text-[10px] uppercase tracking-wide text-gray-400">Carbs</p>
+          <p className="text-sm font-semibold text-gray-600">{fmt(f.carbsGrams, 1)}</p>
+        </div>
       </div>
     </div>
   );
@@ -781,21 +863,54 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<UpdateFoodEntryRequest | null>(null);
   const [busy, setBusy] = useState(false);
+  const [qtyEditId, setQtyEditId] = useState<number | null>(null);
+  const [qtyEditValue, setQtyEditValue] = useState<string>("");
+  const [qtyBusy, setQtyBusy] = useState(false);
 
   function startEdit(f: FoodEntryResponse) {
+    setQtyEditId(null);
+    setQtyEditValue("");
     setEditId(f.foodEntryId);
     setEditForm({
       foodName: f.foodName,
       portionDescription: f.portionDescription,
       quantity: f.quantity,
-      unit: f.unit,
       caloriesKcal: f.caloriesKcal,
       proteinGrams: f.proteinGrams,
       fatGrams: f.fatGrams,
       carbsGrams: f.carbsGrams,
       alcoholGrams: f.alcoholGrams,
       notes: f.notes,
+      scaleByQuantity: false,
     });
+  }
+
+  async function saveQtyEdit(f: FoodEntryResponse) {
+    const newQty = qtyEditValue !== "" ? +qtyEditValue : null;
+    if (newQty === f.quantity) {
+      setQtyEditId(null);
+      setQtyEditValue("");
+      return;
+    }
+    setQtyBusy(true);
+    try {
+      await foodService.update(date, f.foodEntryId, {
+        foodName: f.foodName,
+        portionDescription: f.portionDescription,
+        quantity: newQty,
+        caloriesKcal: f.caloriesKcal,
+        proteinGrams: f.proteinGrams,
+        fatGrams: f.fatGrams,
+        carbsGrams: f.carbsGrams,
+        alcoholGrams: f.alcoholGrams,
+        notes: f.notes,
+        scaleByQuantity: true,
+      });
+      setQtyEditId(null);
+      setQtyEditValue("");
+      onChanged();
+    } catch { /* ignore */ }
+    setQtyBusy(false);
   }
 
   async function saveEdit() {
@@ -848,7 +963,7 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
               <thead>
                 <tr className="bg-gray-50/80 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-500 sticky top-0 z-10">
                   <th className="py-1.5 px-3 text-left">Food</th>
-                  <th className="py-1.5 px-2 text-right">Qty</th>
+                  <th className="py-1.5 px-2 text-right" title="Click qty to change serving size — scales all macros">Qty</th>
                   <th className="py-1.5 px-2 text-left text-gray-400 font-medium">Portion</th>
                   <th className="py-1.5 px-2 text-right" title="Total calories for the full quantity">Kcal</th>
                   <th className="py-1.5 px-2 text-right" title="Total protein for the full quantity – helps you stay full and preserve muscle">Prot</th>
@@ -863,7 +978,7 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
                   editId === f.foodEntryId && editForm ? (
                     <tr key={f.foodEntryId} className="bg-indigo-50/40">
                       <td className="py-2 px-3"><input value={editForm.foodName} onChange={(e) => setEditForm({ ...editForm, foodName: e.target.value })} className="w-full rounded-md border border-gray-200 px-2 py-1 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Food name" /></td>
-                      <td className="py-2 px-2"><input type="number" step="0.1" value={editForm.quantity ?? ""} onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value ? +e.target.value : null })} className="w-full rounded-md border border-gray-200 px-1.5 py-1 text-right text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Quantity" /></td>
+                      <td className="py-2 px-2 text-right tabular-nums text-sm text-gray-500">{editForm.quantity != null ? fmt(editForm.quantity, 1) : "\u2013"}</td>
                       <td className="py-2 px-2"><input value={editForm.portionDescription ?? ""} onChange={(e) => setEditForm({ ...editForm, portionDescription: e.target.value })} className="w-full rounded-md border border-gray-200 px-1.5 py-1 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Portion" /></td>
                       <td className="py-2 px-2"><input type="number" value={editForm.caloriesKcal} onChange={(e) => setEditForm({ ...editForm, caloriesKcal: +e.target.value })} className="w-full rounded-md border border-gray-200 px-1.5 py-1 text-right text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Calories" /></td>
                       <td className="py-2 px-2"><input type="number" value={editForm.proteinGrams} onChange={(e) => setEditForm({ ...editForm, proteinGrams: +e.target.value })} className="w-full rounded-md border border-gray-200 px-1.5 py-1 text-right text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Protein" /></td>
@@ -900,7 +1015,43 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
                       <td className="py-1.5 px-3 font-medium text-gray-900 max-w-[200px]">
                         <span className="line-clamp-2">{f.foodName}</span>
                       </td>
-                      <td className="py-1.5 px-2 text-right tabular-nums text-gray-700">{f.quantity != null ? fmt(f.quantity, 1) : "\u2013"}</td>
+                      <td className="py-1.5 px-2 text-right">
+                        {qtyEditId === f.foodEntryId ? (
+                          <div className="flex items-center gap-0.5 justify-end">
+                            <input
+                              type="number"
+                              step="0.1"
+                              autoFocus
+                              value={qtyEditValue}
+                              onChange={(e) => setQtyEditValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") saveQtyEdit(f);
+                                if (e.key === "Escape") { setQtyEditId(null); setQtyEditValue(""); }
+                              }}
+                              disabled={qtyBusy}
+                              className="w-14 rounded border border-indigo-300 px-1 py-0.5 text-right text-sm tabular-nums focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                              aria-label="Quantity"
+                            />
+                            <button onClick={() => saveQtyEdit(f)} disabled={qtyBusy} title="Save quantity" aria-label="Save quantity" className="rounded p-0.5 text-green-600 hover:bg-green-50 disabled:opacity-50 transition-colors">
+                              <IconCheck className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => { setQtyEditId(null); setQtyEditValue(""); }} title="Cancel" aria-label="Cancel quantity edit" className="rounded p-0.5 text-gray-400 hover:bg-gray-100 transition-colors">
+                              <IconX className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { setEditId(null); setEditForm(null); setQtyEditId(f.foodEntryId); setQtyEditValue(f.quantity != null ? String(f.quantity) : ""); }}
+                            title="Click to change quantity — scales all macros"
+                            aria-label={`Quantity: ${f.quantity != null ? fmt(f.quantity, 1) : "not set"}. Click to edit.`}
+                            className="group/qty tabular-nums text-gray-700 hover:text-indigo-600 transition-colors cursor-pointer"
+                          >
+                            <span className="group-hover/qty:underline group-hover/qty:underline-offset-2">
+                              {f.quantity != null ? fmt(f.quantity, 1) : "\u2013"}
+                            </span>
+                          </button>
+                        )}
+                      </td>
                       <td className="py-1.5 px-2 text-gray-400 text-xs truncate max-w-[100px]">{f.portionDescription ?? "\u2013"}</td>
                       <td className="py-1.5 px-2 text-right tabular-nums font-semibold text-gray-900">{fmt(f.caloriesKcal)}</td>
                       <td className="py-1.5 px-2 text-right tabular-nums font-medium text-gray-700" title="Protein helps you stay full and preserve muscle">{fmt(f.proteinGrams, 1)}</td>
@@ -945,15 +1096,11 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
                   <input value={editForm.foodName} onChange={(e) => setEditForm({ ...editForm, foodName: e.target.value })} className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm font-medium focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Food name" />
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[10px] uppercase tracking-wide text-gray-400">Qty</label>
-                      <input type="number" step="0.1" value={editForm.quantity ?? ""} onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value ? +e.target.value : null })} aria-label="Quantity" className="w-full rounded-md border border-gray-200 px-2 py-1 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-                    </div>
-                    <div>
                       <label className="text-[10px] uppercase tracking-wide text-gray-400">Portion</label>
                       <input value={editForm.portionDescription ?? ""} onChange={(e) => setEditForm({ ...editForm, portionDescription: e.target.value })} aria-label="Portion description" className="w-full rounded-md border border-gray-200 px-2 py-1 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
                     </div>
                   </div>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-5 gap-1.5">
                     <div>
                       <label className="text-[10px] uppercase tracking-wide text-gray-400">Kcal</label>
                       <input type="number" value={editForm.caloriesKcal} onChange={(e) => setEditForm({ ...editForm, caloriesKcal: +e.target.value })} aria-label="Calories" className="w-full rounded-md border border-gray-200 px-1.5 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
@@ -970,6 +1117,10 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
                       <label className="text-[10px] uppercase tracking-wide text-gray-400">Carbs</label>
                       <input type="number" value={editForm.carbsGrams} onChange={(e) => setEditForm({ ...editForm, carbsGrams: +e.target.value })} aria-label="Carbs" className="w-full rounded-md border border-gray-200 px-1.5 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
                     </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-wide text-gray-400">Alc</label>
+                      <input type="number" value={editForm.alcoholGrams} onChange={(e) => setEditForm({ ...editForm, alcoholGrams: +e.target.value })} aria-label="Alcohol" className="w-full rounded-md border border-gray-200 px-1.5 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
+                    </div>
                   </div>
                   <div className="flex justify-end gap-2 pt-1">
                     <button onClick={() => { setEditId(null); setEditForm(null); }} aria-label="Cancel editing" className="rounded-md px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">Cancel</button>
@@ -983,6 +1134,13 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
                   onEdit={() => startEdit(f)}
                   onDelete={() => handleDelete(f.foodEntryId)}
                   busy={busy}
+                  isQtyEditing={qtyEditId === f.foodEntryId}
+                  qtyEditValue={qtyEditValue}
+                  qtyBusy={qtyBusy}
+                  onQtyEditStart={() => { setEditId(null); setEditForm(null); setQtyEditId(f.foodEntryId); setQtyEditValue(f.quantity != null ? String(f.quantity) : ""); }}
+                  onQtyEditChange={setQtyEditValue}
+                  onQtyEditConfirm={() => saveQtyEdit(f)}
+                  onQtyEditCancel={() => { setQtyEditId(null); setQtyEditValue(""); }}
                 />
               )
             )}
@@ -1019,8 +1177,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<UpdateActivityEntryRequest | null>(null);
   const [showEditAdvanced, setShowEditAdvanced] = useState(false);
-  const [templateSaveTarget, setTemplateSaveTarget] = useState<ActivityEntryResponse | null>(null);
-  const [templateSaveName, setTemplateSaveName] = useState("");
+
 
   useEffect(() => {
     activityService.getTemplates().then(({ data }) => setTemplates(data)).catch(() => {});
@@ -1091,14 +1248,8 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
     setBusy(false);
   }
 
-  function startTemplateSave(a: ActivityEntryResponse) {
-    setTemplateSaveTarget(a);
-    setTemplateSaveName(a.activityName);
-  }
-
-  async function confirmTemplateSave() {
-    if (!templateSaveTarget) return;
-    const name = templateSaveName.trim();
+  async function saveActivityAsTemplate(a: ActivityEntryResponse) {
+    const name = a.activityName.trim();
     if (!name) return;
     setBusy(true);
     try {
@@ -1106,13 +1257,11 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
         templateScope: "USER",
         templateName: name,
         autoAddToNewDay: false,
-        defaultDurationMinutes: templateSaveTarget.durationMinutes,
-        defaultMET: templateSaveTarget.metValue,
+        defaultDurationMinutes: a.durationMinutes,
+        defaultMET: a.metValue,
       };
       await activityService.createTemplate(req);
       activityService.getTemplates().then(({ data }) => setTemplates(data)).catch(() => {});
-      setTemplateSaveTarget(null);
-      setTemplateSaveName("");
     } catch { /* ignore */ }
     setBusy(false);
   }
@@ -1186,7 +1335,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
                                     </div>
                                     {!savedTemplateNames.has(a.activityName.toLowerCase()) && (
                                       <button
-                                        onClick={() => startTemplateSave(a)}
+                                        onClick={() => saveActivityAsTemplate(a)}
                                         disabled={busy}
                                         aria-label={`Save ${a.activityName} as template`}
                                         className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
@@ -1230,7 +1379,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
                                   {savedTemplateNames.has(a.activityName.toLowerCase()) ? (
                                     <button onClick={() => handleRemoveTemplate(a)} disabled={busy} title="Remove template" aria-label={`Remove ${a.activityName} template`} className="rounded-md p-1.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"><IconBookmarkFilled className="w-4 h-4" /></button>
                                   ) : (
-                                    <button onClick={() => startTemplateSave(a)} disabled={busy} title="Save as template" aria-label={`Save ${a.activityName} as template`} className="rounded-md p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"><IconBookmark className="w-4 h-4" /></button>
+                                    <button onClick={() => saveActivityAsTemplate(a)} disabled={busy} title="Save as template" aria-label={`Save ${a.activityName} as template`} className="rounded-md p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"><IconBookmark className="w-4 h-4" /></button>
                                   )}
                                   <button onClick={() => startEditActivity(a)} title="Edit" aria-label={`Edit ${a.activityName}`} className="rounded-md p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"><IconEdit className="w-4 h-4" /></button>
                                   <button onClick={() => handleDelete(a.activityEntryId)} disabled={busy} title="Delete" aria-label={`Delete ${a.activityName}`} className="rounded-md p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"><IconTrash className="w-4 h-4" /></button>
@@ -1290,7 +1439,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
                           a={a}
                           onEdit={() => startEditActivity(a)}
                           onDelete={() => handleDelete(a.activityEntryId)}
-                          onSaveTemplate={() => startTemplateSave(a)}
+                          onSaveTemplate={() => saveActivityAsTemplate(a)}
                           onRemoveTemplate={() => handleRemoveTemplate(a)}
                           isSavedTemplate={savedTemplateNames.has(a.activityName.toLowerCase())}
                           busy={busy}
@@ -1303,35 +1452,6 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
             </div>
           </div>
         </>
-      )}
-
-      {templateSaveTarget && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg bg-indigo-50/50 px-3 py-2.5">
-          <IconBookmark className="w-3.5 h-3.5 flex-shrink-0 text-indigo-400" />
-          <label className="text-xs font-medium text-gray-500 whitespace-nowrap">Template name</label>
-          <input
-            type="text"
-            value={templateSaveName}
-            onChange={(e) => setTemplateSaveName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") confirmTemplateSave(); if (e.key === "Escape") { setTemplateSaveTarget(null); setTemplateSaveName(""); } }}
-            autoFocus
-            aria-label="Template name"
-            className="flex-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-sm placeholder:text-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-          />
-          <button
-            onClick={confirmTemplateSave}
-            disabled={busy || !templateSaveName.trim()}
-            className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
-          >
-            Save
-          </button>
-          <button
-            onClick={() => { setTemplateSaveTarget(null); setTemplateSaveName(""); }}
-            className="rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
-          >
-            Cancel
-          </button>
-        </div>
       )}
 
       {templates.filter((t) => t.isActive).length > 0 && (
