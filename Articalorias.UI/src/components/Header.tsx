@@ -1,6 +1,5 @@
 ﻿import { NavLink, useNavigate, useLocation } from 'react-router';
 import { useAuth } from '@/hooks/useAuth';
-import { useState } from 'react';
 import type { ReactElement } from 'react';
 
 const navItems = [
@@ -45,7 +44,6 @@ export default function Header() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isToday = location.pathname === '/today' || location.pathname === '/';
   const currentPage = PAGE_TITLES.find(({ path }) => location.pathname.startsWith(path));
@@ -75,7 +73,7 @@ export default function Header() {
               {pageTitle ?? ''}
             </span>
           )}
-          {/* Mobile invisible spacer to balance the hamburger button */}
+          {/* Mobile invisible spacer to balance the logout button */}
           <div className="md:hidden w-10" aria-hidden="true" />
         </div>
 
@@ -125,56 +123,19 @@ export default function Header() {
           </div>
         </nav>
 
-        {/* Mobile Menu Button */}
+        {/* Mobile Logout Button */}
         <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors flex-shrink-0"
-          aria-label="Toggle menu"
-          aria-expanded={mobileMenuOpen}
+          onClick={handleLogout}
+          className="md:hidden rounded-md p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
+          aria-label="Logout"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            {mobileMenuOpen ? (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            ) : (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            )}
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
           </svg>
         </button>
       </div>
-
-      {/* Mobile Menu Dropdown */}
-      {mobileMenuOpen && (
-        <div className="md:hidden border-t border-gray-200 bg-white">
-          <nav className="px-4 py-2 space-y-1">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={() => setMobileMenuOpen(false)}
-                className={({ isActive }) =>
-                  `block rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-indigo-50 text-indigo-700'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                  }`
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-
-            <div className="border-t border-gray-200 mt-2 pt-2 flex items-center justify-between">
-              <span className="text-xs text-gray-400 truncate">{user?.username}</span>
-              <button
-                onClick={() => { setMobileMenuOpen(false); handleLogout(); }}
-                className="rounded-md px-2.5 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
-              >
-                Logout
-              </button>
-            </div>
-          </nav>
-        </div>
-      )}
     </header>
   );
 }
