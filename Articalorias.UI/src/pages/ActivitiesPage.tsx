@@ -1,18 +1,29 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { activityService } from "@/services/activityService";
 import type { ActivityTemplateResponse, ActivityTemplateRequest, ParsedActivityItem } from "@/types";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import ErrorMessage from "@/components/ErrorMessage";
 import { extractApiError } from "@/utils/apiError";
 import { fmt } from "@/utils/format";
+import { queryKeys } from "@/lib/queryKeys";
 
 export default function ActivitiesPage() {
-  const [templates, setTemplates] = useState<ActivityTemplateResponse[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClientInstance = useQueryClient();
+  const templatesQuery = useQuery({
+    queryKey: queryKeys.activityTemplates(),
+    queryFn: () => activityService.getTemplates().then(r => r.data),
+    staleTime: 10 * 60 * 1000,
+  });
+  const templates = templatesQuery.data ?? [];
   const [error, setError] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [busy, setBusy] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
+
+  function invalidateTemplates() {
+    queryClientInstance.invalidateQueries({ queryKey: queryKeys.activityTemplates() });
+  }
 
   // --- AI parse state ---
   const [aiText, setAiText] = useState("");
@@ -35,18 +46,6 @@ export default function ActivitiesPage() {
     defaultDurationMinutes: null,
     defaultMET: null,
   });
-
-  function load() {
-    setLoading(true);
-    setError(null);
-    activityService
-      .getTemplates()
-      .then(({ data }) => setTemplates(data))
-      .catch((err) => setError(extractApiError(err, "Failed to load your saved activities.")))
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(load, []);
 
   // --- AI parse handlers ---
 
@@ -106,7 +105,7 @@ export default function ActivitiesPage() {
       }
       setAiText("");
       setAiParsed(null);
-      load();
+      invalidateTemplates();
     } catch (err) {
       setAiError(extractApiError(err, "Something went wrong saving your activities. Please try again."));
     } finally {
@@ -149,7 +148,7 @@ export default function ActivitiesPage() {
     try {
       await activityService.createTemplate(submitForm);
       resetForm();
-      load();
+      invalidateTemplates();
     } catch { /* ignore */ }
     setBusy(false);
   }
@@ -186,7 +185,7 @@ export default function ActivitiesPage() {
     try {
       await activityService.updateTemplate(editingTemplateId, submitForm);
       resetForm();
-      load();
+      invalidateTemplates();
     } catch { /* ignore */ }
     setBusy(false);
   }
@@ -204,13 +203,14 @@ export default function ActivitiesPage() {
     setBusy(true);
     try {
       await activityService.removeTemplate(id);
-      load();
+      invalidateTemplates();
     } catch { /* ignore */ }
     setBusy(false);
   }
 
-  if (loading) return <LoadingSpinner message="Loading your saved activities..." />;
-  if (error) return <ErrorMessage message={error} onRetry={load} />;
+  if (templatesQuery.isPending) return <LoadingSpinner message="Loading your saved activities..." />;
+  if (templatesQuery.isError) return <ErrorMessage message="Failed to load your saved activities." onRetry={() => templatesQuery.refetch()} />;
+  if (error) return <ErrorMessage message={error} onRetry={() => setError(null)} />;
 
   const userTemplates = templates.filter((t) => t.templateScope === "USER");
   const systemTemplates = templates.filter((t) => t.templateScope === "SYSTEM");
@@ -564,7 +564,7 @@ export default function ActivitiesPage() {
                           defaultDurationMinutes: t.defaultDurationMinutes,
                           defaultMET: t.defaultMET,
                         });
-                        load();
+                        invalidateTemplates();
                       } catch (err) {
                         setError(extractApiError(err, "Failed to update this activity."));
                       } finally {

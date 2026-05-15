@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router";
 import {
   ResponsiveContainer,
@@ -18,6 +19,7 @@ import { dailyLogService } from "@/services/dailyLogService";
 import type { DailyLogResponse } from "@/types/dailyLog";
 import { fmt, toDateString } from "@/utils/format";
 import { extractApiError } from "@/utils/apiError";
+import { queryKeys } from "@/lib/queryKeys";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import ErrorMessage from "@/components/ErrorMessage";
 import EmptyState from "@/components/EmptyState";
@@ -43,9 +45,20 @@ function MonthlyView() {
 
   const [year, setYear] = useState(initYear);
   const [month, setMonth] = useState(initMonth);
-  const [days, setDays] = useState<DailyLogResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClientInstance = useQueryClient();
+
+  const from = year + "-" + String(month).padStart(2, "0") + "-01";
+  const lastDay = new Date(year, month, 0).getDate();
+  const to = year + "-" + String(month).padStart(2, "0") + "-" + String(lastDay).padStart(2, "0");
+
+  const historyQuery = useQuery({
+    queryKey: queryKeys.history(from, to),
+    queryFn: () => historyService.getDailyRange(from, to).then(r => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+  const days = historyQuery.data ?? [];
+  const loading = historyQuery.isPending;
+  const error = historyQuery.isError ? "Couldn't load your history — please try again." : null;
 
   const monthLabel = new Date(year, month - 1).toLocaleString("default", {
     month: "long",
@@ -54,23 +67,6 @@ function MonthlyView() {
 
   const isCurrentMonth =
     year === now.getFullYear() && month === now.getMonth() + 1;
-
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    const from = year + "-" + String(month).padStart(2, "0") + "-01";
-    const lastDay = new Date(year, month, 0).getDate();
-    const to = year + "-" + String(month).padStart(2, "0") + "-" + String(lastDay).padStart(2, "0");
-
-    historyService.getDailyRange(from, to)
-      .then(({ data }) => {
-        setDays(data);
-      })
-      .catch(() => setError("Couldn't load your history — please try again."))
-      .finally(() => setLoading(false));
-  }, [year, month]);
-
-  useEffect(load, [load]);
 
   function goPrev() {
     if (month === 1) { setYear((y) => y - 1); setMonth(12); }
@@ -87,7 +83,6 @@ function MonthlyView() {
   const loggedDates = new Set(days.map((d) => d.logDate));
 
   // Build list of unlogged past days in the displayed month
-  const lastDay = new Date(year, month, 0).getDate();
   const todayStr = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
   const unloggedDays: string[] = [];
   for (let d = 1; d <= lastDay; d++) {
@@ -123,13 +118,13 @@ function MonthlyView() {
       </div>
 
       {loading && <LoadingSpinner message="Loading your month..." />}
-      {error && <ErrorMessage message={error} onRetry={load} />}
+      {error && <ErrorMessage message={error} onRetry={() => historyQuery.refetch()} />}
 
       {!loading && !error && (
         <>
           {days.length >= 1 && <BalanceTrend days={days} />}
           {(days.length > 0 || unloggedDays.length > 0) && (
-            <DailyLogsCard days={days} unloggedDays={unloggedDays} onDayClick={(d) => navigate(d === toDateString() ? "/today" : "/history/" + d)} onDayDeleted={load} />
+            <DailyLogsCard days={days} unloggedDays={unloggedDays} onDayClick={(d) => navigate(d === toDateString() ? "/today" : "/history/" + d)} onDayDeleted={() => queryClientInstance.invalidateQueries({ queryKey: queryKeys.history(from, to) })} />
           )}
         </>
       )}

@@ -1,4 +1,5 @@
-﻿import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+﻿import { useEffect, useState, useMemo, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { dailyLogService } from "@/services/dailyLogService";
 import { foodService } from "@/services/foodService";
 import { activityService } from "@/services/activityService";
@@ -8,7 +9,6 @@ import type {
   UpdateFoodEntryRequest,
   ActivityEntryResponse,
   UpdateActivityEntryRequest,
-  ActivityTemplateResponse,
   ActivityTemplateRequest,
   ParsedFoodItem,
 } from "@/types";
@@ -16,6 +16,7 @@ import { fmt, toDateString } from "@/utils/format";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import ErrorMessage from "@/components/ErrorMessage";
 import { extractApiError, isNotFound } from "@/utils/apiError";
+import { queryKeys } from "@/lib/queryKeys";
 import { compressImage } from "@/utils/compressImage";
 
 interface DayDashboardProps {
@@ -31,9 +32,22 @@ const CHART_MODES: { key: ChartMode; label: string }[] = [
 ];
 
 export default function DayDashboard({ date }: DayDashboardProps) {
-  const [dash, setDash] = useState<DailyDashboardResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClientInstance = useQueryClient();
+  const dashQuery = useQuery({
+    queryKey: queryKeys.dashboard(date),
+    queryFn: async () => {
+      try {
+        const { data } = await dailyLogService.getDashboard(date);
+        return data;
+      } catch (err) {
+        if (isNotFound(err)) return null;
+        throw err;
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const dash = dashQuery.data ?? null;
+
   const [activeTab, setActiveTab] = useState<"meals" | "activities">("meals");
   const [chartMode, setChartMode] = useState<ChartMode>(() => {
     const saved = localStorage.getItem("ac-table-mode");
@@ -42,31 +56,18 @@ export default function DayDashboard({ date }: DayDashboardProps) {
   useEffect(() => { localStorage.setItem("ac-table-mode", chartMode); }, [chartMode]);
   const isToday = useMemo(() => date === toDateString(), [date]);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    dailyLogService
-      .getDashboard(date)
-      .then(({ data }) => setDash(data))
-      .catch((err) => {
-        if (isNotFound(err)) {
-          setDash(null);
-        } else {
-          setError(extractApiError(err, "Failed to load dashboard."));
-        }
-      })
-      .finally(() => setLoading(false));
-  }, [date]);
+  function handleChanged() {
+    queryClientInstance.invalidateQueries({ queryKey: queryKeys.dashboard(date) });
+    queryClientInstance.invalidateQueries({ queryKey: queryKeys.historyAll() });
+  }
 
-  useEffect(load, [load]);
-
-  if (loading) return <LoadingSpinner message="Loading day..." />;
-  if (error) return <ErrorMessage message={error} onRetry={load} />;
+  if (dashQuery.isPending) return <LoadingSpinner message="Loading day..." />;
+  if (dashQuery.isError) return <ErrorMessage message={extractApiError(dashQuery.error, "Failed to load dashboard.")} onRetry={() => dashQuery.refetch()} />;
 
   return (
     <div className="space-y-2">
       <CompactDayProgress dash={dash} isToday={isToday} chartMode={chartMode} onModeChange={setChartMode} />
-      <DailyLogWorkspace date={date} dash={dash} onChanged={load} isToday={isToday} activeTab={activeTab} onTabChange={setActiveTab} />
+      <DailyLogWorkspace date={date} dash={dash} onChanged={handleChanged} isToday={isToday} activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   );
 }
@@ -1165,7 +1166,12 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
 
 /* --- Activity Section --- */
 function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCard }: { date: string; activities: ActivityEntryResponse[]; onChanged: () => void; isToday: boolean; noCard?: boolean }) {
-  const [templates, setTemplates] = useState<ActivityTemplateResponse[]>([]);
+  const queryClientInstance = useQueryClient();
+  const { data: templates = [] } = useQuery({
+    queryKey: queryKeys.activityTemplates(),
+    queryFn: () => activityService.getTemplates().then(r => r.data),
+    staleTime: 10 * 60 * 1000,
+  });
   const [selectKey, setSelectKey] = useState(0);
   const [addError, setAddError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1177,11 +1183,6 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<UpdateActivityEntryRequest | null>(null);
   const [showEditAdvanced, setShowEditAdvanced] = useState(false);
-
-
-  useEffect(() => {
-    activityService.getTemplates().then(({ data }) => setTemplates(data)).catch(() => {});
-  }, [activities]);
 
   async function addFromTemplate(id: string) {
     const t = templates.find((tpl) => tpl.activityTemplateId === +id);
@@ -1243,7 +1244,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
     setBusy(true);
     try {
       await activityService.removeTemplate(match.activityTemplateId);
-      activityService.getTemplates().then(({ data }) => setTemplates(data)).catch(() => {});
+      queryClientInstance.invalidateQueries({ queryKey: queryKeys.activityTemplates() });
     } catch { /* ignore */ }
     setBusy(false);
   }
@@ -1261,7 +1262,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
         defaultMET: a.metValue,
       };
       await activityService.createTemplate(req);
-      activityService.getTemplates().then(({ data }) => setTemplates(data)).catch(() => {});
+      queryClientInstance.invalidateQueries({ queryKey: queryKeys.activityTemplates() });
     } catch { /* ignore */ }
     setBusy(false);
   }

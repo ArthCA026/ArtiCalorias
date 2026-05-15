@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { profileService } from "@/services/profileService";
 import { dailyLogService } from "@/services/dailyLogService";
 import type { UserProfileRequest, UserProfileResponse } from "@/types";
@@ -10,6 +11,7 @@ import GoalSelector from "@/components/goal/GoalSelector";
 import { PROTEIN_PRESETS, getAgeProteinMinimum } from "@/config/proteinPresets";
 import ProteinPresetSelector from "@/components/protein/ProteinPresetSelector";
 import type { ProteinPresetId } from "@/config/proteinPresets";
+import { queryKeys } from "@/lib/queryKeys";
 
 type FormState = {
   currentWeightKg: string;
@@ -133,7 +135,12 @@ function validateAll(f: FormState): Record<string, string> {
 }
 
 export default function ProfilePage() {
-  const [loading, setLoading] = useState(true);
+  const queryClientInstance = useQueryClient();
+  const profileQuery = useQuery({
+    queryKey: queryKeys.profile(),
+    queryFn: () => profileService.get().then(r => r.data),
+    staleTime: 15 * 60 * 1000,
+  });
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -144,18 +151,18 @@ export default function ProfilePage() {
 
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  // Initialize form once when profile data first arrives; skip on background refetches
+  // to avoid clobbering in-progress edits.
+  const isFormInitialized = useRef(false);
   useEffect(() => {
-    profileService
-      .get()
-      .then(({ data }) => {
-        const f = toFormState(data);
-        setForm(f);
-        setOriginal(f);
-        setShowAdvanced(!data.autoCalculateBMR || !data.autoCalculateBodyFat);
-      })
-      .catch(() => setError("Failed to load profile."))
-      .finally(() => setLoading(false));
-  }, []);
+    if (profileQuery.data && !isFormInitialized.current) {
+      isFormInitialized.current = true;
+      const f = toFormState(profileQuery.data);
+      setForm(f);
+      setOriginal(f);
+      setShowAdvanced(!profileQuery.data.autoCalculateBMR || !profileQuery.data.autoCalculateBodyFat);
+    }
+  }, [profileQuery.data]);
 
   function setField(field: keyof FormState, value: string | boolean, orig: FormState = original) {
     setForm((prev) => {
@@ -182,12 +189,17 @@ export default function ProfilePage() {
     setFieldErrors((prev) => { const next = { ...prev }; delete next[field]; return next; });
   }
 
-  /** Fire-and-forget: refreshes today's daily log snapshot after a profile save. */
+  /** Fire-and-forget: refreshes today's daily log snapshot after a profile save,
+   * then invalidates the dashboard cache so the Today page reflects the new profile. */
   function refreshTodaySnapshot() {
     const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
     dailyLogService.refreshSnapshot(today).catch(() => {
       // Non-critical — the user can recalculate manually. Silently ignore.
     });
+    // Unconditionally invalidate so the Today page and all history months refetch
+    // with up-to-date numbers (profile changes affect calorie/protein calculations).
+    queryClientInstance.invalidateQueries({ queryKey: queryKeys.dashboard(today) });
+    queryClientInstance.invalidateQueries({ queryKey: queryKeys.historyAll() });
   }
 
   async function confirmField(field: keyof FormState) {
@@ -202,6 +214,7 @@ export default function ProfilePage() {
       setForm(newForm);
       setOriginal(newForm);
       setDirtyFields((prev) => { const d = new Set(prev); d.delete(field); return d; });
+      queryClientInstance.setQueryData(queryKeys.profile(), updated);
       refreshTodaySnapshot();
     } catch (err) {
       setError(extractApiError(err, "Failed to save."));
@@ -225,6 +238,7 @@ export default function ProfilePage() {
       setForm(newForm);
       setOriginal(newForm);
       setDirtyFields(new Set());
+      queryClientInstance.setQueryData(queryKeys.profile(), updated);
       refreshTodaySnapshot();
     } catch (err) {
       setError(extractApiError(err, "Failed to save."));
@@ -253,8 +267,8 @@ export default function ProfilePage() {
     return { maintenance, dailyTarget, bmr, bodyFat };
   }, [form.currentWeightKg, form.heightCm, form.age, form.biologicalSex, form.dailyBaseGoalKcal]);
 
-  if (loading) return <LoadingSpinner />;
-  if (error && form === emptyForm) return <ErrorMessage message={error} />;
+  if (profileQuery.isPending) return <LoadingSpinner />;
+  if (profileQuery.isError && form === emptyForm) return <ErrorMessage message="Failed to load profile." />;
 
   return (
     <div className="space-y-3 w-full min-w-0">
