@@ -706,7 +706,7 @@ function ActivityMobileCard({
           <button onClick={onDelete} disabled={busy} title="Delete" aria-label={`Delete ${a.activityName}`} className="rounded-md p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"><IconTrash className="w-4 h-4" /></button>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-50">
+      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-50">
         <MobileStat label={a.calculatedCaloriesKcal < 0 ? "Below resting" : "Burned"} value={`${fmt(a.calculatedCaloriesKcal)} kcal`} accent />
         <MobileStat label="Duration" value={a.durationMinutes != null ? (a.durationMinutes >= 60 ? `${+(a.durationMinutes / 60).toFixed(1)}h` : `${fmt(a.durationMinutes)} min`) : "\u2013"} />
       </div>
@@ -939,7 +939,7 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
     noCard
       ? <p className="text-sm text-gray-400 py-1">Nothing logged yet</p>
       : (
-        <div className="flex flex-col items-center justify-center py-8 text-center">
+        <div className="flex flex-col items-center justify-center py-4 sm:py-8 text-center">
           <p className="text-sm font-medium text-gray-500">No meals logged yet</p>
           <p className="mt-1 text-sm text-gray-400">Describe what you ate in the box above – even a rough description works</p>
           <p className="mt-3 text-xs text-gray-400 italic">Try something like: "2 eggs, toast with butter, and a coffee with milk"</p>
@@ -1280,7 +1280,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
         noCard
           ? <p className="text-sm text-gray-400 py-1">Nothing logged yet</p>
           : (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="flex flex-col items-center justify-center py-4 sm:py-8 text-center">
               <p className="text-sm font-medium text-gray-500">No activities logged yet</p>
               <p className="mt-1 text-sm text-gray-400">Describe what you did in the box above – even a rough description works</p>
               <p className="mt-3 text-xs text-gray-400 italic">Try something like: "30 min walking"</p>

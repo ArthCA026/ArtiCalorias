@@ -474,7 +474,7 @@ export default function ActivitiesPage() {
         }
       >
         {userTemplates.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
+          <div className="flex flex-col items-center justify-center py-4 sm:py-8 text-center">
             <p className="text-sm font-medium text-gray-500">Nothing saved yet</p>
             <p className="mt-1 text-sm text-gray-400">Describe an activity above and we'll save it for you</p>
             <p className="mt-3 text-xs text-gray-400 italic">Try something like: "30 min walking" or "1 hour yoga"</p>

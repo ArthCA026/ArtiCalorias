@@ -6,7 +6,7 @@ export default function AppLayout() {
   return (
     <div className="flex min-h-screen flex-col bg-gray-50 overflow-x-hidden">
       <Header />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-4 pb-24 md:py-6 overflow-x-hidden">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-2 pb-24 md:pt-4 md:pb-6 overflow-x-hidden">
         <Outlet />
       </main>
       <BottomTabBar />

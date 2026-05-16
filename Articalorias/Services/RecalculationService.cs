@@ -21,9 +21,9 @@ public class RecalculationService : IRecalculationService
     }
 
     public Task RecalculateFullPipelineAsync(long dailyLogId)
-        => RecalculateFullPipelineAsync(dailyLogId, cascade: true);
+        => RecalculateFullPipelineAsync(dailyLogId, cascade: true, siblingBalances: null);
 
-    private async Task RecalculateFullPipelineAsync(long dailyLogId, bool cascade)
+    private async Task RecalculateFullPipelineAsync(long dailyLogId, bool cascade, IReadOnlyDictionary<long, decimal>? siblingBalances)
     {
         // ── Step 1: Load DailyLog with all children ──
         var log = await _db.DailyLogs
@@ -87,7 +87,7 @@ public class RecalculationService : IRecalculationService
         log.ProteinRemainingGrams = log.SnapshotProteinGoalGrams - log.TotalProteinGrams;
 
         // ── Step 8: Recompute weekly dynamic context ──
-        await RecalculateWeeklyContext(log);
+        await RecalculateWeeklyContext(log, siblingBalances);
 
         log.LastRecalculatedAtUtc = DateTime.UtcNow;
         log.UpdatedAtUtc = DateTime.UtcNow;
@@ -103,15 +103,24 @@ public class RecalculationService : IRecalculationService
         // you edit yesterday. cascade=false prevents infinite recursion.
         if (cascade)
         {
-            var siblingIds = await _db.DailyLogs
+            var siblings = await _db.DailyLogs
                 .Where(d => d.UserId == log.UserId
                     && d.WeekStartDate == log.WeekStartDate
                     && d.DailyLogId != dailyLogId)
-                .Select(d => d.DailyLogId)
+                .Select(d => new { d.DailyLogId, d.NetBalanceKcal })
                 .ToListAsync();
 
-            foreach (var siblingId in siblingIds)
-                await RecalculateFullPipelineAsync(siblingId, cascade: false);
+            // Build the week-balance snapshot once (primary day just saved above).
+            // Each sibling call receives the same snapshot so it can skip the
+            // DB round-trip for sibling balances inside RecalculateWeeklyContext.
+            var siblingBalancesForCascade = siblings.ToDictionary(
+                s => s.DailyLogId,
+                s => s.NetBalanceKcal);
+            // Include the freshly saved primary day so siblings can see its balance.
+            siblingBalancesForCascade[dailyLogId] = log.NetBalanceKcal;
+
+            foreach (var sibling in siblings)
+                await RecalculateFullPipelineAsync(sibling.DailyLogId, cascade: false, siblingBalances: siblingBalancesForCascade);
         }
     }
 
@@ -156,7 +165,7 @@ public class RecalculationService : IRecalculationService
             .ToListAsync();
 
         foreach (var logId in remainingWeekLogIds)
-            await RecalculateFullPipelineAsync(logId, cascade: false);
+            await RecalculateFullPipelineAsync(logId, cascade: false, siblingBalances: null);
 
         // Always recalculate the monthly summary for the deleted date's month
         // (handles cross-month weeks where no remaining days fall in the same month)
@@ -167,15 +176,35 @@ public class RecalculationService : IRecalculationService
     //  Step 8 — Weekly context fields on the DailyLog itself
     // ─────────────────────────────────────────────────────
 
-    private async Task RecalculateWeeklyContext(DailyLog log)
+    private async Task RecalculateWeeklyContext(DailyLog log, IReadOnlyDictionary<long, decimal>? siblingBalances)
     {
-        var weekLogs = await _db.DailyLogs
-            .Where(d => d.UserId == log.UserId
-                && d.WeekStartDate == log.WeekStartDate
-                && d.DailyLogId != log.DailyLogId)
-            .ToListAsync();
+        // Use the pre-fetched balance snapshot when available (cascade path) to avoid
+        // an extra DB round-trip per sibling. Fall back to a fresh query otherwise.
+        List<decimal> otherBalances;
+        int otherCount;
+        if (siblingBalances is not null)
+        {
+            // The snapshot contains ALL week days (including the primary); exclude self.
+            var others = siblingBalances
+                .Where(kv => kv.Key != log.DailyLogId)
+                .Select(kv => kv.Value)
+                .ToList();
+            otherBalances = others;
+            otherCount = others.Count;
+        }
+        else
+        {
+            var rows = await _db.DailyLogs
+                .Where(d => d.UserId == log.UserId
+                    && d.WeekStartDate == log.WeekStartDate
+                    && d.DailyLogId != log.DailyLogId)
+                .Select(d => d.NetBalanceKcal)
+                .ToListAsync();
+            otherBalances = rows;
+            otherCount = rows.Count;
+        }
 
-        var allWeekBalances = weekLogs.Sum(d => d.NetBalanceKcal) + log.NetBalanceKcal;
+        var allWeekBalances = otherBalances.Sum() + log.NetBalanceKcal;
         var dayOfWeek = log.LogDate.DayNumber - log.WeekStartDate.DayNumber + 1;
         var daysRemaining = 7 - dayOfWeek;
 
@@ -188,8 +217,8 @@ public class RecalculationService : IRecalculationService
         // Use only completed past days for the suggested average so that
         // today's incomplete balance doesn't distort the suggestion, and
         // today itself counts as one of the remaining days to plan for.
-        var pastDaysBalance = weekLogs.Sum(d => d.NetBalanceKcal);
-        var pastDaysCount = weekLogs.Count;
+        var pastDaysBalance = otherBalances.Sum();
+        var pastDaysCount = otherCount;
         var daysRemainingIncludingToday = 7 - pastDaysCount;
 
         var rawSuggested = daysRemainingIncludingToday > 0

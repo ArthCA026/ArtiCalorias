@@ -13,7 +13,7 @@ const variantStyles = {
 
 export default function AlertBanner({ variant = "error", children }: AlertBannerProps) {
   return (
-    <div className={`rounded-md border px-4 py-3 text-sm ${variantStyles[variant]}`} role="alert">
+    <div className={`rounded-md border px-4 py-2 text-sm ${variantStyles[variant]}`} role="alert">
       {children}
     </div>
   );

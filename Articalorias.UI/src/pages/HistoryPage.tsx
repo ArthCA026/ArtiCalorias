@@ -93,7 +93,7 @@ function MonthlyView() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex justify-center">
         <div className="inline-flex items-center rounded-full bg-gray-100 p-1 gap-0.5">
           <button
@@ -268,7 +268,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
 
       {/* Integrated action: add a missed day */}
       {unloggedDays.length > 0 && (
-        <div className={days.length > 0 ? "mt-3 pt-3 border-t border-gray-100" : "mt-4"}>
+        <div className={days.length > 0 ? "pt-3 border-t border-gray-100" : "mt-3"}>
           {!showDatePicker ? (
             <button
               onClick={() => setShowDatePicker(true)}
@@ -598,7 +598,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
 function DayDetail({ date }: { date: string }) {
   const backTo = "/history?m=" + date.slice(0, 7); // e.g. /history?m=2025-04
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <Link to={backTo} className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-800 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">
           &larr; Back to month

@@ -45,7 +45,7 @@ export default function LoginPage() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5" noValidate aria-busy={loading}>
+    <form onSubmit={handleSubmit} className="space-y-4" noValidate aria-busy={loading}>
       <AuthCard
         title="Welcome back"
         subtitle="Sign in to pick up where you left off."

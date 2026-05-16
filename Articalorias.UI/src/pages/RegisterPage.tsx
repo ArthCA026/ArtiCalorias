@@ -68,7 +68,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5" noValidate aria-busy={loading}>
+    <form onSubmit={handleSubmit} className="space-y-4" noValidate aria-busy={loading}>
       <AuthCard
         title="Create account"
         subtitle="It only takes a minute to get started."

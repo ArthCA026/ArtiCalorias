@@ -166,7 +166,7 @@ export default function OnboardingPage() {
 
   return (
     <div className="w-full min-w-0">
-      <div className="text-center mb-6 sm:mb-10 max-w-xl mx-auto">
+      <div className="text-center mb-4 sm:mb-8 max-w-xl mx-auto">
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100">
           <svg className="h-6 w-6 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
@@ -178,13 +178,13 @@ export default function OnboardingPage() {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
         {error && (
           <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
 
         {/* ── Section 1: Basic details ── */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6 sm:p-8 shadow-sm space-y-5">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 sm:p-8 shadow-sm space-y-4">
           <div className="flex items-start gap-3">
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white flex-shrink-0 mt-0.5">1</span>
             <div>
@@ -250,7 +250,7 @@ export default function OnboardingPage() {
         </div>
 
         {/* ── Section 2: Your goal ── */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6 sm:p-8 shadow-sm space-y-5">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 sm:p-8 shadow-sm space-y-4">
           <div className="flex items-start gap-3">
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white flex-shrink-0 mt-0.5">2</span>
             <div>
@@ -296,7 +296,7 @@ export default function OnboardingPage() {
         </div>
 
         {/* ── Section 3: Optional details ── */}
-        <div className="rounded-xl border border-gray-200 bg-white p-6 sm:p-8 shadow-sm space-y-5">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 sm:p-8 shadow-sm space-y-4">
           <div className="flex items-start gap-3">
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white flex-shrink-0 mt-0.5">3</span>
             <div>
@@ -425,7 +425,7 @@ export default function OnboardingPage() {
         </div>
 
         {estimate && (
-          <div className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-white p-6 sm:p-8 shadow-sm space-y-4">
+          <div className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-white p-5 sm:p-8 shadow-sm space-y-3">
             <div className="flex items-center gap-2">
               <svg className="h-5 w-5 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
               <h2 className="text-base font-semibold text-gray-900">Your starting plan</h2>
