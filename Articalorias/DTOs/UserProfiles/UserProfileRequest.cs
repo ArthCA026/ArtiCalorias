@@ -36,6 +36,13 @@ public class UserProfileRequest
     [StringLength(100)]
     public string? Country { get; set; }
 
+    // Display preferences
+    [StringLength(20)]
+    public string CalorieDisplayMode { get; set; } = "adjusted";
+
+    // Safety settings
+    public bool MinCaloriesSafeguardEnabled { get; set; } = false;
+
     // Sleep & NEAT fixed daily costs
     [Range(0, 23)]
     public decimal SleepHours { get; set; } = 8.0m;

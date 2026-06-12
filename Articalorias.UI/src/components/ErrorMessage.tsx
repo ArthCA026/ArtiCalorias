@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 interface ErrorMessageProps {
   title?: string;
   message?: string;
@@ -5,15 +7,18 @@ interface ErrorMessageProps {
 }
 
 export default function ErrorMessage({
-  title = 'Something went wrong',
-  message = 'An unexpected error occurred. Please try again.',
+  title,
+  message,
   onRetry,
 }: ErrorMessageProps) {
+  const { t } = useTranslation();
+  const resolvedTitle = title ?? t('common.error_title');
+  const resolvedMessage = message ?? t('common.error_message');
   return (
     <div className="flex flex-col items-center justify-center py-6 sm:py-10 gap-4 text-center">
-      <div className="rounded-full bg-red-100 p-3">
+      <div className="rounded-full bg-red-100 dark:bg-red-900/40 p-3">
         <svg
-          className="h-6 w-6 text-red-600"
+          className="h-6 w-6 text-red-600 dark:text-red-400"
           fill="none"
           viewBox="0 0 24 24"
           strokeWidth={1.5}
@@ -27,15 +32,15 @@ export default function ErrorMessage({
         </svg>
       </div>
       <div>
-        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-        <p className="mt-1 text-sm text-gray-500">{message}</p>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{resolvedTitle}</h3>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{resolvedMessage}</p>
       </div>
       {onRetry && (
         <button
           onClick={onRetry}
           className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 transition-colors"
         >
-          Try again
+          {t('common.retry')}
         </button>
       )}
     </div>

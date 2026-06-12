@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router";
+import { useTranslation } from "react-i18next";
+import i18n from "@/lib/i18n";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -18,12 +20,17 @@ import { historyService } from "@/services/historyService";
 import { dailyLogService } from "@/services/dailyLogService";
 import type { DailyLogResponse } from "@/types/dailyLog";
 import { fmt, toDateString } from "@/utils/format";
+import { useUnits } from "@/hooks/useUnits";
+import { formatEnergy, kcalToDisplay } from "@/utils/units";
 import { extractApiError } from "@/utils/apiError";
 import { queryKeys } from "@/lib/queryKeys";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import ErrorMessage from "@/components/ErrorMessage";
 import EmptyState from "@/components/EmptyState";
 import DayDashboard from "@/components/DayDashboard";
+import { useTheme } from "@/hooks/useTheme";
+import { useCalorieMode } from "@/hooks/useCalorieMode";
+import type { CalorieMode } from "@/hooks/useCalorieMode";
 
 export default function HistoryPage() {
   const { date } = useParams<{ date: string }>();
@@ -58,13 +65,14 @@ function MonthlyView() {
   });
   const days = historyQuery.data ?? [];
   const loading = historyQuery.isPending;
-  const error = historyQuery.isError ? "Couldn't load your history — please try again." : null;
+  const error = historyQuery.isError ? "history.load_error" : null;
 
-  const monthLabel = new Date(year, month - 1).toLocaleString("default", {
+  const monthLabel = new Date(year, month - 1).toLocaleString(i18n.language, {
     month: "long",
     year: "numeric",
   });
 
+  const { t } = useTranslation();
   const isCurrentMonth =
     year === now.getFullYear() && month === now.getMonth() + 1;
 
@@ -95,30 +103,30 @@ function MonthlyView() {
   return (
     <div className="space-y-4">
       <div className="flex justify-center">
-        <div className="inline-flex items-center rounded-full bg-gray-100 p-1 gap-0.5">
+        <div className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 p-1 gap-0.5">
           <button
             onClick={goPrev}
-            aria-label="Previous month"
-            className="flex h-7 w-7 items-center justify-center rounded-full text-gray-500 hover:bg-white hover:text-gray-900 hover:shadow-sm transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+            aria-label={t('history.prev_month')}
+            className="flex h-7 w-7 items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 hover:shadow-sm transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
           </button>
-          <span className="min-w-[148px] text-center text-sm font-semibold text-gray-800 select-none px-1">
+          <span className="min-w-[148px] text-center text-sm font-semibold text-gray-800 dark:text-gray-200 select-none px-1">
             {monthLabel}
           </span>
           <button
             onClick={goNext}
             disabled={isCurrentMonth}
-            aria-label="Next month"
-            className="flex h-7 w-7 items-center justify-center rounded-full text-gray-500 hover:bg-white hover:text-gray-900 hover:shadow-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+            aria-label={t('history.next_month')}
+            className="flex h-7 w-7 items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 hover:shadow-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
           </button>
         </div>
       </div>
 
-      {loading && <LoadingSpinner message="Loading your month..." />}
-      {error && <ErrorMessage message={error} onRetry={() => historyQuery.refetch()} />}
+      {loading && <LoadingSpinner message={t('history.loading')} />}
+      {error && <ErrorMessage message={t(error)} onRetry={() => historyQuery.refetch()} />}
 
       {!loading && !error && (
         <>
@@ -135,21 +143,18 @@ function MonthlyView() {
 /* --- Daily Logs Card --- */
 
 function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days: DailyLogResponse[]; unloggedDays: string[]; onDayClick: (date: string) => void; onDayDeleted: () => void }) {
+  const { t } = useTranslation();
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const todayStr = toDateString();
-  const [chartMode, setChartMode] = useState<ChartMode>(() => {
-    const saved = localStorage.getItem("ac-table-mode");
-    return (saved === "net" || saved === "goal" || saved === "adjusted") ? saved : "adjusted";
-  });
-  useEffect(() => { localStorage.setItem("ac-table-mode", chartMode); }, [chartMode]);
+  const { mode: chartMode } = useCalorieMode();
 
   const tableColumnLabel =
-    chartMode === "net" ? "Net Balance" :
-    chartMode === "goal" ? "vs. Daily Goal" :
-    "Over / Under";
+    chartMode === "net" ? t('history.table_net') :
+    chartMode === "goal" ? t('history.table_goal') :
+    t('history.table_adjusted');
 
   function handleDeleteClick(e: React.MouseEvent, date: string) {
     e.stopPropagation();
@@ -164,62 +169,49 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
     dailyLogService
       .deleteDay(deleteTarget)
       .then(() => { setDeleteTarget(null); onDayDeleted(); })
-      .catch((err) => setDeleteError(extractApiError(err, "Failed to delete this day. Please try again.")))
+      .catch((err) => setDeleteError(extractApiError(err, t('history.delete_error_default'))))
       .finally(() => setDeleting(false));
   }
 
-  const tableDropdown = (
-    <select
-      value={chartMode}
-      onChange={(e) => setChartMode(e.target.value as ChartMode)}
-      aria-label="Table view"
-      className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-gray-600 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-    >
-      {CHART_MODES.map(({ key, label }) => (
-        <option key={key} value={key}>{label}</option>
-      ))}
-    </select>
-  );
-
   return (
-    <Card title="Logged days" headerAction={tableDropdown}>
+    <Card title={t('history.logs_title')}>
 
       {days.length === 0 ? (
-        <EmptyState message="No logged days yet — you can add a missed day below." />
+        <EmptyState message={t('history.no_logs')} />
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden sm:block overflow-x-auto rounded-lg border border-gray-100">
+          <div className="hidden sm:block overflow-x-auto rounded-lg border border-gray-100 dark:border-gray-800">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50/80 border-b border-gray-200 text-xs font-semibold uppercase tracking-wider text-gray-500 sticky top-0 z-10">
-                  <th className="py-2.5 px-3 text-left">Date</th>
+                <tr className="bg-gray-50/80 dark:bg-gray-900/80 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 sticky top-0 z-10">
+                  <th className="py-2.5 px-3 text-left">{t('history.table_date')}</th>
                   <th className="py-2.5 px-2 text-right">{tableColumnLabel}</th>
-                  <th className="py-2.5 px-2 text-right">Protein</th>
-                  <th className="py-2.5 px-2 text-center w-10"><span className="sr-only">Actions</span></th>
+                  <th className="py-2.5 px-2 text-right">{t('history.table_protein')}</th>
+                  <th className="py-2.5 px-2 text-center w-10"><span className="sr-only">{t('history.table_actions')}</span></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {days.map((d, idx) => (
                   <tr
                     key={d.logDate}
                     onClick={() => onDayClick(d.logDate)}
-                    className={`cursor-pointer group transition-colors hover:bg-indigo-50/30 ${idx % 2 === 1 ? "bg-gray-50/40" : ""}`}
+                    className={`cursor-pointer group transition-colors hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20 ${idx % 2 === 1 ? "bg-gray-50/40 dark:bg-gray-900/30" : "dark:bg-transparent"}`}
                   >
                     <td className="py-2.5 px-3 font-medium text-indigo-600">
                       <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${getTableDelta(d, chartMode) <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
-                      {formatDayLabel(d.logDate)}
+                      {formatDayLabel(d.logDate, i18n.language)}
                     </td>
                     <td className="py-2.5 px-2 text-right">
                       <FriendlyGoalDelta value={getTableDelta(d, chartMode)} />
                     </td>
-                    <td className="py-2.5 px-2 text-right tabular-nums font-medium text-gray-700">{fmt(d.totalProteinGrams, 1)} g</td>
+                    <td className="py-2.5 px-2 text-right tabular-nums font-medium text-gray-700 dark:text-gray-300">{fmt(d.totalProteinGrams, 1)} g</td>
                     <td className="py-2.5 px-2 text-center">
                       {d.logDate !== todayStr && (
                         <button
                           onClick={(e) => handleDeleteClick(e, d.logDate)}
-                          title="Delete this day"
-                          className="inline-flex items-center justify-center rounded p-1 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-red-50 transition-all focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
+                          title={t('history.delete_title')}
+                          className="inline-flex items-center justify-center rounded p-1 text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-all focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
                         >
                           <TrashIcon />
                         </button>
@@ -237,27 +229,27 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
               <div
                 key={d.logDate}
                 onClick={() => onDayClick(d.logDate)}
-                className="cursor-pointer rounded-lg border border-gray-100 bg-white p-3 hover:bg-indigo-50/30 transition-colors"
+                className="cursor-pointer rounded-lg border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20 transition-colors"
               >
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="font-medium text-indigo-600 text-sm">
                     <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${getTableDelta(d, chartMode) <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
-                    {formatDayLabel(d.logDate)}
+                    {formatDayLabel(d.logDate, i18n.language)}
                   </span>
                   <div className="flex items-center gap-2">
                     {d.logDate !== todayStr && (
                       <button
                         onClick={(e) => handleDeleteClick(e, d.logDate)}
-                        title="Delete this day"
-                        className="inline-flex items-center justify-center rounded p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
+                        title={t('history.delete_title')}
+                        className="inline-flex items-center justify-center rounded p-1 text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
                       >
                         <TrashIcon />
                       </button>
                     )}
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
-                  <span>Protein: <span className="font-medium text-gray-700">{fmt(d.totalProteinGrams, 1)} g</span></span>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  <span>{t('history.mobile_protein')} <span className="font-medium text-gray-700 dark:text-gray-300">{fmt(d.totalProteinGrams, 1)} g</span></span>
                   <span>{tableColumnLabel}: <FriendlyGoalDelta value={getTableDelta(d, chartMode)} /></span>
                 </div>
               </div>
@@ -268,31 +260,30 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
 
       {/* Integrated action: add a missed day */}
       {unloggedDays.length > 0 && (
-        <div className={days.length > 0 ? "pt-3 border-t border-gray-100" : "mt-3"}>
+          <div className={days.length > 0 ? "pt-3 border-t border-gray-100 dark:border-gray-800" : "mt-3"}>
           {!showDatePicker ? (
             <button
               onClick={() => setShowDatePicker(true)}
               className="text-sm text-indigo-600 hover:text-indigo-800 font-medium rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
             >
-              + Add a missed day
+              {t('history.add_missed_day')}
             </button>
           ) : (
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Which day would you like to log?</label>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('history.which_day')}</label>
                 <select
                   defaultValue=""
                   onChange={(e) => { if (e.target.value) onDayClick(e.target.value); }}
-                  className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                >
-                  <option value="" disabled>Choose a date...</option>
+                  className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+                  <option value="" disabled>{t('history.choose_date')}</option>
                   {unloggedDays.map((d) => (
-                    <option key={d} value={d}>{formatDayLabel(d)}</option>
+                    <option key={d} value={d}>{formatDayLabel(d, i18n.language)}</option>
                   ))}
                 </select>
               </div>
-              <button onClick={() => setShowDatePicker(false)} className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gray-500">
-                Cancel
+              <button onClick={() => setShowDatePicker(false)} className="rounded-md px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gray-500">
+                {t('common.cancel')}
               </button>
             </div>
           )}
@@ -315,45 +306,39 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
 
 /* --- Balance Trend Chart --- */
 
-type ChartMode = "net" | "goal" | "adjusted";
-
-const CHART_MODES: { key: ChartMode; label: string }[] = [
-  { key: "adjusted", label: "Weekly Plan" },
-  { key: "goal",     label: "Daily Goal" },
-  { key: "net",      label: "Net Balance" },
-];
+type ChartMode = CalorieMode;
 
 const CHART_MODE_CONFIG: Record<ChartMode, {
-  zeroLabel: string;
-  zeroLabelShort: string;
-  subtitle: string;
-  tooltipZero: string;
-  tooltipUnder: string;
-  tooltipOver: string;
+  zeroLabelKey: string;
+  zeroLabelShortKey: string;
+  subtitleKey: string;
+  tooltipZeroKey: string;
+  tooltipUnderKey: string;
+  tooltipOverKey: string;
 }> = {
   net: {
-    zeroLabel: "Maintenance",
-    zeroLabelShort: "Maint.",
-    subtitle: "Calories eaten minus calories burned each day. Zero means you broke even with your TDEE.",
-    tooltipZero: "Perfectly balanced",
-    tooltipUnder: "kcal deficit",
-    tooltipOver: "kcal surplus",
+    zeroLabelKey: "history.net_zero_label",
+    zeroLabelShortKey: "history.net_zero_short",
+    subtitleKey: "history.net_subtitle",
+    tooltipZeroKey: "history.net_tooltip_zero",
+    tooltipUnderKey: "history.net_tooltip_under",
+    tooltipOverKey: "history.net_tooltip_over",
   },
   goal: {
-    zeroLabel: "Your goal",
-    zeroLabelShort: "Goal",
-    subtitle: "How far above or below your fixed daily calorie goal you were. Adjusts automatically when your settings change.",
-    tooltipZero: "Right on goal",
-    tooltipUnder: "kcal under goal",
-    tooltipOver: "kcal over goal",
+    zeroLabelKey: "history.goal_zero_label",
+    zeroLabelShortKey: "history.goal_zero_short",
+    subtitleKey: "history.goal_subtitle",
+    tooltipZeroKey: "history.goal_tooltip_zero",
+    tooltipUnderKey: "history.goal_tooltip_under",
+    tooltipOverKey: "history.goal_tooltip_over",
   },
   adjusted: {
-    zeroLabel: "Weekly plan",
-    zeroLabelShort: "Plan",
-    subtitle: "Each day compared to the weekly-adjusted target — redistributes this week's surplus or deficit so you finish the week on track.",
-    tooltipZero: "Right on plan",
-    tooltipUnder: "kcal under plan",
-    tooltipOver: "kcal over plan",
+    zeroLabelKey: "history.adjusted_zero_label",
+    zeroLabelShortKey: "history.adjusted_zero_short",
+    subtitleKey: "history.adjusted_subtitle",
+    tooltipZeroKey: "history.adjusted_tooltip_zero",
+    tooltipUnderKey: "history.adjusted_tooltip_under",
+    tooltipOverKey: "history.adjusted_tooltip_over",
   },
 };
 
@@ -414,6 +399,14 @@ function formatYAxisTickMobile(value: number, zeroLabel = "Goal"): string {
 function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
   if (days.length === 0) return null;
 
+  const { t } = useTranslation();
+  const { theme } = useTheme();
+  const { energyUnit } = useUnits();
+  const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const gridStroke = isDark ? "#374151" : "#e5e7eb";
+  const axisTickFill = isDark ? "#6b7280" : "#9ca3af";
+  const refLineStroke = isDark ? "#9ca3af" : "#6b7280";
+
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 640);
@@ -421,11 +414,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
     return () => window.removeEventListener("resize", handler);
   }, []);
 
-  const [chartMode, setChartMode] = useState<ChartMode>(() => {
-    const saved = localStorage.getItem("ac-chart-mode");
-    return (saved === "net" || saved === "goal" || saved === "adjusted") ? saved : "goal";
-  });
-  useEffect(() => { localStorage.setItem("ac-chart-mode", chartMode); }, [chartMode]);
+  const { mode: chartMode } = useCalorieMode();
 
   const cfg = CHART_MODE_CONFIG[chartMode];
 
@@ -442,7 +431,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
 
   const points: TrendPoint[] = sorted.map((d, i) => ({
     date: d.logDate,
-    label: new Date(d.logDate + "T00:00:00").toLocaleDateString("default", { month: "short", day: "numeric" }),
+    label: new Date(d.logDate + "T00:00:00").toLocaleDateString(i18n.language, { month: "short", day: "numeric" }),
     value: getChartValue(d),
     rollingAvg: calculateRollingAverage(values, i, 7),
   }));
@@ -461,16 +450,16 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
     const point = payload[0]?.payload;
     if (!point) return null;
     const daily = point.value;
-    const abs = Math.abs(Math.round(daily));
+    const abs = Math.abs(daily);
     const text =
-      abs < 5    ? cfg.tooltipZero
-      : daily <= 0 ? `${abs} ${cfg.tooltipUnder}`
-      :               `${abs} ${cfg.tooltipOver}`;
+      abs < 5    ? t(cfg.tooltipZeroKey)
+      : daily <= 0 ? `${formatEnergy(abs, energyUnit)} ${t(cfg.tooltipUnderKey)}`
+      :               `${formatEnergy(abs, energyUnit)} ${t(cfg.tooltipOverKey)}`;
     return (
-      <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-lg text-xs max-w-[180px]">
-        <p className="font-semibold text-gray-700 mb-1">{point.label}</p>
-        <p className="text-gray-400">
-          That day:{" "}
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 shadow-lg text-xs max-w-[180px]">
+        <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">{point.label}</p>
+        <p className="text-gray-400 dark:text-gray-500">
+          {t('history.chart_today')}{" "}
           <span className={daily <= 0 ? "text-green-600 font-semibold" : "text-orange-500 font-semibold"}>
             {text}
           </span>
@@ -479,32 +468,19 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
     );
   }
 
-  const underLabel = chartMode === "net" ? "Deficit" : "Under";
-  const overLabel  = chartMode === "net" ? "Surplus" : "Over";
-
-  const chartDropdown = (
-    <select
-      value={chartMode}
-      onChange={(e) => setChartMode(e.target.value as ChartMode)}
-      aria-label="Chart view"
-      className="rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-gray-600 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-    >
-      {CHART_MODES.map(({ key, label }) => (
-        <option key={key} value={key}>{label}</option>
-      ))}
-    </select>
-  );
+  const underLabel = chartMode === "net" ? t('history.chart_deficit') : t('history.chart_under');
+  const overLabel  = chartMode === "net" ? t('history.chart_surplus') : t('history.chart_over');
 
   return (
-    <Card title="Are you staying on track?" subtitle={cfg.subtitle} variant="muted" headerAction={chartDropdown}>
+    <Card title={t('history.chart_title')} subtitle={t(cfg.subtitleKey)} variant="muted">
 
       {points.length < 2 ? (
-        <p className="text-xs text-gray-400 text-center py-4">Log at least 2 days to see the trend.</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4">{t('history.chart_min_data')}</p>
       ) : (
         <>
           {!hasEnoughForFullWindow && (
-            <p className="mb-2 text-[10px] text-gray-400">
-              Building trend — {days.length} day{days.length !== 1 ? "s" : ""} logged
+            <p className="mb-2 text-[10px] text-gray-400 dark:text-gray-500">
+              {t('history.building_trend', { count: days.length })}
             </p>
           )}
 
@@ -514,32 +490,32 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
                 <ReferenceArea y1={0} y2={domain.yMax} fill="#fef3c7" fillOpacity={0.3} ifOverflow="hidden" />
                 <ReferenceArea y1={domain.yMin} y2={0} fill="#dcfce7" fillOpacity={0.3} ifOverflow="hidden" />
 
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
                 <XAxis
                   dataKey="label"
                   ticks={xTicks}
-                  tick={{ fontSize: 10, fill: "#9ca3af" }}
+                  tick={{ fontSize: 10, fill: axisTickFill }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
                   domain={[domain.yMin, domain.yMax]}
                   ticks={domain.ticks}
-                  tick={{ fontSize: 9, fill: "#9ca3af" }}
+                  tick={{ fontSize: 9, fill: axisTickFill }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={isMobile
-                    ? (v) => formatYAxisTickMobile(v, cfg.zeroLabelShort)
-                    : (v) => formatYAxisTick(v, cfg.zeroLabelShort)
+                    ? (v) => formatYAxisTickMobile(kcalToDisplay(v, energyUnit), t(cfg.zeroLabelShortKey))
+                    : (v) => formatYAxisTick(kcalToDisplay(v, energyUnit), t(cfg.zeroLabelShortKey))
                   }
                   width={isMobile ? 40 : 68}
                 />
                 <ReferenceLine
                   y={0}
-                  stroke="#6b7280"
+                  stroke={refLineStroke}
                   strokeWidth={1.5}
                   strokeDasharray="5 3"
-                  label={{ value: cfg.zeroLabel, position: "insideTopRight", fontSize: 9, fill: "#6b7280", fontWeight: 600 }}
+                  label={{ value: t(cfg.zeroLabelKey), position: "insideTopRight", fontSize: 9, fill: refLineStroke, fontWeight: 600 }}
                 />
                 <Tooltip
                   content={<TooltipContent />}
@@ -573,7 +549,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
           </div>
 
           {/* Legend */}
-          <div className="mt-1 flex justify-center gap-4 text-[10px] text-gray-400">
+          <div className="mt-1 flex justify-center gap-4 text-[10px] text-gray-400 dark:text-gray-500">
             <span className="flex items-center gap-1">
               <span className="inline-block h-3 w-2.5 rounded-sm bg-green-300" />
               {underLabel}
@@ -584,7 +560,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
             </span>
             <span className="flex items-center gap-1">
               <span className="inline-block h-0.5 w-4 rounded" style={{ backgroundColor: lineColor }} />
-              Trend
+              {t('history.chart_legend_trend')}
             </span>
           </div>
         </>
@@ -596,15 +572,16 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
 /* --- Day Detail --- */
 
 function DayDetail({ date }: { date: string }) {
-  const backTo = "/history?m=" + date.slice(0, 7); // e.g. /history?m=2025-04
+  const { t } = useTranslation();
+  const backTo = "/history?m=" + date.slice(0, 7);
   return (
     <div className="space-y-4">
       <div>
         <Link to={backTo} className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-800 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">
-          &larr; Back to month
+          {t('history.back_to_month')}
         </Link>
-        <h1 className="mt-2 text-2xl font-bold text-gray-900">{formatDayLabel(date)}</h1>
-        <p className="mt-1.5 text-sm text-gray-400">Review and edit this day's meals and activities.</p>
+        <h1 className="mt-2 text-2xl font-bold text-gray-900 dark:text-gray-100">{formatDayLabel(date, i18n.language)}</h1>
+        <p className="mt-1.5 text-sm text-gray-400 dark:text-gray-500">{t('history.day_detail_subtitle')}</p>
       </div>
 
       <DayDashboard date={date} />
@@ -621,12 +598,13 @@ function DeleteDayDialog({ date, deleting, error, onConfirm, onCancel }: {
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
       <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={onCancel} aria-hidden="true" />
-      <div className="relative w-full max-w-sm rounded-xl border border-gray-200 bg-white p-5 shadow-xl">
+      <div className="relative w-full max-w-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5 shadow-xl">
         <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 dark:bg-red-900/30">
             <svg className="h-5 w-5 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
               <line x1="12" y1="9" x2="12" y2="13" />
@@ -634,32 +612,32 @@ function DeleteDayDialog({ date, deleting, error, onConfirm, onCancel }: {
             </svg>
           </span>
           <div className="min-w-0">
-            <h3 id="delete-dialog-title" className="text-base font-semibold text-gray-900">Delete this day?</h3>
-            <p className="mt-1.5 text-sm text-gray-500">
-              All meals, activities, and data for <span className="font-medium text-gray-700">{formatDayLabel(date)}</span> will be permanently removed. Your weekly and monthly summaries will be recalculated.
+            <h3 id="delete-dialog-title" className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('history.delete_title')}</h3>
+            <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400">
+              {t('history.delete_body_prefix')} <span className="font-medium text-gray-700 dark:text-gray-300">{formatDayLabel(date, i18n.language)}</span> {t('history.delete_body_suffix')}
             </p>
-            <p className="mt-1 text-xs text-gray-400">This action cannot be undone.</p>
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t('history.delete_warning')}</p>
           </div>
         </div>
 
         {error && (
-          <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+          <p className="mt-3 rounded-md bg-red-50 dark:bg-red-900/30 px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</p>
         )}
 
         <div className="mt-4 flex justify-end gap-2">
           <button
             onClick={onCancel}
             disabled={deleting}
-            className="rounded-md border border-gray-300 px-3.5 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+            className="rounded-md border border-gray-300 dark:border-gray-600 px-3.5 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             onClick={onConfirm}
             disabled={deleting}
             className="rounded-md bg-red-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
           >
-            {deleting ? "Deleting…" : "Yes, delete"}
+            {deleting ? t('history.deleting') : t('history.delete_confirm')}
           </button>
         </div>
       </div>
@@ -689,31 +667,33 @@ function getTableDelta(d: DailyLogResponse, mode: ChartMode): number {
 }
 
 function FriendlyGoalDelta({ value }: { value: number }) {
-  if (Math.abs(value) < 1) return <span className="text-gray-400">On target</span>;
+  const { t } = useTranslation();
+  const { energyUnit } = useUnits();
+  if (Math.abs(value) < 1) return <span className="text-gray-400">{t('history.on_target')}</span>;
   const isUnder = value <= 0;
   return (
     <span className={"tabular-nums " + (isUnder ? "text-green-700/70" : "text-amber-500")}>
-      {fmt(Math.abs(value))} {isUnder ? "under" : "over"}
+      {formatEnergy(Math.abs(value), energyUnit)} {isUnder ? t('history.under') : t('history.over')}
     </span>
   );
 }
 
-function formatDayLabel(dateStr: string): string {
+function formatDayLabel(dateStr: string, language = "default"): string {
   const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("default", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  return d.toLocaleDateString(language, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 }
 
 function Card({ title, subtitle, variant, headerAction, children }: { title: string; subtitle?: string; variant?: "primary" | "muted"; headerAction?: React.ReactNode; children: React.ReactNode }) {
   const sectionClass = variant === "primary"
-    ? "rounded-xl border-2 border-indigo-200 bg-white shadow-md ring-1 ring-indigo-100"
+    ? "rounded-xl border-2 border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-900 shadow-md ring-1 ring-indigo-100 dark:ring-indigo-900"
     : variant === "muted"
-      ? "rounded-xl border border-gray-100 bg-gray-50/60 shadow-none"
-      : "rounded-xl border border-gray-200 bg-white shadow-sm";
+      ? "rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-900/40 shadow-none"
+      : "rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm";
   const titleClass = variant === "primary"
     ? "text-sm font-bold uppercase tracking-wide text-indigo-600"
     : variant === "muted"
-      ? "text-xs font-semibold uppercase tracking-wide text-gray-400"
-      : "text-sm font-semibold uppercase tracking-wide text-gray-500";
+      ? "text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+      : "text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400";
 
   return (
     <section className={`${sectionClass} p-4 sm:p-5`}>
@@ -721,7 +701,7 @@ function Card({ title, subtitle, variant, headerAction, children }: { title: str
         <h2 className={titleClass}>{title}</h2>
         {headerAction && <div className="flex items-center">{headerAction}</div>}
       </div>
-      {subtitle && <p className="mb-3 text-xs text-gray-400">{subtitle}</p>}
+      {subtitle && <p className="mb-3 text-xs text-gray-400 dark:text-gray-500">{subtitle}</p>}
       {!subtitle && <div className="mb-2" />}
       {children}
     </section>

@@ -3,6 +3,7 @@
  * These are kept here so they can be imported by both GoalSelector sub-components
  * and any future pages that need to reason about goal values.
  */
+import { formatWeightRateLong, formatWeightRate, formatEnergyAdjustment, type WeightUnit, type EnergyUnit } from "@/utils/units";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,25 +50,18 @@ export function kcalToKgPerWeek(kcal: number): string {
 // ─── Formatting helpers ────────────────────────────────────────────────────────
 
 /** Formats a kg/week value with the correct sign character (−, not hyphen). */
-export function formatKgPerWeek(kg: number): string {
-  if (kg === 0) return "0 kg per week";
-  const sign = kg > 0 ? "+" : "−";
-  return `${sign}${Math.abs(kg).toFixed(2)} kg per week`;
+export function formatKgPerWeek(kg: number, unit: WeightUnit = "kg"): string {
+  return formatWeightRateLong(kg, unit);
 }
 
 /** Compact kg/week format for mobile option cards (e.g. "−0.50 kg/wk"). */
-export function formatKgPerWeekShort(kg: number): string {
-  if (kg === 0) return "0 kg/wk";
-  const sign = kg > 0 ? "+" : "−";
-  return `${sign}${Math.abs(kg).toFixed(2)} kg/wk`;
+export function formatKgPerWeekShort(kg: number, unit: WeightUnit = "kg"): string {
+  return formatWeightRate(kg, unit);
 }
 
 /** Formats a daily kcal adjustment rounded to the nearest 10. */
-export function formatKcalAdjustment(kcal: number): string {
-  if (kcal === 0) return "no calorie adjustment";
-  const rounded = Math.round(kcal / 10) * 10;
-  const sign = rounded > 0 ? "+" : "−";
-  return `about ${sign}${Math.abs(rounded).toLocaleString()} kcal/day`;
+export function formatKcalAdjustment(kcal: number, unit: EnergyUnit = "kcal"): string {
+  return formatEnergyAdjustment(kcal, unit);
 }
 
 // ─── Validation helpers ────────────────────────────────────────────────────────
@@ -77,12 +71,18 @@ export const CUSTOM_KG_MIN = -1.50;
 export const CUSTOM_KG_MAX =  1.00;
 
 /** Validates a raw custom kg/week string. Returns an error message or null. */
-export function validateCustomKg(value: string): string | null {
+export function validateCustomKg(value: string, unit: WeightUnit = "kg"): string | null {
   if (!value.trim()) return "Enter a value.";
   const n = parseFloat(value);
   if (isNaN(n)) return "Enter a valid number.";
-  if (n < CUSTOM_KG_MIN) return `Minimum is ${CUSTOM_KG_MIN} kg/week.`;
-  if (n > CUSTOM_KG_MAX) return `Maximum is +${CUSTOM_KG_MAX} kg/week.`;
+  if (unit === "lbs") {
+    const kgVal = n / 2.20462;
+    if (kgVal < CUSTOM_KG_MIN) return `Minimum is ${(CUSTOM_KG_MIN * 2.20462).toFixed(2)} lbs/week.`;
+    if (kgVal > CUSTOM_KG_MAX) return `Maximum is +${(CUSTOM_KG_MAX * 2.20462).toFixed(2)} lbs/week.`;
+  } else {
+    if (n < CUSTOM_KG_MIN) return `Minimum is ${CUSTOM_KG_MIN} kg/week.`;
+    if (n > CUSTOM_KG_MAX) return `Maximum is +${CUSTOM_KG_MAX} kg/week.`;
+  }
   return null;
 }
 

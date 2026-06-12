@@ -111,7 +111,7 @@ export default function SegmentedCodeInput({
   return (
     <div>
       {label && (
-        <label id={`${id}-label`} className="block text-sm font-medium text-gray-700 mb-2">
+        <label id={`${id}-label`} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           {label}
         </label>
       )}
@@ -143,10 +143,10 @@ export default function SegmentedCodeInput({
             aria-label={`Digit ${i + 1} of ${length}`}
             aria-invalid={hasError ? "true" : undefined}
             aria-describedby={descId}
-            className={`h-12 w-12 rounded-md border text-center text-xl font-mono font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors disabled:opacity-50 disabled:bg-gray-50 ${
+            className={`h-12 w-12 rounded-md border text-center text-xl font-mono font-semibold text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors disabled:opacity-50 disabled:bg-gray-50 dark:disabled:bg-gray-900 ${
               hasError
                 ? "border-red-400 focus:border-red-500 focus:ring-red-500/30"
-                : "border-gray-300 focus:border-indigo-500 focus:ring-indigo-500/30"
+                : "border-gray-300 dark:border-gray-600 focus:border-indigo-500 focus:ring-indigo-500/30"
             }`}
           />
         ))}
@@ -155,7 +155,7 @@ export default function SegmentedCodeInput({
       {hasError ? (
         <p id={errorId} className="mt-2 text-center text-sm text-red-600" role="alert">{error}</p>
       ) : helperText ? (
-        <p id={hintId} className="mt-2 text-center text-xs text-gray-400">{helperText}</p>
+        <p id={hintId} className="mt-2 text-center text-xs text-gray-400 dark:text-gray-500">{helperText}</p>
       ) : null}
     </div>
   );

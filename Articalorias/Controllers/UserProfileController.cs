@@ -52,6 +52,8 @@ public class UserProfileController : ControllerBase
             Country = request.Country,
             SleepHours = request.SleepHours,
             NeatHours = request.NeatHours,
+            CalorieDisplayMode = request.CalorieDisplayMode,
+            MinCaloriesSafeguardEnabled = request.MinCaloriesSafeguardEnabled,
         };
 
         var result = await _profileService.CreateOrUpdateAsync(userId, profile);
@@ -83,5 +85,7 @@ public class UserProfileController : ControllerBase
         IsOnboardingCompleted = p.IsOnboardingCompleted,
         SleepHours = p.SleepHours,
         NeatHours = p.NeatHours,
+        CalorieDisplayMode = p.CalorieDisplayMode,
+        MinCaloriesSafeguardEnabled = p.MinCaloriesSafeguardEnabled,
     };
 }

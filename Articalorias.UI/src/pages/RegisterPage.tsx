@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/authService";
 import { extractApiError } from "@/utils/apiError";
@@ -22,6 +23,7 @@ interface FieldTouched {
 }
 
 export default function RegisterPage() {
+  const { t } = useTranslation();
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -34,8 +36,8 @@ export default function RegisterPage() {
   const [submitted, setSubmitted] = useState(false);
   const [touched, setTouched] = useState<FieldTouched>({ username: false, email: false, password: false, confirmPassword: false });
 
-  const usernameError = !username.trim() ? "Please choose a username." : username.trim().length < 3 ? "Must be at least 3 characters." : null;
-  const emailError = !email.trim() ? "Please enter your email." : !EMAIL_RE.test(email.trim()) ? "That doesn't look like a valid email." : null;
+  const usernameError = !username.trim() ? t('auth.register.username_error_empty') : username.trim().length < 3 ? t('auth.register.username_error_short') : null;
+  const emailError = !email.trim() ? t('auth.register.email_error_empty') : !EMAIL_RE.test(email.trim()) ? t('auth.register.email_error_invalid') : null;
   const passwordError = validatePassword(password);
   const confirmError = validateConfirmPassword(password, confirmPassword);
 
@@ -61,7 +63,7 @@ export default function RegisterPage() {
       login(data);
       navigate("/today", { replace: true });
     } catch (err) {
-      setServerError(extractApiError(err, "We couldn't create your account. Please try again."));
+      setServerError(extractApiError(err, t('auth.register.server_error')));
     } finally {
       setLoading(false);
     }
@@ -70,25 +72,25 @@ export default function RegisterPage() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4" noValidate aria-busy={loading}>
       <AuthCard
-        title="Create account"
-        subtitle="It only takes a minute to get started."
+        title={t('auth.register.title')}
+        subtitle={t('auth.register.subtitle')}
         alerts={serverError && <AlertBanner>{serverError}</AlertBanner>}
       >
         <FormField
           id="reg-username"
-          label="Username"
+          label={t('auth.register.username_label')}
           autoComplete="username"
           value={username}
           onChange={setUsername}
           onBlur={() => markTouched("username")}
           error={usernameError}
           showError={showError("username", usernameError)}
-          hint="3–50 characters"
+          hint={t('auth.register.username_hint')}
         />
 
         <FormField
           id="reg-email"
-          label="Email"
+          label={t('auth.register.email_label')}
           type="email"
           autoComplete="email"
           value={email}
@@ -96,7 +98,7 @@ export default function RegisterPage() {
           onBlur={() => markTouched("email")}
           error={emailError}
           showError={showError("email", emailError)}
-          hint="Used only for account recovery"
+          hint={t('auth.register.email_hint')}
         />
 
         <PasswordCreateField
@@ -118,12 +120,12 @@ export default function RegisterPage() {
           submitted={submitted}
         />
 
-        <SubmitButton loading={loading} text="Create account" loadingText="Creating account…" />
+        <SubmitButton loading={loading} text={t('auth.register.submit')} loadingText={t('auth.register.submitting')} />
       </AuthCard>
 
-      <p className="text-center text-sm text-gray-500">
-        Already have an account?{" "}
-        <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-500">Sign in</Link>
+      <p className="text-center text-sm text-gray-500 dark:text-gray-400">
+        {t('auth.register.have_account')}{" "}
+        <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-500">{t('auth.register.sign_in')}</Link>
       </p>
     </form>
   );

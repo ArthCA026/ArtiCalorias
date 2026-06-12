@@ -2,12 +2,18 @@ self.addEventListener('push', (event) => {
   const data = event.data?.json() ?? { title: 'ArtiCalorias', body: '' };
 
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: '/favicon.svg',
-      badge: '/favicon.svg',
-      data: { url: data.url ?? '/' },
-    })
+    Promise.all([
+      self.registration.showNotification(data.title, {
+        body: data.body,
+        icon: '/favicon.svg',
+        badge: '/favicon.svg',
+        tag: data.tag ?? 'articalorias-reminder',
+        data: { url: data.url ?? '/' },
+      }),
+      'setAppBadge' in self.navigator
+        ? self.navigator.setAppBadge(1)
+        : Promise.resolve(),
+    ])
   );
 });
 

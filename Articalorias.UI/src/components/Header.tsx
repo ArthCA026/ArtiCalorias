@@ -1,20 +1,21 @@
 ﻿import { NavLink, useNavigate, useLocation } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
 import type { ReactElement } from 'react';
 
 const navItems = [
-  { to: '/today', label: 'Today' },
-  { to: '/history', label: 'History' },
-  { to: '/activities', label: 'Activities' },
-  { to: '/profile', label: 'Profile' },
-  { to: '/settings', label: 'Settings (WIP)' },
+  { to: '/today', labelKey: 'nav.today' },
+  { to: '/history', labelKey: 'nav.history' },
+  { to: '/activities', labelKey: 'nav.activities' },
+  { to: '/profile', labelKey: 'nav.profile' },
+  { to: '/settings', labelKey: 'nav.settings_wip' },
 ];
 
-const PAGE_TITLES: { path: string; label: string }[] = [
-  { path: '/history', label: 'History' },
-  { path: '/activities', label: 'Activities' },
-  { path: '/profile', label: 'Profile' },
-  { path: '/settings', label: 'Settings' },
+const PAGE_TITLE_KEYS: { path: string; labelKey: string }[] = [
+  { path: '/history', labelKey: 'nav.history' },
+  { path: '/activities', labelKey: 'nav.activities' },
+  { path: '/profile', labelKey: 'nav.profile' },
+  { path: '/settings', labelKey: 'nav.settings' },
 ];
 
 const PAGE_ICONS: Record<string, ReactElement> = {
@@ -41,13 +42,14 @@ const PAGE_ICONS: Record<string, ReactElement> = {
 };
 
 export default function Header() {
+  const { t } = useTranslation();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const isToday = location.pathname === '/today' || location.pathname === '/';
-  const currentPage = PAGE_TITLES.find(({ path }) => location.pathname.startsWith(path));
-  const pageTitle = currentPage?.label;
+  const currentPage = PAGE_TITLE_KEYS.find(({ path }) => location.pathname.startsWith(path));
+  const pageTitle = currentPage ? t(currentPage.labelKey) : undefined;
   const pageIcon = currentPage ? PAGE_ICONS[currentPage.path] : null;
 
   function handleLogout() {
@@ -56,7 +58,7 @@ export default function Header() {
   }
 
   return (
-    <header className="border-b border-gray-200 bg-white">
+    <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
       <div className="relative mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
         {/* Desktop left slot: logo/title always on the left */}
         <div className="flex-shrink-0">
@@ -68,7 +70,7 @@ export default function Header() {
               ArtiCalorias
             </NavLink>
           ) : (
-            <span className="hidden md:flex items-center gap-1.5 text-base font-semibold text-gray-900 truncate max-w-[200px]">
+            <span className="hidden md:flex items-center gap-1.5 text-base font-semibold text-gray-900 dark:text-gray-100 truncate max-w-[200px]">
               {pageIcon}
               {pageTitle ?? ''}
             </span>
@@ -87,7 +89,7 @@ export default function Header() {
               ArtiCalorias
             </NavLink>
           ) : (
-            <span className="flex items-center gap-1.5 text-base font-semibold text-gray-900 whitespace-nowrap">
+            <span className="flex items-center gap-1.5 text-base font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap">
               {pageIcon}
               {pageTitle ?? ''}
             </span>
@@ -103,22 +105,22 @@ export default function Header() {
               className={({ isActive }) =>
                 `rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-indigo-50 text-indigo-700'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
                 }`
               }
             >
-              {item.label}
+              {t(item.labelKey)}
             </NavLink>
           ))}
 
-          <div className="ml-3 flex items-center gap-2 border-l border-gray-200 pl-3">
-            <span className="text-xs text-gray-400">{user?.username}</span>
+          <div className="ml-3 flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-3">
+            <span className="text-xs text-gray-400 dark:text-gray-500">{user?.username}</span>
             <button
               onClick={handleLogout}
-              className="rounded-md px-2.5 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+              className="rounded-md px-2.5 py-1.5 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
             >
-              Logout
+              {t('nav.logout')}
             </button>
           </div>
         </nav>
@@ -126,8 +128,8 @@ export default function Header() {
         {/* Mobile Logout Button */}
         <button
           onClick={handleLogout}
-          className="md:hidden rounded-md p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
-          aria-label="Logout"
+          className="md:hidden rounded-md p-2 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors shrink-0"
+          aria-label={t('nav.logout')}
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

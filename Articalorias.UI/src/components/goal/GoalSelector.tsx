@@ -10,6 +10,7 @@ import {
 import GoalPresetScale from "./GoalPresetScale";
 import GoalSummary from "./GoalSummary";
 import CustomGoalInput from "./CustomGoalInput";
+import { useUnits } from "@/hooks/useUnits";
 
 interface GoalSelectorProps {
   /** The currently saved daily kcal adjustment (string form of the API value). */
@@ -56,6 +57,7 @@ export default function GoalSelector({ selectedKcal, onGoalChange, disabled }: G
     () => matchPreset(selectedKcal).preset,
   );
   const [showCustomInput, setShowCustomInput] = useState(false);
+  const { weightUnit, energyUnit } = useUnits();
 
   // Derived — always reflects the last confirmed saved value, not optimistic state.
   const isCustomActive = matchPreset(selectedKcal).isCustom;
@@ -98,7 +100,7 @@ export default function GoalSelector({ selectedKcal, onGoalChange, disabled }: G
        */}
       {/* shadow-sm lifts the control just enough to distinguish it from the flat
           form background without making it look like a card or modal. */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
 
         {/* Scale — fills the top of the container; no border of its own */}
         <GoalPresetScale
@@ -114,13 +116,13 @@ export default function GoalSelector({ selectedKcal, onGoalChange, disabled }: G
             className="flex select-none justify-between px-3 pb-1.5 pt-1"
             aria-hidden="true"
           >
-            <span className="text-[10px] text-gray-400">← More deficit</span>
-            <span className="text-[10px] text-gray-400">More surplus →</span>
+            <span className="text-[10px] text-gray-400 dark:text-gray-500">← More deficit</span>
+            <span className="text-[10px] text-gray-400 dark:text-gray-500">More surplus →</span>
           </div>
         )}
 
         {/* Detail row — same container, separated from scale by a thin rule */}
-        <div className="border-t border-gray-100 px-3 py-2 sm:py-3">
+        <div className="border-t border-gray-100 dark:border-gray-800 px-3 py-2 sm:py-3">
 
           {/* Face 1: preset active */}
           {!showCustomInput && !isCustomActive && activePreset && (
@@ -134,7 +136,7 @@ export default function GoalSelector({ selectedKcal, onGoalChange, disabled }: G
                   type="button"
                   disabled={disabled}
                   onClick={() => setShowCustomInput(true)}
-                  className="sm:hidden shrink-0 mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
+                  className="sm:hidden shrink-0 mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs text-gray-400 dark:text-gray-500 transition-colors hover:text-gray-600 dark:hover:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
                 >
                   <PencilIcon className="h-3 w-3" />
                   Custom
@@ -146,7 +148,7 @@ export default function GoalSelector({ selectedKcal, onGoalChange, disabled }: G
                   type="button"
                   disabled={disabled}
                   onClick={() => setShowCustomInput(true)}
-                  className="inline-flex items-center gap-1.5 rounded px-1 py-1 text-xs text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded px-1 py-1 text-xs text-gray-400 dark:text-gray-500 transition-colors hover:text-gray-600 dark:hover:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
                 >
                   <PencilIcon className="h-3 w-3" />
                   Set custom target
@@ -159,21 +161,21 @@ export default function GoalSelector({ selectedKcal, onGoalChange, disabled }: G
           {!showCustomInput && isCustomActive && (
             <>
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-gray-700">Custom target</p>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Custom target</p>
                 <button
                   type="button"
                   disabled={disabled}
                   onClick={() => setShowCustomInput(true)}
-                  className="inline-flex shrink-0 items-center gap-1 text-xs text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
+                  className="inline-flex shrink-0 items-center gap-1 text-xs text-gray-400 dark:text-gray-500 transition-colors hover:text-gray-600 dark:hover:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
                 >
                   <PencilIcon className="h-3 w-3" />
                   Edit
                 </button>
               </div>
-              <p className="mt-0.5 text-xs text-gray-500">
-                {formatKgPerWeek(savedKgPerWeek)}
-                <span className="mx-1.5 text-gray-300" aria-hidden="true">·</span>
-                {formatKcalAdjustment(savedKcalNum)}
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                {formatKgPerWeek(savedKgPerWeek, weightUnit)}
+                <span className="mx-1.5 text-gray-300 dark:text-gray-600" aria-hidden="true">·</span>
+                {formatKcalAdjustment(savedKcalNum, energyUnit)}
               </p>
             </>
           )}

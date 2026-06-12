@@ -48,7 +48,7 @@ export default function FormField({
   return (
     <div>
       <div className={labelRight ? "flex items-center justify-between" : undefined}>
-        <label htmlFor={id} className="block text-sm font-medium text-gray-700">{label}</label>
+        <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
         {labelRight}
       </div>
       <div className={showPasswordToggle ? "relative mt-1" : undefined}>
@@ -64,13 +64,13 @@ export default function FormField({
           onPaste={onPaste}
           aria-invalid={hasError ? "true" : undefined}
           aria-describedby={hasError ? errorId : hint ? hintId : undefined}
-          className={`${showPasswordToggle ? "" : "mt-1 "}block w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-0 ${showPasswordToggle ? "pr-10 " : ""}${hasError ? "border-red-400 focus:border-red-500 focus:ring-red-500/30" : "border-gray-300 focus:border-indigo-500 focus:ring-indigo-500/30"} ${inputClassName}`}
+          className={`${showPasswordToggle ? "" : "mt-1 "}block w-full rounded-md border px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-0 ${showPasswordToggle ? "pr-10 " : ""}${hasError ? "border-red-400 focus:border-red-500 focus:ring-red-500/30" : "border-gray-300 dark:border-gray-600 focus:border-indigo-500 focus:ring-indigo-500/30"} ${inputClassName}`}
         />
         {showPasswordToggle && (
           <button
             type="button"
             onClick={() => setVisible((v) => !v)}
-            className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 rounded-r-md"
+            className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-r-md"
             aria-label={visible ? "Hide password" : "Show password"}
           >
             {visible ? <EyeOffIcon /> : <EyeIcon />}

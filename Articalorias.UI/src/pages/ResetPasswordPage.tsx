@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 import { authService } from "@/services/authService";
 import { extractApiError, extractApiErrorCode } from "@/utils/apiError";
 import { validateEmail } from "@/utils/emailValidation";
@@ -27,13 +28,14 @@ const AUTO_REDIRECT_SECONDS = 5;
 const RESEND_COOLDOWN_SECONDS = 60;
 
 function validateCode(raw: string): string | null {
-  if (!raw) return "Please enter your 6-digit reset code.";
-  if (!/^\d+$/.test(raw)) return "The code should only contain numbers.";
-  if (raw.length < CODE_LENGTH) return "The code must be 6 digits — check your email.";
+  if (!raw) return "code_error_empty";
+  if (!/^\d+$/.test(raw)) return "code_error_numbers";
+  if (raw.length < CODE_LENGTH) return "code_error_length";
   return null;
 }
 
 export default function ResetPasswordPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
@@ -54,7 +56,8 @@ export default function ResetPasswordPage() {
   const redirectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const emailError = validateEmail(email);
-  const codeError = validateCode(code);
+  const codeErrorKey = validateCode(code);
+  const codeError = codeErrorKey ? t(`auth.reset_password.${codeErrorKey}`) : null;
   const passwordError = validatePassword(newPassword);
   const confirmError = validateConfirmPassword(newPassword, confirmPassword);
 
@@ -93,10 +96,10 @@ export default function ResetPasswordPage() {
     } catch (err) {
       const code = extractApiErrorCode(err);
       if (code === "RESEND_COOLDOWN") {
-        setServerError("You've already requested a code recently. Please wait a minute before trying again.");
+        setServerError(t('auth.reset_password.resend_cooldown_error'));
         setResendCooldown(RESEND_COOLDOWN_SECONDS);
       } else {
-        setServerError("We couldn't resend the code right now. Please try again.");
+        setServerError(t('auth.reset_password.resend_error'));
       }
     } finally {
       setResending(false);
@@ -142,18 +145,18 @@ export default function ResetPasswordPage() {
       switch (errorCode) {
         case "CODE_EXPIRED":
           setCodeExpired(true);
-          setServerError("That code has expired. Request a new one below.");
+          setServerError(t('auth.reset_password.code_expired_error'));
           break;
         case "CODE_INVALID":
-          setServerError("That code doesn't match. Please check and try again.");
+          setServerError(t('auth.reset_password.code_invalid_error'));
           break;
         case "TOO_MANY_ATTEMPTS":
           setLockedOut(true);
-          setServerError("Too many failed attempts. Please request a new code to continue.");
+          setServerError(t('auth.reset_password.locked_out_error'));
           setCode("");
           break;
         default:
-          setServerError(extractApiError(err, "Something went wrong. Please try again."));
+          setServerError(extractApiError(err, t('auth.reset_password.server_error')));
       }
     } finally {
       setLoading(false);
@@ -166,16 +169,16 @@ export default function ResetPasswordPage() {
     return (
       <SuccessCard
         icon={<CheckIcon />}
-        title="Password updated"
-        description="Your password has been reset successfully. You can now sign in with your new password."
+        title={t('auth.reset_password.success_title')}
+        description={t('auth.reset_password.success_description')}
       >
         <button
           onClick={() => navigate("/login", { replace: true })}
           className="w-full rounded-md bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-500 transition-colors"
         >
-          Sign in now
+          {t('auth.reset_password.success_signin')}
         </button>
-        <p className="text-xs text-gray-400">Redirecting in {countdown}s…</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500">{t('auth.reset_password.success_redirect', { count: countdown })}</p>
       </SuccessCard>
     );
   }
@@ -199,7 +202,7 @@ export default function ResetPasswordPage() {
               disabled={!canResend}
               className="mt-2 inline-block text-sm font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-50"
             >
-              {resending ? "Sending…" : resendCooldown > 0 ? `Resend available in ${resendCooldown}s` : "Request a new code →"}
+              {resending ? t('auth.reset_password.resend_sending') : resendCooldown > 0 ? t('auth.reset_password.resend_cooldown', { count: resendCooldown }) : t('auth.reset_password.resend_request')}
             </button>
           )}
         </AlertBanner>
@@ -210,13 +213,13 @@ export default function ResetPasswordPage() {
   return (
     <form onSubmit={handleSubmit} className="space-y-5" noValidate aria-busy={loading}>
       <AuthCard
-        title="Reset your password"
-        subtitle="Enter the 6-digit code from your email and choose a new password."
+        title={t('auth.reset_password.title')}
+        subtitle={t('auth.reset_password.subtitle')}
         alerts={alerts}
       >
         <FormField
           id="reset-email"
-          label="Email"
+          label={t('auth.reset_password.email_label')}
           type="email"
           autoComplete="email"
           value={email}
@@ -228,20 +231,20 @@ export default function ResetPasswordPage() {
 
         <SegmentedCodeInput
           id="reset-code"
-          label="Reset code"
+          label={t('auth.reset_password.code_label')}
           value={code}
           onChange={setCode}
           length={CODE_LENGTH}
           disabled={loading}
           error={codeError}
           showError={showError("code", codeError)}
-          helperText="Enter the 6-digit code from your email. It expires after 15 minutes."
+          helperText={t('auth.reset_password.code_helper')}
           onBlur={() => markTouched("code")}
         />
 
         <PasswordCreateField
           id="reset-password"
-          label="New password"
+          label={t('auth.reset_password.new_password_label')}
           value={newPassword}
           onChange={setNewPassword}
           touched={touched.password}
@@ -251,7 +254,7 @@ export default function ResetPasswordPage() {
 
         <ConfirmPasswordField
           id="reset-confirm"
-          label="Confirm new password"
+          label={t('auth.reset_password.confirm_password_label')}
           password={newPassword}
           value={confirmPassword}
           onChange={setConfirmPassword}
@@ -261,8 +264,8 @@ export default function ResetPasswordPage() {
         />
 
         <div className="space-y-3">
-          <SubmitButton loading={loading} text="Update password" loadingText="Updating password…" />
-          <p className="text-center text-xs text-gray-400">
+          <SubmitButton loading={loading} text={t('auth.reset_password.submit')} loadingText={t('auth.reset_password.submitting')} />
+          <p className="text-center text-xs text-gray-400 dark:text-gray-500">
             Your password is encrypted and stored securely.
           </p>
         </div>
@@ -274,17 +277,17 @@ export default function ResetPasswordPage() {
             disabled={!canResend}
             className="font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-50"
           >
-            {resending ? "Sending…" : resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : "Resend code"}
+          {resending ? t('auth.reset_password.resend_sending') : resendCooldown > 0 ? t('auth.reset_password.resend_cooldown', { count: resendCooldown }) : t('auth.reset_password.resend_request')}
           </button>
-          <span className="text-gray-300">·</span>
+          <span className="text-gray-300 dark:text-gray-600">·</span>
           <Link to="/forgot-password" className="font-medium text-indigo-600 hover:text-indigo-500">
             Use a different email
           </Link>
         </div>
       </AuthCard>
 
-      <p className="text-center text-sm text-gray-500">
-        <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-500">Back to sign in</Link>
+      <p className="text-center text-sm text-gray-500 dark:text-gray-400">
+        <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-500">{t('auth.reset_password.back_to_login')}</Link>
       </p>
     </form>
   );

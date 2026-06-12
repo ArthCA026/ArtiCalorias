@@ -11,14 +11,14 @@ export default function OnboardingLayout() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
-      <header className="border-b border-gray-100 bg-white">
+    <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-950">
+      <header className="border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
           <span className="text-lg font-bold text-indigo-600">ArtiCalorias</span>
           <div className="flex items-center">
             <button
               onClick={handleLogout}
-              className="rounded-md px-2.5 py-1.5 text-sm text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+              className="rounded-md px-2.5 py-1.5 text-sm text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             >
               Logout
             </button>

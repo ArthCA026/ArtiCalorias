@@ -4,4 +4,5 @@ export const queryKeys = {
   historyAll: () => ['history'] as const,  // prefix — matches every history query
   activityTemplates: () => ['activity-templates'] as const,
   profile: () => ['profile'] as const,
+  notificationSchedules: () => ['notification-schedules'] as const,
 };

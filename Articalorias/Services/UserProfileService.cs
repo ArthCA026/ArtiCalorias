@@ -8,12 +8,10 @@ namespace Articalorias.Services;
 public class UserProfileService : IUserProfileService
 {
     private readonly AppDbContext _db;
-    private readonly IRecalculationService _recalculation;
 
-    public UserProfileService(AppDbContext db, IRecalculationService recalculation)
+    public UserProfileService(AppDbContext db)
     {
         _db = db;
-        _recalculation = recalculation;
     }
 
     public async Task<UserProfile?> GetByUserIdAsync(long userId)
@@ -49,6 +47,8 @@ public class UserProfileService : IUserProfileService
             existing.Country = profile.Country;
             existing.SleepHours = profile.SleepHours;
             existing.NeatHours = profile.NeatHours;
+            existing.CalorieDisplayMode = profile.CalorieDisplayMode;
+            existing.MinCaloriesSafeguardEnabled = profile.MinCaloriesSafeguardEnabled;
             existing.IsOnboardingCompleted = true;
             existing.UpdatedAtUtc = DateTime.UtcNow;
             ValidateSleepNeatHours(existing.SleepHours, existing.NeatHours);
@@ -60,6 +60,7 @@ public class UserProfileService : IUserProfileService
         }
 
         await _db.SaveChangesAsync();
+
         return existing ?? profile;
     }
 

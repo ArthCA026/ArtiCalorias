@@ -44,6 +44,10 @@ function ResponsiveScaleSelector({
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const optionRefs = useRef<(HTMLLabelElement | null)[]>([]);
+  // Set to true only by a radio onChange — i.e. a real user tap.
+  // All other key changes (page load, profile data arriving, external resets)
+  // leave it false so the scroll jumps instantly without animation.
+  const isUserChangeRef = useRef(false);
 
   // ── Auto-scroll: center selected mobile card without overscrolling ────────
   useEffect(() => {
@@ -51,6 +55,9 @@ function ResponsiveScaleSelector({
     const selectedOption = optionRefs.current[selectedIndex];
 
     if (!container || !selectedOption || selectedIndex < 0) return;
+
+    const shouldAnimate = isUserChangeRef.current;
+    isUserChangeRef.current = false;
 
     window.requestAnimationFrame(() => {
       const maxScrollLeft = container.scrollWidth - container.clientWidth;
@@ -72,10 +79,11 @@ function ResponsiveScaleSelector({
         maxScrollLeft
       );
 
-      container.scrollTo({
-        left: clampedScroll,
-        behavior: "smooth",
-      });
+      if (shouldAnimate) {
+        container.scrollTo({ left: clampedScroll, behavior: "smooth" });
+      } else {
+        container.scrollLeft = clampedScroll;
+      }
     });
   }, [selectedKey, selectedIndex]);
 
@@ -89,8 +97,8 @@ function ResponsiveScaleSelector({
       isSelected
         ? "bg-indigo-600 text-white font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
         : isAdjacent
-          ? "bg-indigo-50 text-indigo-500"
-          : "bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700",
+          ? "bg-indigo-50 dark:bg-indigo-950 text-indigo-500 dark:text-indigo-400"
+          : "bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200",
       disabled ? "pointer-events-none opacity-50" : "",
     ]
       .filter(Boolean)
@@ -101,7 +109,7 @@ function ResponsiveScaleSelector({
     <div role="group" aria-label={ariaLabel} className="w-full max-w-full min-w-0">
       {/* ── Desktop grid (sm+) — equal-width columns ──────────────────────── */}
       <div
-        className="hidden overflow-hidden bg-gray-200 sm:grid sm:gap-px"
+        className="hidden overflow-hidden bg-gray-200 dark:bg-gray-700 sm:grid sm:gap-px"
         style={{
           gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))`,
         }}
@@ -122,7 +130,7 @@ function ResponsiveScaleSelector({
                 name={`${radioGroupName}-desktop`}
                 value={opt.key}
                 checked={isSelected}
-                onChange={() => onChange(opt.key)}
+                onChange={() => { isUserChangeRef.current = true; onChange(opt.key); }}
                 disabled={disabled}
                 aria-label={opt.fullAriaLabel}
                 className="sr-only"
@@ -146,17 +154,11 @@ function ResponsiveScaleSelector({
       </div>
 
       {/* ── Mobile horizontal scroll (below sm) ───────────────────────────── */}
-      <div className="relative w-full max-w-full min-w-0 rounded-xl bg-gray-200 sm:hidden">
-        {/* Right-edge fade affordance */}
-        <div
-          className="pointer-events-none absolute inset-y-0 right-0 z-20 w-8 bg-gradient-to-l from-white to-transparent"
-          aria-hidden="true"
-        />
-
+      <div className="w-full max-w-full min-w-0 rounded-xl bg-gray-200 dark:bg-gray-700 sm:hidden">
         <div
           ref={scrollContainerRef}
           className={[
-            "flex w-full max-w-full min-w-0 gap-px overflow-x-auto overflow-y-hidden bg-gray-200",
+            "flex w-full max-w-full min-w-0 gap-px overflow-x-auto overflow-y-hidden bg-gray-200 dark:bg-gray-700",
             "scrollbar-none overscroll-x-contain touch-pan-x",
           ].join(" ")}
           style={{
@@ -190,7 +192,7 @@ function ResponsiveScaleSelector({
                   name={`${radioGroupName}-mobile`}
                   value={opt.key}
                   checked={isSelected}
-                  onChange={() => onChange(opt.key)}
+                  onChange={() => { isUserChangeRef.current = true; onChange(opt.key); }}
                   disabled={disabled}
                   aria-label={opt.fullAriaLabel}
                   className="absolute inset-0 z-10 m-0 h-full w-full cursor-pointer opacity-0"

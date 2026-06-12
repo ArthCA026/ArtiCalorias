@@ -1,6 +1,7 @@
 ﻿import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/useAuth";
 import { authService } from "@/services/authService";
 import { extractApiError } from "@/utils/apiError";
@@ -10,6 +11,7 @@ import FormField from "@/components/auth/FormField";
 import SubmitButton from "@/components/auth/SubmitButton";
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const { login, sessionExpired, clearSessionExpired } = useAuth();
   const navigate = useNavigate();
 
@@ -20,8 +22,8 @@ export default function LoginPage() {
   const [submitted, setSubmitted] = useState(false);
   const [touched, setTouched] = useState<{ usernameOrEmail: boolean; password: boolean }>({ usernameOrEmail: false, password: false });
 
-  const usernameOrEmailError = !usernameOrEmail.trim() ? "Please enter your username or email." : null;
-  const passwordError = !password.trim() ? "Please enter your password." : null;
+  const usernameOrEmailError = !usernameOrEmail.trim() ? t('auth.login.username_error') : null;
+  const passwordError = !password.trim() ? t('auth.login.password_error') : null;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -38,7 +40,7 @@ export default function LoginPage() {
       login(data);
       navigate("/today", { replace: true });
     } catch (err) {
-      setServerError(extractApiError(err, "Incorrect username/email or password."));
+      setServerError(extractApiError(err, t('auth.login.server_error')));
     } finally {
       setLoading(false);
     }
@@ -47,18 +49,18 @@ export default function LoginPage() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4" noValidate aria-busy={loading}>
       <AuthCard
-        title="Welcome back"
-        subtitle="Sign in to pick up where you left off."
+        title={t('auth.login.title')}
+        subtitle={t('auth.login.subtitle')}
         alerts={<>
           {sessionExpired && (
-            <AlertBanner variant="warning">Your session expired — please sign in again.</AlertBanner>
+            <AlertBanner variant="warning">{t('auth.login.session_expired')}</AlertBanner>
           )}
           {serverError && <AlertBanner>{serverError}</AlertBanner>}
         </>}
       >
         <FormField
           id="login-username"
-          label="Username or Email"
+          label={t('auth.login.username_label')}
           autoComplete="username"
           value={usernameOrEmail}
           onChange={setUsernameOrEmail}
@@ -69,7 +71,7 @@ export default function LoginPage() {
 
         <FormField
           id="login-password"
-          label="Password"
+          label={t('auth.login.password_label')}
           type="password"
           autoComplete="current-password"
           value={password}
@@ -80,19 +82,19 @@ export default function LoginPage() {
           showPasswordToggle
           labelRight={
             <Link to="/forgot-password" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 rounded-sm px-0.5">
-              Forgot password?
+              {t('auth.login.forgot_password')}
             </Link>
           }
         />
 
-        <SubmitButton loading={loading} text="Sign in" loadingText="Signing in…" />
+        <SubmitButton loading={loading} text={t('auth.login.submit')} loadingText={t('auth.login.submitting')} />
       </AuthCard>
 
-      <p className="text-center text-sm text-gray-500">
-        Don't have an account?{" "}
-        <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">Create account</Link>
+      <p className="text-center text-sm text-gray-500 dark:text-gray-400">
+        {t('auth.login.no_account')}{" "}
+        <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">{t('auth.login.create_account')}</Link>
       </p>
-      <p className="text-center text-xs text-gray-300">v1.1.0</p>
+      <p className="text-center text-xs text-gray-300 dark:text-gray-600">v1.1.0</p>
     </form>
   );
 }

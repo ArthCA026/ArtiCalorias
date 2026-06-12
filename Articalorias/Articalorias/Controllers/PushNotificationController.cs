@@ -41,6 +41,24 @@ public class PushNotificationController : ControllerBase
         return Ok();
     }
 
+    [HttpGet("schedules")]
+    [Authorize]
+    public async Task<IActionResult> GetSchedules()
+    {
+        var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var schedules = await _push.GetSchedulesAsync(userId);
+        return Ok(schedules);
+    }
+
+    [HttpPut("schedules")]
+    [Authorize]
+    public async Task<IActionResult> UpdateSchedules([FromBody] UpdateSchedulesRequest request)
+    {
+        var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        await _push.UpsertSchedulesAsync(userId, request.Schedules);
+        return NoContent();
+    }
+
 #if DEBUG
     [HttpPost("test")]
     [Authorize]
@@ -52,3 +70,4 @@ public class PushNotificationController : ControllerBase
     }
 #endif
 }
+

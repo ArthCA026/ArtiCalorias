@@ -91,17 +91,17 @@ function CustomInput({ initialGrams, weightKg, onApply, onBack, disabled }: Cust
   }
 
   const inputCls = [
-    "block w-full rounded-md border bg-white px-3 py-2 pr-14 text-sm text-gray-900",
+    "block w-full rounded-md border bg-white dark:bg-gray-800 px-3 py-2 pr-14 text-sm text-gray-900 dark:text-gray-100",
     "transition-colors focus:outline-none",
-    "disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400",
+    "disabled:cursor-not-allowed disabled:bg-gray-50 dark:disabled:bg-gray-900 disabled:text-gray-400 dark:disabled:text-gray-500",
     error
       ? "border-red-300 hover:border-red-400 focus:border-red-400 focus:ring-2 focus:ring-red-400/20"
-      : "border-gray-200 hover:border-gray-300 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20",
+      : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20",
   ].join(" ");
 
   return (
     <div className="space-y-2">
-      <label className="block text-xs font-medium text-gray-600">
+      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">
         Custom protein target
       </label>
 
@@ -127,7 +127,7 @@ function CustomInput({ initialGrams, weightKg, onApply, onBack, disabled }: Cust
             className={inputCls}
           />
           <span
-            className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 select-none"
+            className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 dark:text-gray-500 select-none"
             aria-hidden="true"
           >
             g/day
@@ -143,7 +143,7 @@ function CustomInput({ initialGrams, weightKg, onApply, onBack, disabled }: Cust
 
         {/* g/kg hint — hidden when there is an error to keep things compact */}
         {!error && gramsPerKgHint != null && (
-          <p id="custom-protein-hint" className="mt-1 text-xs text-gray-400">
+          <p id="custom-protein-hint" className="mt-1 text-xs text-gray-400 dark:text-gray-500">
             about {gramsPerKgHint} g/kg
           </p>
         )}
@@ -154,7 +154,7 @@ function CustomInput({ initialGrams, weightKg, onApply, onBack, disabled }: Cust
           type="button"
           onClick={onBack}
           disabled={disabled}
-          className="text-xs text-gray-400 hover:text-gray-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-50"
+          className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-50"
         >
           ← Back
         </button>
@@ -283,7 +283,7 @@ export default function ProteinPresetSelector({
        * Unified container — scale + caption + detail share one rounded border,
        * matching the GoalSelector shell exactly.
        */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
 
         {/* ── Scale — desktop grid / mobile horizontal scroll ── */}
         <ResponsiveScaleSelector
@@ -303,39 +303,39 @@ export default function ProteinPresetSelector({
             className="flex select-none justify-between px-3 pb-1.5 pt-1"
             aria-hidden="true"
           >
-            <span className="text-[10px] text-gray-400">← Less protein</span>
-            <span className="text-[10px] text-gray-400">More protein →</span>
+            <span className="text-[10px] text-gray-400 dark:text-gray-500">← Less protein</span>
+            <span className="text-[10px] text-gray-400 dark:text-gray-500">More protein →</span>
           </div>
         )}
 
         {/* ── Detail row ── */}
-        <div className="border-t border-gray-100 px-3 py-2 sm:py-3">
+<div className="border-t border-gray-100 dark:border-gray-800 px-3 py-2 sm:py-3">
 
           {/* Face 1: a preset is active */}
           {!showCustomInput && !isCustomActive && activePreset && (
             <>
               <div className="flex items-start gap-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800">
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
                     {activePreset.label} protein
                   </p>
-                  <p className="mt-0.5 text-xs text-gray-500">
+                  <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                     {activePreset.gramsPerKg} g/kg
                     {previewGrams != null && (
                       <>
-                        <span className="mx-1.5 text-gray-300" aria-hidden="true">·</span>
-                        about <strong className="text-gray-700">{previewGrams} g/day</strong>
+                        <span className="mx-1.5 text-gray-300 dark:text-gray-600" aria-hidden="true">·</span>
+                        about <strong className="text-gray-700 dark:text-gray-300">{previewGrams} g/day</strong>
                       </>
                     )}
                   </p>
-                  <p className="mt-0.5 text-xs text-gray-400">{activePreset.description}</p>
+                  <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{activePreset.description}</p>
                   {isAgeAdjusted && (
                     <p className="mt-1.5 text-[11px] text-amber-600 italic">
                       Adjusted for age: older adults often benefit from a slightly higher minimum protein target.
                     </p>
                   )}
                   {goalHint && (
-                    <p className="hidden sm:block mt-1.5 text-[11px] text-gray-400 italic">{goalHint}</p>
+                    <p className="hidden sm:block mt-1.5 text-[11px] text-gray-400 dark:text-gray-500 italic">{goalHint}</p>
                   )}
                 </div>
                 {/* Mobile: “Custom” shortcut — top-right of summary */}
@@ -343,7 +343,7 @@ export default function ProteinPresetSelector({
                   type="button"
                   disabled={disabled}
                   onClick={() => setShowCustomInput(true)}
-                  className="sm:hidden shrink-0 mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
+                  className="sm:hidden shrink-0 mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs text-gray-400 dark:text-gray-500 transition-colors hover:text-gray-600 dark:hover:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
                 >
                   <PencilIcon className="h-3 w-3" />
                   Custom
@@ -356,7 +356,7 @@ export default function ProteinPresetSelector({
                   type="button"
                   disabled={disabled}
                   onClick={() => setShowCustomInput(true)}
-                  className="inline-flex items-center gap-1.5 rounded px-1 py-1 text-xs text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded px-1 py-1 text-xs text-gray-400 dark:text-gray-500 transition-colors hover:text-gray-600 dark:hover:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
                 >
                   <PencilIcon className="h-3 w-3" />
                   Set custom target
@@ -377,21 +377,21 @@ export default function ProteinPresetSelector({
               <>
                 <div className="flex items-start gap-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-700">Custom target</p>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Custom target</p>
                     {grams != null && (
-                      <p className="mt-0.5 text-xs text-gray-500">
-                        <strong className="text-gray-700">{grams} g/day</strong>
+                      <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                        <strong className="text-gray-700 dark:text-gray-300">{grams} g/day</strong>
                         {gramsPerKgCustom != null && (
                           <>
-                            <span className="mx-1.5 text-gray-300" aria-hidden="true">·</span>
+                            <span className="mx-1.5 text-gray-300 dark:text-gray-600" aria-hidden="true">·</span>
                             about {gramsPerKgCustom} g/kg
                           </>
                         )}
                       </p>
                     )}
-                    <p className="mt-0.5 text-xs text-gray-400">Custom protein goal</p>
+                    <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">Custom protein goal</p>
                     {goalHint && (
-                      <p className="hidden sm:block mt-1.5 text-[11px] text-gray-400 italic">{goalHint}</p>
+                      <p className="hidden sm:block mt-1.5 text-[11px] text-gray-400 dark:text-gray-500 italic">{goalHint}</p>
                     )}
                   </div>
                   {/* Mobile: “Edit” shortcut — top-right of summary */}
@@ -399,7 +399,7 @@ export default function ProteinPresetSelector({
                     type="button"
                     disabled={disabled}
                     onClick={() => setShowCustomInput(true)}
-                    className="sm:hidden shrink-0 mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
+                    className="sm:hidden shrink-0 mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs text-gray-400 dark:text-gray-500 transition-colors hover:text-gray-600 dark:hover:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
                   >
                     <PencilIcon className="h-3 w-3" />
                     Edit
@@ -412,7 +412,7 @@ export default function ProteinPresetSelector({
                     type="button"
                     disabled={disabled}
                     onClick={() => setShowCustomInput(true)}
-                    className="inline-flex items-center gap-1.5 rounded px-1 py-1 text-xs text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded px-1 py-1 text-xs text-gray-400 dark:text-gray-500 transition-colors hover:text-gray-600 dark:hover:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
                   >
                     <PencilIcon className="h-3 w-3" />
                     Edit custom target

@@ -1,5 +1,18 @@
 import { useState, Fragment } from "react";
+import { useTranslation } from "react-i18next";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useTheme } from "@/hooks/useTheme";
+import { useLanguage } from "@/hooks/useLanguage";
+import type { Language } from "@/hooks/useLanguage";
+import { useUnits } from "@/hooks/useUnits";
+import { useNotificationSettings } from "@/hooks/useNotificationSettings";
+import { NotificationPermissionModal } from "@/components/NotificationPermissionModal";
+import { formatLocalTime } from "@/utils/notifications";
+import { useCalorieMode } from "@/hooks/useCalorieMode";
+import { useSafeguardToggle } from "@/hooks/useSafeguardToggle";
+import { useAuth } from "@/hooks/useAuth";
+import { userService } from "@/services/userService";
 
 /* ─── tiny helpers ─────────────────────────────────────────── */
 
@@ -18,7 +31,7 @@ function Toggle({ checked, onChange, disabled = false }: ToggleProps) {
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 ${
-        checked ? "bg-indigo-600" : "bg-gray-200"
+        checked ? "bg-indigo-600" : "bg-gray-200 dark:bg-gray-700"
       }`}
     >
       <span
@@ -40,9 +53,9 @@ function SettingRow({ label, description, children }: SettingRowProps) {
   return (
     <div className="flex items-center justify-between gap-4 py-3.5">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-gray-900">{label}</p>
+        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{label}</p>
         {description && (
-          <p className="mt-0.5 text-xs text-gray-400">{description}</p>
+          <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{description}</p>
         )}
       </div>
       <div className="flex-shrink-0">{children}</div>
@@ -50,30 +63,120 @@ function SettingRow({ label, description, children }: SettingRowProps) {
   );
 }
 
-interface SectionCardProps {
-  index: number;
-  icon: React.ReactNode;
+interface SectionBlockProps {
   title: string;
-  subtitle: string;
+  subtitle?: string;
+  wip?: boolean;
+  icon?: React.ReactNode;
   children: React.ReactNode;
 }
 
-function SectionCard({ index, icon, title, subtitle, children }: SectionCardProps) {
+function SectionBlock({ title, subtitle, wip = false, icon, children }: SectionBlockProps) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-6 sm:p-8 shadow-sm space-y-1">
-      <div className="flex items-start gap-3 mb-4">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white flex-shrink-0 mt-0.5">
-          {index}
-        </span>
-        <div>
-          <div className="flex items-center gap-2">
-            {icon}
-            <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-          </div>
-          <p className="mt-0.5 text-xs text-gray-400">{subtitle}</p>
+    <div className="px-6 py-5 sm:px-8 sm:py-6">
+      <div className="mb-4">
+        <div className="flex items-center gap-2">
+          {icon && <span className="flex-shrink-0 text-indigo-500">{icon}</span>}
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
+          {wip && (
+            <span className="rounded-full bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+              WIP
+            </span>
+          )}
         </div>
+        {subtitle && <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{subtitle}</p>}
       </div>
-      <div className="divide-y divide-gray-100">{children}</div>
+      <div className="divide-y divide-gray-100 dark:divide-gray-800">{children}</div>
+    </div>
+  );
+}
+
+function PillToggle<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { key: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-sm font-medium shadow-sm">
+      {options.map(({ key, label }) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => onChange(key)}
+          className={`px-3 py-1.5 transition-colors ${
+            value === key
+              ? "bg-indigo-600 text-white"
+              : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const SELECT_CLS =
+  "rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 " +
+  "text-gray-900 dark:text-gray-100 px-2 py-1.5 text-sm shadow-sm " +
+  "focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none";
+
+function TimePicker12h({
+  hour,
+  minute,
+  onChange,
+}: {
+  hour: number;
+  minute: number;
+  onChange: (hour: number, minute: number) => void;
+}) {
+  const isAm = hour < 12;
+  const display12 = hour % 12 === 0 ? 12 : hour % 12;
+
+  function setHour12(h12: number) {
+    const h24 = isAm ? (h12 === 12 ? 0 : h12) : h12 === 12 ? 12 : h12 + 12;
+    onChange(h24, minute);
+  }
+  function setAmPm(am: boolean) {
+    let h24 = hour;
+    if (am && hour >= 12) h24 = hour - 12;
+    if (!am && hour < 12) h24 = hour + 12;
+    onChange(h24, minute);
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <select
+        value={display12}
+        onChange={(e) => setHour12(Number(e.target.value))}
+        className={SELECT_CLS}
+      >
+        {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((h) => (
+          <option key={h} value={h}>{h}</option>
+        ))}
+      </select>
+      <span className="text-gray-400 dark:text-gray-500 text-sm font-semibold select-none">:</span>
+      <select
+        value={minute}
+        onChange={(e) => onChange(hour, Number(e.target.value))}
+        className={SELECT_CLS}
+      >
+        {Array.from({ length: 12 }, (_, i) => i * 5).map((m) => (
+          <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
+        ))}
+      </select>
+      <select
+        value={isAm ? "AM" : "PM"}
+        onChange={(e) => setAmPm(e.target.value === "AM")}
+        className={SELECT_CLS}
+      >
+        <option value="AM">AM</option>
+        <option value="PM">PM</option>
+      </select>
     </div>
   );
 }
@@ -95,6 +198,26 @@ interface Release {
 }
 
 const CHANGELOG: Release[] = [
+  {
+    version: "1.3.0",
+    date: "2026-06-12",
+    summary: "Settings, localization, units, and calorie intelligence.",
+    changes: [
+      { type: "new",      text: "App available in English and Spanish — switch anytime in Settings" },
+      { type: "new",      text: "Settings page with sections for appearance, units, language, notifications, tracking, and app info" },
+      { type: "new",      text: "Dark, light, and system (auto) theme support" },
+      { type: "new",      text: "Imperial/metric unit toggle — switch between kcal/kJ and kg/lb" },
+      { type: "new",      text: "Calorie display mode: choose Net Balance, Daily Goal, or Weekly Adjusted" },
+      { type: "new",      text: "Minimum calorie safeguard — prevents targets from dropping below safe levels; toggle in Settings" },
+      { type: "new",      text: "Configurable push notification schedule per meal type" },
+      { type: "new",      text: "Clear history and Delete account actions in Settings › Danger Zone" },
+      { type: "improved", text: "Today, History, and Profile pages adapted for localization and unit preferences" },
+      { type: "fixed",    text: "Profile changes now immediately recalculate today's goals for users outside UTC" },
+      { type: "fixed",    text: "Weekly adjusted calorie suggestion incorrectly used server UTC — now uses your local date" },
+      { type: "fixed",    text: "Minimum calorie safeguard now also applies in Daily Goal display mode" },
+      { type: "fixed",    text: "Negative calorie budget no longer displays as \"0 of −X kcal\"" },
+    ],
+  },
   {
     version: "1.2.0",
     date: "2026-05-15",
@@ -160,10 +283,10 @@ const CHANGELOG: Release[] = [
 ];
 
 const CHANGE_BADGE: Record<ChangeType, { label: string; className: string; dotClassName: string }> = {
-  new:      { label: "New",      className: "bg-indigo-50 text-indigo-700", dotClassName: "bg-indigo-400" },
-  improved: { label: "Improved", className: "bg-blue-50 text-blue-700",    dotClassName: "bg-blue-400"   },
-  fixed:    { label: "Fixed",    className: "bg-green-50 text-green-700",  dotClassName: "bg-green-400"  },
-  removed:  { label: "Removed",  className: "bg-red-50 text-red-600",      dotClassName: "bg-red-400"    },
+  new:      { label: "New",      className: "bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300", dotClassName: "bg-indigo-400" },
+  improved: { label: "Improved", className: "bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300",    dotClassName: "bg-blue-400"   },
+  fixed:    { label: "Fixed",    className: "bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400",  dotClassName: "bg-green-400"  },
+  removed:  { label: "Removed",  className: "bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400",      dotClassName: "bg-red-400"    },
 };
 
 interface ChangelogEntryProps {
@@ -175,22 +298,22 @@ function ChangelogEntry({ release, defaultOpen = false }: ChangelogEntryProps) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden">
+    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-white hover:bg-gray-50 transition-colors text-left"
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
       >
         <div className="flex items-center gap-2.5 min-w-0">
-          <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 flex-shrink-0">
+          <span className="rounded-full bg-indigo-50 dark:bg-indigo-950 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300 flex-shrink-0">
             v{release.version}
           </span>
-          <span className="text-sm font-medium text-gray-900 truncate">
+          <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
             {release.summary}
           </span>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-xs text-gray-400">{release.date}</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">{release.date}</span>
           <svg
             className={`h-3.5 w-3.5 text-gray-400 transition-transform ${open ? "rotate-90" : ""}`}
             viewBox="0 0 24 24"
@@ -206,21 +329,16 @@ function ChangelogEntry({ release, defaultOpen = false }: ChangelogEntryProps) {
       </button>
 
       {open && (
-        <ul className="px-4 pb-4 pt-2 space-y-0 border-t border-gray-100 bg-gray-50/50">
+        <ul className="px-4 pb-4 pt-2 space-y-0 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
           {release.changes.map((item, i) => {
             const badge = CHANGE_BADGE[item.type];
             return (
               <li key={i} className="flex items-center gap-2 text-sm py-2">
-                {/* dot */}
                 <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${badge.dotClassName}`} />
-
-                {/* content */}
-                <span
-                  className={`flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${badge.className}`}
-                >
+                <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${badge.className}`}>
                   {badge.label}
                 </span>
-                <span className="text-gray-700 leading-snug">{item.text}</span>
+                <span className="text-gray-700 dark:text-gray-300 leading-snug">{item.text}</span>
               </li>
             );
           })}
@@ -233,312 +351,512 @@ function ChangelogEntry({ release, defaultOpen = false }: ChangelogEntryProps) {
 /* ─── page ─────────────────────────────────────────────────── */
 
 export default function SettingsPage() {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const { logout } = useAuth();
   /* Appearance */
-  const [theme, setTheme] = useState<"system" | "light" | "dark">("system");
-  const [language, setLanguage] = useState("en");
-  const [compactView, setCompactView] = useState(false);
-  const [showCalorieDecimals, setShowCalorieDecimals] = useState(false);
+  const { theme, setTheme } = useTheme();
+  const { language, setLanguage } = useLanguage();
+
+  /* Units */
+  const { weightUnit, setWeightUnit, energyUnit, setEnergyUnit } = useUnits();
 
   /* Notifications */
   const push = usePushNotifications();
-  const [dailyReminder, setDailyReminder] = useState(true);
-  const [weeklyReport, setWeeklyReport] = useState(false);
-  const [goalAlerts, setGoalAlerts] = useState(true);
-  const [reminderTime, setReminderTime] = useState("08:00");
+  const { schedules, updateSchedule, isSaving } = useNotificationSettings();
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
 
-  /* Units */
-  const [weightUnit, setWeightUnit] = useState<"kg" | "lbs">("kg");
-  const [energyUnit, setEnergyUnit] = useState<"kcal" | "kJ">("kcal");
+  function handlePushToggle(on: boolean) {
+    if (on) {
+      if (push.permission === 'granted') {
+        push.subscribe();
+      } else {
+        const lastDismiss = Number(localStorage.getItem('ac-notification-dismiss') ?? 0);
+        if (Date.now() - lastDismiss > 30 * 24 * 60 * 60 * 1000) {
+          setShowPermissionModal(true);
+        } else {
+          push.subscribe();
+        }
+      }
+    } else {
+      push.unsubscribe();
+    }
+  }
 
-  /* Privacy */
-  const [shareAnonymousData, setShareAnonymousData] = useState(true);
-  const [crashReports, setCrashReports] = useState(true);
+  /* Display */
+  const { mode: calorieMode, setMode: setCalorieMode, isSaving: calorieModeSaving } = useCalorieMode();
+  const [weeklyResetDay, setWeeklyResetDay] = useState("monday");
+
+  /* Tracking */
+  const { enabled: minCalSafeguard, setEnabled: setSafeguardEnabled, isSaving: safeguardSaving } = useSafeguardToggle();
+  const [showSafeguardWarning, setShowSafeguardWarning] = useState(false);
+
+  /* Danger zone */
+  const [showClearHistoryModal, setShowClearHistoryModal] = useState(false);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+
+  const clearHistoryMutation = useMutation({
+    mutationFn: () => userService.clearHistory(),
+    onSuccess: () => {
+      queryClient.clear();
+      setShowClearHistoryModal(false);
+    },
+  });
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: () => userService.deleteAccount(),
+    onSuccess: () => {
+      queryClient.clear();
+      logout();
+    },
+  });
 
   return (
     <div className="max-w-xl mx-auto">
-      {/* ── WIP Banner ── */}
-      <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        <svg className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-          <line x1="12" y1="9" x2="12" y2="13" />
-          <line x1="12" y1="17" x2="12.01" y2="17" />
-        </svg>
-        <p>
-          <span className="font-semibold">Settings is a work in progress</span> — most options here are not functional yet.
-        </p>
-      </div>
+
+      {showPermissionModal && (
+        <NotificationPermissionModal
+          onAllow={() => {
+            setShowPermissionModal(false);
+            push.subscribe();
+          }}
+          onDismiss={() => {
+            setShowPermissionModal(false);
+            localStorage.setItem('ac-notification-dismiss', String(Date.now()));
+          }}
+        />
+      )}
+
+      {showSafeguardWarning && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="safeguard-warning-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4">
+            <div className="flex justify-center">
+              <span className="flex items-center justify-center w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-900/40">
+                <svg className="w-7 h-7 text-amber-600 dark:text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              </span>
+            </div>
+            <div className="text-center">
+              <h2 id="safeguard-warning-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Turn off minimum calories safeguard?
+              </h2>
+              <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400">
+                Your daily adjusted calorie goal may drop below recommended health minimums (1&nbsp;200–1&nbsp;500 kcal). Only disable this if you're working with a medical or nutrition professional.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setShowSafeguardWarning(false); setSafeguardEnabled(false); }}
+              className="w-full rounded-xl bg-amber-600 py-3 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 active:bg-amber-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 transition-colors"
+            >
+              Turn off anyway
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSafeguardWarning(false)}
+              className="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-center transition-colors"
+            >
+              Keep it on
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Clear history confirmation ── */}
+      {showClearHistoryModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="clear-history-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4">
+            <div className="flex justify-center">
+              <span className="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/40">
+                <svg className="w-7 h-7 text-red-600 dark:text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" />
+                </svg>
+              </span>
+            </div>
+            <div className="text-center">
+              <h2 id="clear-history-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Clear all history?
+              </h2>
+              <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400">
+                Every daily log, food entry, and activity record will be permanently deleted. Your profile settings will be kept.
+              </p>
+            </div>
+            {clearHistoryMutation.isError && (
+              <p className="text-xs text-center text-red-500">Something went wrong. Please try again.</p>
+            )}
+            <button
+              type="button"
+              disabled={clearHistoryMutation.isPending}
+              onClick={() => clearHistoryMutation.mutate()}
+              className="w-full rounded-xl bg-red-600 py-3 text-sm font-semibold text-white shadow-sm hover:bg-red-700 active:bg-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {clearHistoryMutation.isPending ? "Clearing…" : "Yes, clear everything"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowClearHistoryModal(false)}
+              className="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-center transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete account confirmation ── */}
+      {showDeleteAccountModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-account-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4">
+            <div className="flex justify-center">
+              <span className="flex items-center justify-center w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/40">
+                <svg className="w-7 h-7 text-red-600 dark:text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                  <line x1="18" y1="8" x2="23" y2="13" /><line x1="23" y1="8" x2="18" y2="13" />
+                </svg>
+              </span>
+            </div>
+            <div className="text-center">
+              <h2 id="delete-account-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Delete your account?
+              </h2>
+              <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400">
+                Your account, all logs, and every piece of data will be permanently erased. This cannot be undone.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 text-center">
+                Type <span className="font-mono font-bold text-red-600">DELETE</span> to confirm
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+                autoCapitalize="characters"
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-center font-mono text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-red-500 focus:ring-1 focus:ring-red-500 focus:outline-none"
+              />
+            </div>
+            {deleteAccountMutation.isError && (
+              <p className="text-xs text-center text-red-500">Something went wrong. Please try again.</p>
+            )}
+            <button
+              type="button"
+              disabled={deleteConfirmText !== "DELETE" || deleteAccountMutation.isPending}
+              onClick={() => deleteAccountMutation.mutate()}
+              className="w-full rounded-xl bg-red-600 py-3 text-sm font-semibold text-white shadow-sm hover:bg-red-700 active:bg-red-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {deleteAccountMutation.isPending ? "Deleting…" : "Delete my account"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowDeleteAccountModal(false)}
+              className="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-center transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-6 sm:space-y-8">
 
-        {/* ── Section 1: Appearance ── */}
-        <SectionCard
-          index={1}
-          title="Appearance"
-          subtitle="Control how the app looks on your device."
+        {/* ── Main settings card ── */}
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm divide-y divide-gray-100 dark:divide-gray-800">
+
+        {/* ── Appearance ── */}
+        <SectionBlock
+          title={t('settings.appearance_title')}
+          subtitle={t('settings.appearance_subtitle')}
           icon={
-            <svg className="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
             </svg>
           }
         >
-          <SettingRow label="Theme" description="Choose between light, dark, or follow your system setting.">
+          <SettingRow label={t('settings.theme_label')} description={t('settings.theme_description')}>
             <select
               value={theme}
               onChange={(e) => setTheme(e.target.value as typeof theme)}
-              className="rounded-md border border-gray-300 px-2.5 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+              className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
             >
-              <option value="system">System</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
+              <option value="system">{t('settings.theme_system')}</option>
+              <option value="light">{t('settings.theme_light')}</option>
+              <option value="dark">{t('settings.theme_dark')}</option>
             </select>
           </SettingRow>
 
-          <SettingRow label="Language" description="The language used throughout the app.">
+          <SettingRow label={t('settings.language_label')} description={t('settings.language_description')}>
             <select
               value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="rounded-md border border-gray-300 px-2.5 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+              onChange={(e) => setLanguage(e.target.value as Language)}
+              className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
             >
-              <option value="en">English</option>
-              <option value="es">Español</option>
-              <option value="fr">Français</option>
-              <option value="de">Deutsch</option>
-              <option value="pt">Português</option>
+              <option value="en">{t('settings.lang_en')}</option>
+              <option value="es">{t('settings.lang_es')}</option>
             </select>
           </SettingRow>
+        </SectionBlock>
 
-          <SettingRow label="Compact view" description="Show more items on screen by reducing spacing.">
-            <Toggle checked={compactView} onChange={setCompactView} />
-          </SettingRow>
-
-          <SettingRow label="Show calorie decimals" description="Display calories with one decimal place.">
-            <Toggle checked={showCalorieDecimals} onChange={setShowCalorieDecimals} />
-          </SettingRow>
-        </SectionCard>
-
-        {/* ── Section 2: Units ── */}
-        <SectionCard
-          index={2}
-          title="Units"
-          subtitle="Choose the measurement units that feel natural to you."
+        {/* ── Units ── */}
+        <SectionBlock
+          title={t('settings.units_title')}
+          subtitle={t('settings.units_subtitle')}
           icon={
-            <svg className="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 3h18v18H3z" /><path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
             </svg>
           }
         >
-          <SettingRow label="Weight" description="Unit used for displaying your body weight.">
-            <div className="flex rounded-lg border border-gray-300 overflow-hidden text-sm font-medium shadow-sm">
-              {(["kg", "lbs"] as const).map((u) => (
-                <button
-                  key={u}
-                  type="button"
-                  onClick={() => setWeightUnit(u)}
-                  className={`px-3 py-1.5 transition-colors ${
-                    weightUnit === u
-                      ? "bg-indigo-600 text-white"
-                      : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  {u}
-                </button>
-              ))}
-            </div>
+          <SettingRow label={t('settings.weight_label')} description={t('settings.weight_description')}>
+            <PillToggle
+              options={[{ key: "kg", label: "kg" }, { key: "lbs", label: "lbs" }]}
+              value={weightUnit}
+              onChange={setWeightUnit}
+            />
           </SettingRow>
 
-          <SettingRow label="Energy" description="Unit used for displaying calorie counts.">
-            <div className="flex rounded-lg border border-gray-300 overflow-hidden text-sm font-medium shadow-sm">
-              {(["kcal", "kJ"] as const).map((u) => (
-                <button
-                  key={u}
-                  type="button"
-                  onClick={() => setEnergyUnit(u)}
-                  className={`px-3 py-1.5 transition-colors ${
-                    energyUnit === u
-                      ? "bg-indigo-600 text-white"
-                      : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  {u}
-                </button>
-              ))}
-            </div>
+          <SettingRow label={t('settings.energy_label')} description={t('settings.energy_description')}>
+            <PillToggle
+              options={[{ key: "kcal", label: "kcal" }, { key: "kJ", label: "kJ" }]}
+              value={energyUnit}
+              onChange={setEnergyUnit}
+            />
           </SettingRow>
-        </SectionCard>
+        </SectionBlock>
 
-        {/* ── Section 3: Notifications ── */}
-        <SectionCard
-          index={3}
-          title="Notifications"
-          subtitle="Decide when and how ArtiCalorias reaches out to you."
+        {/* ── Notifications ── */}
+        <SectionBlock
+          title={t('settings.notifications_title')}
+          subtitle={t('settings.notifications_subtitle')}
           icon={
-            <svg className="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
           }
         >
           <SettingRow
-            label="Push notifications"
+            label={t('settings.push_label')}
             description={
               !push.supported
-                ? "Not supported in this browser."
-                : push.permission === "denied"
-                ? "Blocked by your browser — update site permissions to re-enable."
-                : "Allow ArtiCalorias to send you notifications when installed as an app."
+                ? t('settings.notification_push_unsupported')
+                : push.permission === 'denied'
+                ? t('settings.notification_push_denied')
+                : t('settings.push_description')
             }
           >
             <Toggle
               checked={push.subscribed}
-              disabled={push.loading || !push.supported || push.permission === "denied"}
-              onChange={(on) => (on ? push.subscribe() : push.unsubscribe())}
+              disabled={push.loading || !push.supported || push.permission === 'denied'}
+              onChange={handlePushToggle}
             />
           </SettingRow>
 
           {push.subscribed && (
             <>
-              <SettingRow label="Daily log reminder" description="Get a nudge to log your meals each day.">
-                <Toggle checked={dailyReminder} onChange={setDailyReminder} />
-              </SettingRow>
+              {schedules.map((reminder) => (
+                <Fragment key={reminder.type}>
+                  <SettingRow
+                    label={`${{ breakfast: '🌅', lunch: '☀️', dinner: '🌙' }[reminder.type]} ${t(`settings.reminder_${reminder.type}`)}`}
+                    description={reminder.enabled ? formatLocalTime(reminder.hour, reminder.minute) : t('settings.reminder_off')}
+                  >
+                    <Toggle
+                      checked={reminder.enabled}
+                      disabled={isSaving}
+                      onChange={(on) => updateSchedule(reminder.type, { enabled: on })}
+                    />
+                  </SettingRow>
 
-              {dailyReminder && (
-                <SettingRow label="Reminder time" description="The time you'd like to receive your daily reminder.">
-                  <input
-                    type="time"
-                    value={reminderTime}
-                    onChange={(e) => setReminderTime(e.target.value)}
-                    className="rounded-md border border-gray-300 px-2.5 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                  />
-                </SettingRow>
-              )}
-
-              <SettingRow label="Weekly progress report" description="A summary of your week delivered every Sunday.">
-                <Toggle checked={weeklyReport} onChange={setWeeklyReport} />
-              </SettingRow>
-
-              <SettingRow label="Goal alerts" description="Notify me when I'm close to hitting or exceeding my daily goal.">
-                <Toggle checked={goalAlerts} onChange={setGoalAlerts} />
-              </SettingRow>
+                  {reminder.enabled && (
+                    <SettingRow label="" description={t('settings.reminder_time_label')}>
+                      <TimePicker12h
+                        hour={reminder.hour}
+                        minute={reminder.minute}
+                        onChange={(h, m) => updateSchedule(reminder.type, { hour: h, minute: m })}
+                      />
+                    </SettingRow>
+                  )}
+                </Fragment>
+              ))}
             </>
           )}
-        </SectionCard>
+        </SectionBlock>
 
-        {/* ── Section 4: Privacy & Data ── */}
-        <SectionCard
-          index={4}
-          title="Privacy & data"
-          subtitle="Control what information is shared to help improve the app."
+        {/* ── Display ── */}
+        <SectionBlock
+          title={t('settings.display_title')}
+          subtitle={t('settings.display_subtitle')}
           icon={
-            <svg className="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" />
             </svg>
           }
         >
           <SettingRow
-            label="Share anonymous usage data"
-            description="Help us understand how the app is used — no personal information is ever sent."
+            label={t('settings.calorie_mode_label')}
+            description={t('settings.calorie_mode_description')}
           >
-            <Toggle checked={shareAnonymousData} onChange={setShareAnonymousData} />
-          </SettingRow>
-
-          <SettingRow
-            label="Send crash reports"
-            description="Automatically send reports when something goes wrong so we can fix it faster."
-          >
-            <Toggle checked={crashReports} onChange={setCrashReports} />
-          </SettingRow>
-
-          <div className="pt-3.5">
-            <button
-              type="button"
-              className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+            <select
+              value={calorieMode}
+              disabled={calorieModeSaving}
+              onChange={(e) => setCalorieMode(e.target.value as typeof calorieMode)}
+              className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Download my data →
-            </button>
-            <p className="mt-0.5 text-xs text-gray-400">
-              Request an export of everything ArtiCalorias has stored for your account.
-            </p>
-          </div>
-        </SectionCard>
+              <option value="net">{t('settings.calorie_mode_net')}</option>
+              <option value="goal">{t('settings.calorie_mode_goal')}</option>
+              <option value="adjusted">{t('settings.calorie_mode_adjusted')}</option>
+            </select>
+          </SettingRow>
 
-        {/* ── Section 5: About ── */}
-        <SectionCard
-          index={5}
+          {/* Calorie mode description */}
+          {calorieMode === "net" && (
+            <div className="flex items-start gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-950 px-3 py-2.5 text-xs text-indigo-700 dark:text-indigo-300">
+              <svg className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span><span className="font-semibold">Net Balance</span> — calories eaten minus calories burned through activity. Shows whether you're in a surplus or deficit for the day.</span>
+            </div>
+          )}
+          {calorieMode === "goal" && (
+            <div className="flex items-start gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-950 px-3 py-2.5 text-xs text-indigo-700 dark:text-indigo-300">
+              <svg className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span><span className="font-semibold">Daily Goal</span> — your fixed daily calorie target from your profile. A constant reference regardless of activity or weekly surplus/deficit.</span>
+            </div>
+          )}
+          {calorieMode === "adjusted" && (
+            <div className="flex items-start gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-950 px-3 py-2.5 text-xs text-indigo-700 dark:text-indigo-300">
+              <svg className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span><span className="font-semibold">Weekly Adjusted</span> — your daily goal is shifted up or down based on how over/under you've been so far this week, keeping your weekly total on track.</span>
+            </div>
+          )}
+
+          {calorieMode === "adjusted" && (
+            <SettingRow
+              label="Weekly adjustment resets on"
+              description="The day of the week your weekly calorie balance resets to zero."
+            >
+              <select
+                value={weeklyResetDay}
+                onChange={(e) => setWeeklyResetDay(e.target.value)}
+                className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+              >
+                <option value="monday">Monday</option>
+                <option value="tuesday">Tuesday</option>
+                <option value="wednesday">Wednesday</option>
+                <option value="thursday">Thursday</option>
+                <option value="friday">Friday</option>
+                <option value="saturday">Saturday</option>
+                <option value="sunday">Sunday</option>
+              </select>
+            </SettingRow>
+          )}
+        </SectionBlock>
+
+        {/* ── Tracking ── */}
+        <SectionBlock
+          title={t('settings.tracking_title')}
+          subtitle={t('settings.tracking_subtitle')}
+          icon={
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+          }
+        >
+          <SettingRow
+            label="Minimum calories safeguard"
+            description="Prevents your daily adjusted goal from dropping below a healthy floor. Turn off only if you know what you're doing."
+          >
+            <Toggle
+              checked={minCalSafeguard}
+              disabled={safeguardSaving}
+              onChange={(newVal) => {
+                if (!newVal) {
+                  setShowSafeguardWarning(true);
+                } else {
+                  setSafeguardEnabled(true);
+                }
+              }}
+            />
+          </SettingRow>
+        </SectionBlock>
+
+        {/* ── About ── */}
+        <SectionBlock
           title="About"
           subtitle="Version information and useful links."
           icon={
-            <svg className="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
           }
         >
           <SettingRow label="Version" description="The version of ArtiCalorias you're currently running.">
-            <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
-              1.2.0
+            <span className="rounded-full bg-indigo-50 dark:bg-indigo-950 px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+              1.3.0
             </span>
           </SettingRow>
 
-          <div className="pt-3.5 space-y-2">
-            {[
-              { label: "Privacy policy", href: "#" },
-              { label: "Terms of service", href: "#" },
-              { label: "Open-source licences", href: "#" },
-            ].map(({ label, href }) => (
-              <div key={label}>
-                <a
-                  href={href}
-                  className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
-                >
-                  {label} →
-                </a>
-              </div>
-            ))}
-          </div>
-
-          {/* ── Changelog ── */}
-          <div className="pt-4 border-t border-gray-100 space-y-3">
+          <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3">
             <div>
-              <p className="text-sm font-medium text-gray-900">Changelog</p>
-              <p className="mt-0.5 text-xs text-gray-400">
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Changelog</p>
+              <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
                 What's new in each release — tap a version to expand its notes.
               </p>
             </div>
             <div className="space-y-2">
-              {CHANGELOG.map((release) => (
+              {CHANGELOG.map((release, idx) => (
                 <Fragment key={release.version}>
-                  <ChangelogEntry release={release} defaultOpen={false} />
+                  <ChangelogEntry release={release} defaultOpen={idx === 0} />
                 </Fragment>
               ))}
             </div>
           </div>
-        </SectionCard>
+        </SectionBlock>
+
+        </div>{/* end main settings card */}
 
         {/* ── Danger zone ── */}
-        <div className="rounded-xl border border-red-200 bg-white p-6 sm:p-8 shadow-sm space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-red-100 flex-shrink-0 mt-0.5">
-              <svg className="h-4 w-4 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-            </div>
+        <div className="rounded-xl border border-red-200 dark:border-red-900 bg-white dark:bg-gray-900 p-6 sm:p-8 shadow-sm space-y-4">
+          <div className="flex items-center gap-2">
+            <svg className="h-4 w-4 flex-shrink-0 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
             <div>
-              <h2 className="text-base font-semibold text-gray-900">Danger zone</h2>
-              <p className="mt-0.5 text-xs text-gray-400">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Danger zone</h2>
+              <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
                 These actions are permanent and cannot be undone.
               </p>
             </div>
           </div>
 
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-gray-100 dark:divide-gray-800">
             <SettingRow
-              label="Clear all food log history"
+              label="Clear history"
               description="Permanently delete every daily log entry. Your profile settings are kept."
             >
               <button
                 type="button"
-                className="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                disabled={clearHistoryMutation.isPending}
+                onClick={() => setShowClearHistoryModal(true)}
+                className="rounded-md border border-red-300 dark:border-red-800 px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Clear history
+                {clearHistoryMutation.isPending ? "Clearing…" : "Clear history"}
               </button>
             </SettingRow>
 
@@ -548,9 +866,11 @@ export default function SettingsPage() {
             >
               <button
                 type="button"
-                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500 transition-colors"
+                disabled={deleteAccountMutation.isPending}
+                onClick={() => { setDeleteConfirmText(""); setShowDeleteAccountModal(true); }}
+                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Delete account
+                {deleteAccountMutation.isPending ? "Deleting…" : "Delete account"}
               </button>
             </SettingRow>
           </div>

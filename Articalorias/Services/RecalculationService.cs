@@ -23,7 +23,7 @@ public class RecalculationService : IRecalculationService
     public Task RecalculateFullPipelineAsync(long dailyLogId)
         => RecalculateFullPipelineAsync(dailyLogId, cascade: true, siblingBalances: null);
 
-    private async Task RecalculateFullPipelineAsync(long dailyLogId, bool cascade, IReadOnlyDictionary<long, decimal>? siblingBalances)
+    private async Task RecalculateFullPipelineAsync(long dailyLogId, bool cascade, IReadOnlyDictionary<long, decimal>? siblingBalances, DateOnly? referenceToday = null)
     {
         // ── Step 1: Load DailyLog with all children ──
         var log = await _db.DailyLogs
@@ -31,6 +31,16 @@ public class RecalculationService : IRecalculationService
             .Include(d => d.ActivityEntries)
             .FirstOrDefaultAsync(d => d.DailyLogId == dailyLogId)
             ?? throw new InvalidOperationException("DailyLog not found.");
+
+        // ── Step 1b: Load profile settings for safeguard calculations ──
+        // Loaded once here so both Step 7 (Daily Goal mode) and Step 8 (Weekly Adjusted
+        // mode) share the same values without an extra DB round-trip per step.
+        var profileData = await _db.UserProfiles
+            .Where(p => p.UserId == log.UserId)
+            .Select(p => new { p.BiologicalSex, p.MinCaloriesSafeguardEnabled })
+            .FirstOrDefaultAsync();
+        var biologicalSex = profileData?.BiologicalSex;
+        var safeguardEnabled = profileData?.MinCaloriesSafeguardEnabled ?? true;
 
         // ── Step 2: Recompute food intake totals ──
         log.TotalFoodCaloriesKcal = log.FoodEntries.Sum(f => f.CaloriesKcal);
@@ -82,12 +92,22 @@ public class RecalculationService : IRecalculationService
 
         // ── Step 7: Recompute daily remaining (calories + protein) ──
         log.DailyGoalDeltaKcal = log.NetBalanceKcal - log.SnapshotDailyBaseGoalKcal;
-        log.CaloriesRemainingToDailyTargetKcal =
-            (log.TotalDailyExpenditureKcal + log.SnapshotDailyBaseGoalKcal) - log.TotalFoodCaloriesKcal;
+
+        // Apply the same physiological safeguard to the "Daily Goal" calorie mode.
+        // rawGoalTarget = TDEE + user's deficit/surplus (e.g. 2000 + (-1100) = 900 kcal
+        // for an aggressive -1.00 kg/wk plan — below the 1200/1500 minimum intake floor).
+        // Always floor at 1 kcal so the budget is never <= 0 (prevents negative-budget UI bugs).
+        var rawGoalTarget = log.TotalDailyExpenditureKcal + log.SnapshotDailyBaseGoalKcal;
+        var minIntakeForGoal = CalculateMinimumDailyIntakeKcal(log, biologicalSex);
+        var effectiveGoalTarget = Math.Max(
+            rawGoalTarget,
+            safeguardEnabled ? Math.Max(minIntakeForGoal, 1m) : 1m);
+        log.CaloriesRemainingToDailyTargetKcal = effectiveGoalTarget - log.TotalFoodCaloriesKcal;
+
         log.ProteinRemainingGrams = log.SnapshotProteinGoalGrams - log.TotalProteinGrams;
 
         // ── Step 8: Recompute weekly dynamic context ──
-        await RecalculateWeeklyContext(log, siblingBalances);
+        await RecalculateWeeklyContext(log, siblingBalances, biologicalSex, safeguardEnabled, referenceToday);
 
         log.LastRecalculatedAtUtc = DateTime.UtcNow;
         log.UpdatedAtUtc = DateTime.UtcNow;
@@ -120,7 +140,7 @@ public class RecalculationService : IRecalculationService
             siblingBalancesForCascade[dailyLogId] = log.NetBalanceKcal;
 
             foreach (var sibling in siblings)
-                await RecalculateFullPipelineAsync(sibling.DailyLogId, cascade: false, siblingBalances: siblingBalancesForCascade);
+                await RecalculateFullPipelineAsync(sibling.DailyLogId, cascade: false, siblingBalances: siblingBalancesForCascade, referenceToday: referenceToday);
         }
     }
 
@@ -153,7 +173,11 @@ public class RecalculationService : IRecalculationService
 
         await _db.SaveChangesAsync();
 
-        await RecalculateFullPipelineAsync(log.DailyLogId);
+        // Pass the caller-supplied date as the reference point so the frozen-past-day
+        // guard uses the user's local date instead of the server's UTC clock.
+        // Without this, users in UTC-N timezones after ~(24-N):00 local time would see
+        // today treated as a past day, causing the adjusted budget to be skipped.
+        await RecalculateFullPipelineAsync(log.DailyLogId, cascade: true, siblingBalances: null, referenceToday: date);
     }
 
     public async Task RecalculateAfterDayDeletionAsync(long userId, DateOnly deletedDate, DateOnly weekStart, DateOnly weekEnd, decimal baseDailyGoal)
@@ -176,7 +200,7 @@ public class RecalculationService : IRecalculationService
     //  Step 8 — Weekly context fields on the DailyLog itself
     // ─────────────────────────────────────────────────────
 
-    private async Task RecalculateWeeklyContext(DailyLog log, IReadOnlyDictionary<long, decimal>? siblingBalances)
+    private async Task RecalculateWeeklyContext(DailyLog log, IReadOnlyDictionary<long, decimal>? siblingBalances, string? biologicalSex, bool safeguardEnabled, DateOnly? referenceToday = null)
     {
         // Use the pre-fetched balance snapshot when available (cascade path) to avoid
         // an extra DB round-trip per sibling. Fall back to a fresh query otherwise.
@@ -226,13 +250,8 @@ public class RecalculationService : IRecalculationService
             : log.SnapshotDailyBaseGoalKcal;
 
         // ── Safety floor — never suggest eating below physiologically safe intake ──
-        // BiologicalSex is not snapshotted on DailyLog (effectively immutable),
-        // so we do a single lightweight SELECT from the user's profile.
-        var biologicalSex = await _db.UserProfiles
-            .Where(p => p.UserId == log.UserId)
-            .Select(p => p.BiologicalSex)
-            .FirstOrDefaultAsync();
-
+        // biologicalSex and safeguardEnabled are loaded once in Step 1b of
+        // RecalculateFullPipelineAsync and passed in, avoiding a redundant DB round-trip.
         var minIntakeKcal = CalculateMinimumDailyIntakeKcal(log, biologicalSex);
         // Convert intake floor → net-balance floor (SuggestedDailyAverageRemainingKcal is
         // a net-balance target: negative = deficit, positive = surplus vs. expenditure)
@@ -243,12 +262,22 @@ public class RecalculationService : IRecalculationService
         // Past days that already have a value must keep it frozen — their adjusted budget
         // reflected the week's reality at that point in time and must not be retroactively
         // rewritten when food or activities are changed on any day in the same week.
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        // referenceToday is the user's local date supplied by the caller; falls back to
+        // the server UTC clock for food/activity saves (where timezone ambiguity is fine).
+        var today = referenceToday ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var isPastDay = log.LogDate < today;
         var alreadySet = log.SuggestedDailyAverageRemainingKcal != 0m;
 
+        // Convert "budget >= 1 kcal" into a net-balance floor:
+        // adjusted budget = TDEE + SuggestedDailyAverageRemainingKcal, so
+        // Suggested >= (1 - TDEE) guarantees budget >= 1 kcal unconditionally.
+        // This prevents the "0 of -10 kcal" display bug regardless of safeguard state.
+        var minNetBalanceForDisplay = 1m - log.TotalDailyExpenditureKcal;
+
         if (!isPastDay || !alreadySet)
-            log.SuggestedDailyAverageRemainingKcal = Math.Max(rawSuggested, minNetBalance);
+            log.SuggestedDailyAverageRemainingKcal = Math.Max(
+                safeguardEnabled ? Math.Max(rawSuggested, minNetBalance) : rawSuggested,
+                minNetBalanceForDisplay);
     }
 
     /// <summary>

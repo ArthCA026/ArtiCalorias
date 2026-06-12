@@ -17,6 +17,12 @@ public class UserProfileResponse
     public string? Country { get; set; }
     public bool IsOnboardingCompleted { get; set; }
 
+    // Display preferences
+    public string CalorieDisplayMode { get; set; } = "adjusted";
+
+    // Safety settings
+    public bool MinCaloriesSafeguardEnabled { get; set; } = true;
+
     // Sleep & NEAT fixed daily costs
     public decimal SleepHours { get; set; }
     public decimal NeatHours { get; set; }

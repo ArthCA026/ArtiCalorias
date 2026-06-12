@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Articalorias.Configuration;
 using Articalorias.Data;
+using Articalorias.DTOs.Push;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -14,12 +15,17 @@ public class PushNotificationService : IPushNotificationService
 {
     private readonly AppDbContext _db;
     private readonly VapidSettings _vapid;
+    private readonly MealReminderSettings _reminderDefaults;
     private readonly WebPushClient _client;
 
-    public PushNotificationService(AppDbContext db, IOptions<VapidSettings> vapidOptions)
+    public PushNotificationService(
+        AppDbContext db,
+        IOptions<VapidSettings> vapidOptions,
+        IOptions<MealReminderSettings> reminderOptions)
     {
         _db = db;
         _vapid = vapidOptions.Value;
+        _reminderDefaults = reminderOptions.Value;
         _client = new WebPushClient();
     }
 
@@ -62,13 +68,19 @@ public class PushNotificationService : IPushNotificationService
         }
     }
 
-    public async Task SendToUserAsync(long userId, string title, string body)
+    public async Task SendToUserAsync(long userId, string title, string body, string? tag = null)
     {
         var subscriptions = await _db.PushSubscriptions
             .Where(s => s.UserId == userId)
             .ToListAsync();
 
-        var payload = JsonSerializer.Serialize(new { title, body });
+        var payload = JsonSerializer.Serialize(new
+        {
+            title,
+            body,
+            tag = tag ?? "articalorias-reminder",
+            url = "/",
+        });
         var vapidDetails = new VapidDetails(_vapid.Subject, _vapid.PublicKey, _vapid.PrivateKey);
 
         var stale = new List<PushSubscriptionEntity>();
@@ -98,7 +110,13 @@ public class PushNotificationService : IPushNotificationService
         var subscriptions = await _db.PushSubscriptions.ToListAsync();
         if (subscriptions.Count == 0) return;
 
-        var payload = JsonSerializer.Serialize(new { title, body });
+        var payload = JsonSerializer.Serialize(new
+        {
+            title,
+            body,
+            tag = "articalorias-reminder",
+            url = "/",
+        });
         var vapidDetails = new VapidDetails(_vapid.Subject, _vapid.PublicKey, _vapid.PrivateKey);
 
         var stale = new List<PushSubscriptionEntity>();
@@ -122,4 +140,64 @@ public class PushNotificationService : IPushNotificationService
             await _db.SaveChangesAsync();
         }
     }
+
+    public async Task<List<NotificationScheduleDto>> GetSchedulesAsync(long userId)
+    {
+        var rows = await _db.NotificationSchedules
+            .Where(s => s.UserId == userId)
+            .OrderBy(s => s.Type)
+            .ToListAsync();
+
+        // First-time user: return defaults (disabled) so the frontend shows something sensible
+        if (rows.Count == 0)
+        {
+            return
+            [
+                new NotificationScheduleDto("breakfast", false, 13, 0),
+                new NotificationScheduleDto("lunch",     false, _reminderDefaults.LunchUtcHour,  _reminderDefaults.LunchUtcMinute),
+                new NotificationScheduleDto("dinner",    false, _reminderDefaults.DinnerUtcHour, _reminderDefaults.DinnerUtcMinute),
+            ];
+        }
+
+        return rows.Select(r => new NotificationScheduleDto(
+            r.Type.ToString().ToLower(),
+            r.Enabled,
+            r.HourUtc,
+            r.MinuteUtc
+        )).ToList();
+    }
+
+    public async Task UpsertSchedulesAsync(long userId, List<NotificationScheduleDto> schedules)
+    {
+        foreach (var dto in schedules)
+        {
+            if (!Enum.TryParse<ReminderType>(dto.Type, ignoreCase: true, out var type)) continue;
+
+            var existing = await _db.NotificationSchedules
+                .FirstOrDefaultAsync(s => s.UserId == userId && s.Type == type);
+
+            if (existing is not null)
+            {
+                existing.Enabled = dto.Enabled;
+                existing.HourUtc = dto.HourUtc;
+                existing.MinuteUtc = dto.MinuteUtc;
+                existing.UpdatedAtUtc = DateTime.UtcNow;
+            }
+            else
+            {
+                _db.NotificationSchedules.Add(new NotificationSchedule
+                {
+                    UserId = userId,
+                    Type = type,
+                    Enabled = dto.Enabled,
+                    HourUtc = dto.HourUtc,
+                    MinuteUtc = dto.MinuteUtc,
+                    UpdatedAtUtc = DateTime.UtcNow,
+                });
+            }
+        }
+
+        await _db.SaveChangesAsync();
+    }
 }
+

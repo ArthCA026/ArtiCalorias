@@ -13,6 +13,8 @@ export interface UserProfileResponse {
   autoCalculateProteinGoal: boolean;
   country: string | null;
   isOnboardingCompleted: boolean;
+  calorieDisplayMode: 'net' | 'goal' | 'adjusted';
+  minCaloriesSafeguardEnabled: boolean;
   // Sleep & NEAT
   sleepHours: number;
   neatHours: number;
@@ -31,6 +33,8 @@ export interface UserProfileRequest {
   proteinGoalGrams?: number | null;
   autoCalculateProteinGoal: boolean;
   country?: string | null;
+  calorieDisplayMode: 'net' | 'goal' | 'adjusted';
+  minCaloriesSafeguardEnabled: boolean;
   // Sleep & NEAT
   sleepHours: number;
   neatHours: number;

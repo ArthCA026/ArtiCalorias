@@ -21,4 +21,5 @@ public class User
     public ICollection<ActivityTemplate> ActivityTemplates { get; set; } = [];
     public ICollection<MonthlySummary> MonthlySummaries { get; set; } = [];
     public ICollection<PushSubscription> PushSubscriptions { get; set; } = [];
+    public ICollection<NotificationSchedule> NotificationSchedules { get; set; } = [];
 }

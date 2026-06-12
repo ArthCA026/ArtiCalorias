@@ -22,6 +22,12 @@ public class UserProfile
 
     public string? Country { get; set; }
 
+    // Display preferences
+    public string CalorieDisplayMode { get; set; } = "adjusted";
+
+    // Safety settings
+    public bool MinCaloriesSafeguardEnabled { get; set; } = false;
+
     // Sleep & NEAT fixed daily costs
     public decimal SleepHours { get; set; } = 8.0m;
     public decimal NeatHours { get; set; } = 3.0m;

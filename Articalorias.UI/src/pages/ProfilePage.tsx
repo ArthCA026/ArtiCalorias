@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { profileService } from "@/services/profileService";
 import { dailyLogService } from "@/services/dailyLogService";
 import type { UserProfileRequest, UserProfileResponse } from "@/types";
@@ -7,11 +8,14 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import ErrorMessage from "@/components/ErrorMessage";
 import { extractApiError } from "@/utils/apiError";
 import { kgPerWeekToKcal } from "@/utils/goalUtils";
+import { useUnits } from "@/hooks/useUnits";
+import { weightLabel, energyRateLabel, kgToDisplay, displayToKg, kcalToDisplay, displayToKcal } from "@/utils/units";
 import GoalSelector from "@/components/goal/GoalSelector";
 import { PROTEIN_PRESETS, getAgeProteinMinimum } from "@/config/proteinPresets";
 import ProteinPresetSelector from "@/components/protein/ProteinPresetSelector";
 import type { ProteinPresetId } from "@/config/proteinPresets";
 import { queryKeys } from "@/lib/queryKeys";
+import { toDateString } from "@/utils/format";
 
 type FormState = {
   currentWeightKg: string;
@@ -27,6 +31,8 @@ type FormState = {
   proteinPresetId: string;  // one of ProteinPresetId or "" for custom
   autoCalculateProteinGoal: boolean;
   country: string;
+  calorieDisplayMode: 'net' | 'goal' | 'adjusted';
+  minCaloriesSafeguardEnabled: boolean;
   // Sleep & NEAT
   sleepHours: string;
   neatHours: string;
@@ -37,6 +43,8 @@ const emptyForm: FormState = {
   bmrKcal: "", bodyFatPercent: "", autoCalculateBMR: true, autoCalculateBodyFat: true,
   dailyBaseGoalKcal: String(kgPerWeekToKcal(-0.50)), proteinGoalGrams: "",
   proteinPresetId: "muscle-gain", autoCalculateProteinGoal: true, country: "",
+  calorieDisplayMode: "adjusted",
+  minCaloriesSafeguardEnabled: true,
   sleepHours: "8", neatHours: "3",
 };
 
@@ -76,6 +84,8 @@ function toFormState(data: UserProfileResponse): FormState {
     proteinPresetId: detectProteinPresetId(data),
     autoCalculateProteinGoal: data.autoCalculateProteinGoal,
     country: data.country ?? "",
+    calorieDisplayMode: data.calorieDisplayMode,
+    minCaloriesSafeguardEnabled: data.minCaloriesSafeguardEnabled,
     sleepHours: String(data.sleepHours),
     neatHours: String(data.neatHours),
   };
@@ -95,46 +105,50 @@ function buildRequest(f: FormState): UserProfileRequest {
     proteinGoalGrams: f.proteinGoalGrams ? parseFloat(f.proteinGoalGrams) : null,
     autoCalculateProteinGoal: f.autoCalculateProteinGoal,
     country: f.country || null,
+    calorieDisplayMode: f.calorieDisplayMode,
+    minCaloriesSafeguardEnabled: f.minCaloriesSafeguardEnabled,
     sleepHours: parseFloat(f.sleepHours) || 8,
     neatHours: parseFloat(f.neatHours) || 3,
   };
 }
 
-function validateAll(f: FormState): Record<string, string> {
+function validateAll(f: FormState, t: (key: string) => string): Record<string, string> {
   const errors: Record<string, string> = {};
   const weight = parseFloat(f.currentWeightKg);
   const height = parseFloat(f.heightCm);
-  if (!f.currentWeightKg || isNaN(weight) || weight <= 0) errors.currentWeightKg = "Enter your weight in kg";
-  else if (weight > 500) errors.currentWeightKg = "That weight looks too high";
-  if (!f.heightCm || isNaN(height) || height <= 0) errors.heightCm = "Enter your height in cm";
-  else if (height > 300) errors.heightCm = "That height looks too high";
-  if (!f.age) errors.age = "Enter your age";
-  else { const age = parseInt(f.age); if (age < 1) errors.age = "Too low"; else if (age > 150) errors.age = "Too high"; }
-  if (!f.biologicalSex) errors.biologicalSex = "Select your sex";
+  if (!f.currentWeightKg || isNaN(weight) || weight <= 0) errors.currentWeightKg = t('profile.validation_weight_empty');
+  else if (weight > 500) errors.currentWeightKg = t('profile.validation_weight_high');
+  if (!f.heightCm || isNaN(height) || height <= 0) errors.heightCm = t('profile.validation_height_empty');
+  else if (height > 300) errors.heightCm = t('profile.validation_height_high');
+  if (!f.age) errors.age = t('profile.validation_age_empty');
+  else { const age = parseInt(f.age); if (age < 1) errors.age = t('profile.validation_age_low'); else if (age > 150) errors.age = t('profile.validation_age_high'); }
+  if (!f.biologicalSex) errors.biologicalSex = t('profile.validation_sex_empty');
   if (!f.autoCalculateBMR) {
     const bmr = parseFloat(f.bmrKcal);
-    if (!f.bmrKcal || isNaN(bmr) || bmr <= 0) errors.bmrKcal = "Enter a value, or use the estimate";
-    else if (bmr < 500) errors.bmrKcal = "Too low — typical values are 1,000–4,000 kcal/day";
-    else if (bmr > 10000) errors.bmrKcal = "Too high — typical values are 1,000–4,000 kcal/day";
+    if (!f.bmrKcal || isNaN(bmr) || bmr <= 0) errors.bmrKcal = t('profile.validation_bmr_empty');
+    else if (bmr < 500) errors.bmrKcal = t('profile.validation_bmr_low');
+    else if (bmr > 10000) errors.bmrKcal = t('profile.validation_bmr_high');
   }
   if (!f.autoCalculateBodyFat) {
     const bf = parseFloat(f.bodyFatPercent);
-    if (!f.bodyFatPercent || isNaN(bf)) errors.bodyFatPercent = "Enter a value, or use the estimate";
-    else if (bf < 3) errors.bodyFatPercent = "Too low — minimum is 3%";
-    else if (bf > 60) errors.bodyFatPercent = "Too high — maximum is 60%";
+    if (!f.bodyFatPercent || isNaN(bf)) errors.bodyFatPercent = t('profile.validation_bf_empty');
+    else if (bf < 3) errors.bodyFatPercent = t('profile.validation_bf_low');
+    else if (bf > 60) errors.bodyFatPercent = t('profile.validation_bf_high');
   }
   const sleepH = parseFloat(f.sleepHours);
   const neatH  = parseFloat(f.neatHours);
-  if (isNaN(sleepH) || sleepH < 0 || sleepH > 23) errors.sleepHours = "Enter a value between 0 and 23";
-  if (isNaN(neatH)  || neatH  < 0 || neatH  > 23) errors.neatHours  = "Enter a value between 0 and 23";
+  if (isNaN(sleepH) || sleepH < 0 || sleepH > 23) errors.sleepHours = t('profile.validation_sleep_range');
+  if (isNaN(neatH)  || neatH  < 0 || neatH  > 23) errors.neatHours  = t('profile.validation_neat_range');
   if (!isNaN(sleepH) && !isNaN(neatH) && sleepH + neatH > 23) {
-    errors.sleepHours = "Sleep + NEAT cannot exceed 23 hours";
-    errors.neatHours  = "Sleep + NEAT cannot exceed 23 hours";
+    errors.sleepHours = t('profile.validation_sleep_neat_exceed');
+    errors.neatHours  = t('profile.validation_sleep_neat_exceed');
   }
   return errors;
 }
 
 export default function ProfilePage() {
+  const { t } = useTranslation();
+  const { weightUnit, energyUnit } = useUnits();
   const queryClientInstance = useQueryClient();
   const profileQuery = useQuery({
     queryKey: queryKeys.profile(),
@@ -189,21 +203,22 @@ export default function ProfilePage() {
     setFieldErrors((prev) => { const next = { ...prev }; delete next[field]; return next; });
   }
 
-  /** Fire-and-forget: refreshes today's daily log snapshot after a profile save,
-   * then invalidates the dashboard cache so the Today page reflects the new profile. */
-  function refreshTodaySnapshot() {
-    const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
-    dailyLogService.refreshSnapshot(today).catch(() => {
-      // Non-critical — the user can recalculate manually. Silently ignore.
-    });
-    // Unconditionally invalidate so the Today page and all history months refetch
-    // with up-to-date numbers (profile changes affect calorie/protein calculations).
+  /** Awaits the backend snapshot refresh for today, then invalidates the dashboard
+   * cache so the Today page immediately reflects any profile change. Uses the local
+   * date (not UTC) to match the query key that DashboardPage uses. */
+  async function refreshTodaySnapshot() {
+    const today = toDateString(); // local YYYY-MM-DD — must match queryKeys.dashboard(today)
+    try {
+      await dailyLogService.refreshSnapshot(today);
+    } catch {
+      // Non-critical — snapshot will correct itself on next food/activity log.
+    }
     queryClientInstance.invalidateQueries({ queryKey: queryKeys.dashboard(today) });
     queryClientInstance.invalidateQueries({ queryKey: queryKeys.historyAll() });
   }
 
   async function confirmField(field: keyof FormState) {
-    const errors = validateAll(form);
+    const errors = validateAll(form, t);
     if (Object.keys(errors).length > 0) { setFieldErrors(errors); return; }
     setFieldErrors({});
     setError(null);
@@ -215,16 +230,16 @@ export default function ProfilePage() {
       setOriginal(newForm);
       setDirtyFields((prev) => { const d = new Set(prev); d.delete(field); return d; });
       queryClientInstance.setQueryData(queryKeys.profile(), updated);
-      refreshTodaySnapshot();
+      await refreshTodaySnapshot();
     } catch (err) {
-      setError(extractApiError(err, "Failed to save."));
+      setError(extractApiError(err, t('profile.failed_save')));
     } finally {
       setSavingField(null);
     }
   }
 
   async function saveImmediate(overrideForm: FormState) {
-    const errors = validateAll(overrideForm);
+    const errors = validateAll(overrideForm, t);
     if (Object.keys(errors).length > 0) { setFieldErrors(errors); return; }
     setFieldErrors({});
     setError(null);
@@ -239,9 +254,9 @@ export default function ProfilePage() {
       setOriginal(newForm);
       setDirtyFields(new Set());
       queryClientInstance.setQueryData(queryKeys.profile(), updated);
-      refreshTodaySnapshot();
+      await refreshTodaySnapshot();
     } catch (err) {
-      setError(extractApiError(err, "Failed to save."));
+      setError(extractApiError(err, t('profile.failed_save')));
     } finally {
       setSavingField(null);
     }
@@ -268,105 +283,98 @@ export default function ProfilePage() {
   }, [form.currentWeightKg, form.heightCm, form.age, form.biologicalSex, form.dailyBaseGoalKcal]);
 
   if (profileQuery.isPending) return <LoadingSpinner />;
-  if (profileQuery.isError && form === emptyForm) return <ErrorMessage message="Failed to load profile." />;
+  if (profileQuery.isError && form === emptyForm) return <ErrorMessage message={t('profile.failed_load')} />;
 
   return (
     <div className="space-y-3 w-full min-w-0">
       <div className="space-y-3">
         {error && (
-          <div className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+          <div className="rounded-md bg-red-50 dark:bg-red-900/30 px-4 py-3 text-sm text-red-700 dark:text-red-400">{error}</div>
         )}
 
-        <section className="rounded-xl border border-gray-200 bg-white shadow-sm divide-y divide-gray-100 w-full min-w-0 overflow-x-hidden">
+        <section className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm divide-y divide-gray-100 dark:divide-gray-800 w-full min-w-0 overflow-x-hidden">
 
           {/* ── Basic details ── */}
           <div className="p-4 sm:p-5 space-y-3">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Basic details</h2>
-                <p className="mt-0.5 text-xs text-gray-400">Used to estimate your daily calorie needs.</p>
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{t('profile.section_basic')}</h2>
+                <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{t('profile.section_basic_subtitle')}</p>
               </div>
-              <span className="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-400">
-                Required
+              <span className="shrink-0 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2 py-0.5 text-[10px] font-medium text-gray-400 dark:text-gray-500">
+                {t('profile.required')}
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <FieldWrap
-                label="Weight *"
+            {/* 2×2 metric tile grid */}
+            <div className="grid grid-cols-2 gap-2">
+
+              {/* Weight */}
+              <MetricTile
+                label={t('profile.field_weight')}
+                inputId="field-weight"
+                type="number"
+                step="0.1"
+                inputMode="decimal"
+                value={weightUnit === "lbs" ? String(Math.round(kgToDisplay(parseFloat(form.currentWeightKg) || 0, "lbs") * 10) / 10) : form.currentWeightKg}
+                unit={weightLabel(weightUnit)}
                 dirty={dirtyFields.has("currentWeightKg")}
                 saving={savingField === "currentWeightKg"}
                 error={fieldErrors.currentWeightKg}
+                disabled={isSaving}
+                ariaLabel={t('profile.aria_weight')}
+                onChange={(v) => setField("currentWeightKg", weightUnit === "lbs" ? String(displayToKg(parseFloat(v) || 0, "lbs")) : v)}
                 onConfirm={() => confirmField("currentWeightKg")}
                 onRevert={() => revertField("currentWeightKg")}
-              >
-                <div className="relative mt-1">
-                  <input
-                    type="number" step="0.1" inputMode="decimal"
-                    value={form.currentWeightKg}
-                    onChange={(e) => setField("currentWeightKg", e.target.value)}
-                    disabled={isSaving}
-                    aria-label="Weight in kilograms"
-                    aria-required="true"
-                    className={suffixInputCls(!!fieldErrors.currentWeightKg, dirtyFields.has("currentWeightKg"))}
-                  />
-                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 select-none" aria-hidden="true">kg</span>
-                </div>
-              </FieldWrap>
+              />
 
-              <FieldWrap
-                label="Height *"
+              {/* Height */}
+              <MetricTile
+                label={t('profile.field_height')}
+                inputId="field-height"
+                type="number"
+                step="0.1"
+                inputMode="decimal"
+                value={form.heightCm}
+                unit="cm"
                 dirty={dirtyFields.has("heightCm")}
                 saving={savingField === "heightCm"}
                 error={fieldErrors.heightCm}
+                disabled={isSaving}
+                ariaLabel={t('profile.aria_height')}
+                onChange={(v) => setField("heightCm", v)}
                 onConfirm={() => confirmField("heightCm")}
                 onRevert={() => revertField("heightCm")}
-              >
-                <div className="relative mt-1">
-                  <input
-                    type="number" step="0.1" inputMode="decimal"
-                    value={form.heightCm}
-                    onChange={(e) => setField("heightCm", e.target.value)}
-                    disabled={isSaving}
-                    aria-label="Height in centimetres"
-                    aria-required="true"
-                    className={suffixInputCls(!!fieldErrors.heightCm, dirtyFields.has("heightCm"))}
-                  />
-                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 select-none" aria-hidden="true">cm</span>
-                </div>
-              </FieldWrap>
+              />
 
-              <FieldWrap
-                label="Age *"
+              {/* Age */}
+              <MetricTile
+                label={t('profile.field_age')}
+                inputId="field-age"
+                type="number"
+                step="1"
+                inputMode="numeric"
+                value={form.age}
+                unit="yrs"
                 dirty={dirtyFields.has("age")}
                 saving={savingField === "age"}
                 error={fieldErrors.age}
+                disabled={isSaving}
+                ariaLabel={t('profile.aria_age')}
+                onChange={(v) => setField("age", v)}
                 onConfirm={() => confirmField("age")}
                 onRevert={() => revertField("age")}
-              >
-                <div className="relative mt-1">
-                  <input
-                    type="number" step="1" inputMode="numeric"
-                    value={form.age}
-                    onChange={(e) => setField("age", e.target.value)}
-                    disabled={isSaving}
-                    aria-label="Age in years"
-                    aria-required="true"
-                    className={suffixInputCls(!!fieldErrors.age, dirtyFields.has("age"))}
-                  />
-                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 select-none" aria-hidden="true">yrs</span>
-                </div>
-              </FieldWrap>
+              />
 
-              <FieldWrap
-                label="Sex *"
-                dirty={false}
-                saving={false}
-                error={fieldErrors.biologicalSex}
-                onConfirm={() => {}}
-                onRevert={() => {}}
-              >
-                <div className="relative mt-1">
+              {/* Sex — auto-saves on change, no confirm/revert */}
+              <div className={[
+                "rounded-xl border p-3 transition-colors",
+                fieldErrors.biologicalSex
+                  ? "border-red-300 dark:border-red-700 bg-red-50/40 dark:bg-red-900/10"
+                  : "border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/40",
+              ].join(" ")}>
+                <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{t('profile.field_sex')}</span>
+                <div className="relative mt-2">
                   <select
                     value={form.biologicalSex}
                     onChange={(e) => {
@@ -375,32 +383,31 @@ export default function ProfilePage() {
                       saveImmediate(newForm);
                     }}
                     disabled={isSaving}
-                    aria-label="Biological sex"
+                    aria-label={t('profile.aria_sex')}
                     aria-required="true"
-                    className={selectCls(!!fieldErrors.biologicalSex)}
+                    className="w-full appearance-none bg-transparent border-0 p-0 pr-5 text-2xl font-bold text-gray-900 dark:text-gray-100 focus:ring-0 focus:outline-none disabled:opacity-50"
                   >
                     <option value="">—</option>
-                    <option value="M">Male</option>
-                    <option value="F">Female</option>
+                    <option value="M">{t('common.male')}</option>
+                    <option value="F">{t('common.female')}</option>
                   </select>
-                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400" aria-hidden="true">
-                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
+                  <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center text-gray-400 dark:text-gray-500" aria-hidden="true">
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                   </span>
                 </div>
-              </FieldWrap>
+                {fieldErrors.biologicalSex && (
+                  <p className="mt-1.5 text-[10px] leading-tight text-red-500">{fieldErrors.biologicalSex}</p>
+                )}
+              </div>
+
             </div>
-            <p className="text-xs text-gray-400">
-              These values are used to estimate your baseline calorie needs. You can update them anytime.
-            </p>
           </div>
 
           {/* ── Your goal ── */}
           <div className="p-4 sm:p-5 space-y-3">
             <div>
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Your weight goal</h2>
-              <p className="mt-0.5 text-xs text-gray-400">Choose how fast you want your calorie target to change.</p>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{t('profile.section_goal')}</h2>
+              <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{t('profile.section_goal_subtitle')}</p>
             </div>
 
             <GoalSelector
@@ -417,8 +424,8 @@ export default function ProfilePage() {
           {/* ── Your protein target ── */}
           <div className="p-4 sm:p-5 space-y-3">
             <div>
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Your protein target</h2>
-              <p className="mt-0.5 text-xs text-gray-400">Choose how much protein you want to aim for each day.</p>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{t('profile.section_protein')}</h2>
+              <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{t('profile.section_protein_subtitle')}</p>
             </div>
 
             <ProteinPresetSelector
@@ -454,24 +461,24 @@ export default function ProfilePage() {
           {/* ── Personalization ── */}
           <div className="p-4 sm:p-5 space-y-3">
             <div>
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Personalization</h2>
-              <p className="mt-0.5 text-xs text-gray-400">Optional details that help the app recognize your food context.</p>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{t('profile.section_personalization')}</h2>
+              <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{t('profile.section_personalization_subtitle')}</p>
             </div>
 
             <FieldWrap
-              label={<>Country <span className="text-gray-400 font-normal">(optional)</span></>}
+              label={<>{t('profile.field_country_optional')}</>}
               dirty={dirtyFields.has("country")}
               saving={savingField === "country"}
               onConfirm={() => confirmField("country")}
               onRevert={() => revertField("country")}
-              hint="Helps recognize local foods, brands, and portions."
+              hint={t('profile.country_hint')}
             >
               <input
                 type="text"
                 value={form.country}
                 onChange={(e) => setField("country", e.target.value)}
                 disabled={isSaving}
-                placeholder="e.g. Mexico, Spain, USA"
+                placeholder={t('profile.country_placeholder')}
                 className={fieldCls(false, dirtyFields.has("country"))}
               />
             </FieldWrap>
@@ -480,9 +487,9 @@ export default function ProfilePage() {
           {/* ── Sleep & NEAT ── */}
           <div className="p-4 sm:p-5 space-y-3">
             <div>
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Sleep &amp; NEAT</h2>
-              <p className="mt-0.5 text-xs text-gray-400">
-                Daily hours reserved for sleep and non-exercise activity (NEAT). Both reduce idle time and contribute their own calorie estimates.
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{t('profile.section_sleep')}</h2>
+              <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+                {t('profile.section_sleep_subtitle')}
               </p>
             </div>
 
@@ -492,7 +499,7 @@ export default function ProfilePage() {
               if (!isNaN(sh) && !isNaN(nh) && sh + nh > 23) {
                 return (
                   <p className="text-xs text-amber-500">
-                    Sleep + NEAT total {(sh + nh).toFixed(1)}h — combined cannot exceed 23 hours.
+                    {t('profile.sleep_neat_warning', { n: (sh + nh).toFixed(1) })}
                   </p>
                 );
               }
@@ -500,7 +507,7 @@ export default function ProfilePage() {
             })()}
 
             <FieldWrap
-              label="Sleep hours"
+              label={t('profile.sleep_hours_label')}
               dirty={dirtyFields.has("sleepHours")}
               saving={savingField === "sleepHours"}
               onConfirm={() => confirmField("sleepHours")}
@@ -516,18 +523,18 @@ export default function ProfilePage() {
                   disabled={isSaving}
                   className={suffixInputCls(!!fieldErrors.sleepHours, dirtyFields.has("sleepHours"))}
                 />
-                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400">hrs</span>
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 dark:text-gray-500">{t('common.hrs')}</span>
               </div>
             </FieldWrap>
 
             <FieldWrap
-              label="NEAT hours"
+              label={t('profile.neat_hours_label')}
               dirty={dirtyFields.has("neatHours")}
               saving={savingField === "neatHours"}
               onConfirm={() => confirmField("neatHours")}
               onRevert={() => revertField("neatHours")}
               error={fieldErrors.neatHours}
-              hint="Non-exercise activity thermogenesis — daily movement outside formal exercise."
+              hint={t('profile.neat_hint')}
             >
               <div className="relative">
                 <input
@@ -538,7 +545,7 @@ export default function ProfilePage() {
                   disabled={isSaving}
                   className={suffixInputCls(!!fieldErrors.neatHours, dirtyFields.has("neatHours"))}
                 />
-                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400">hrs</span>
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-400 dark:text-gray-500">{t('common.hrs')}</span>
               </div>
             </FieldWrap>
           </div>
@@ -547,8 +554,8 @@ export default function ProfilePage() {
           <div className="p-4 sm:p-5 space-y-3">
             <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
               <div>
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Advanced estimates</h2>
-                <p className="mt-0.5 text-xs text-gray-400">Calculated automatically. Edit only if you know your measured values.</p>
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{t('profile.section_advanced')}</h2>
+                <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{t('profile.section_advanced_subtitle')}</p>
               </div>
               <button
                 type="button"
@@ -560,19 +567,19 @@ export default function ProfilePage() {
                 <svg className={`h-3.5 w-3.5 transition-transform ${showAdvanced ? "rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
-                {showAdvanced ? "Hide advanced estimates" : "Show advanced estimates"}
+                {showAdvanced ? t('profile.advanced_hide') : t('profile.advanced_show')}
               </button>
             </div>
 
             {showAdvanced && (
-              <div id="advanced-estimates-content" className="divide-y divide-gray-100 rounded-lg border border-gray-100 w-full min-w-0 overflow-x-hidden">
+              <div id="advanced-estimates-content" className="divide-y divide-gray-100 dark:divide-gray-800 rounded-lg border border-gray-100 dark:border-gray-800 w-full min-w-0 overflow-x-hidden">
                 <CalculatedEstimateRow
-                  label="Calories burned at rest"
-                  explanation="Your baseline burn before daily movement or exercise."
+                  label={t('profile.bmr_label')}
+                  explanation={t('profile.bmr_explanation')}
                   value={
                     !form.autoCalculateBMR
-                      ? (form.bmrKcal ? `${parseFloat(form.bmrKcal).toLocaleString()} kcal/day` : null)
-                      : (estimate ? `${estimate.bmr.toLocaleString()} kcal/day` : null)
+                      ? (form.bmrKcal ? `${Math.round(kcalToDisplay(parseFloat(form.bmrKcal), energyUnit)).toLocaleString()} ${energyRateLabel(energyUnit)}` : null)
+                      : (estimate ? `${Math.round(kcalToDisplay(estimate.bmr, energyUnit)).toLocaleString()} ${energyRateLabel(energyUnit)}` : null)
                   }
                   isCustom={!form.autoCalculateBMR}
                   disabled={isSaving}
@@ -588,10 +595,10 @@ export default function ProfilePage() {
                   }}
                   inputStep="1"
                   inputMode="numeric"
-                  inputValue={form.bmrKcal}
-                  inputPlaceholder="e.g. 1700"
-                  unit="kcal/day"
-                  onInputChange={(v) => setField("bmrKcal", v)}
+                  inputValue={energyUnit === "kJ" ? String(Math.round(kcalToDisplay(parseFloat(form.bmrKcal) || 0, "kJ"))) : form.bmrKcal}
+                  inputPlaceholder={t('profile.bmr_placeholder')}
+                  unit={energyRateLabel(energyUnit)}
+                  onInputChange={(v) => setField("bmrKcal", energyUnit === "kJ" ? String(displayToKcal(parseFloat(v) || 0, "kJ")) : v)}
                   isDirty={dirtyFields.has("bmrKcal")}
                   isSaving={savingField === "bmrKcal"}
                   error={fieldErrors.bmrKcal}
@@ -600,8 +607,8 @@ export default function ProfilePage() {
                 />
 
                 <CalculatedEstimateRow
-                  label="Body fat"
-                  explanation="Estimated from your profile details."
+                  label={t('profile.body_fat_label')}
+                  explanation={t('profile.body_fat_explanation')}
                   value={
                     !form.autoCalculateBodyFat
                       ? (form.bodyFatPercent ? `${parseFloat(form.bodyFatPercent).toFixed(1)}%` : null)
@@ -622,7 +629,7 @@ export default function ProfilePage() {
                   inputStep="0.1"
                   inputMode="decimal"
                   inputValue={form.bodyFatPercent}
-                  inputPlaceholder="e.g. 25"
+                  inputPlaceholder={t('profile.body_fat_placeholder')}
                   unit="%"
                   onInputChange={(v) => setField("bodyFatPercent", v)}
                   isDirty={dirtyFields.has("bodyFatPercent")}
@@ -678,6 +685,7 @@ function CalculatedEstimateRow({
   inputStep, inputMode, inputValue, inputPlaceholder, unit,
   onInputChange, isDirty, isSaving, error, onConfirm, onRevert,
 }: CalculatedEstimateRowProps) {
+  const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
 
   // Close the edit panel if the field is switched back to auto by the parent.
@@ -709,18 +717,18 @@ function CalculatedEstimateRow({
           <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-4">
             {/* Col 1: label + explanation */}
             <div className="flex-1 min-w-0">
-              <span className="text-xs font-medium text-gray-700">{label}</span>
-              <span className="mt-0.5 block text-[11px] text-gray-400 sm:mt-0 sm:inline sm:ml-1.5">{explanation}</span>
+              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{label}</span>
+              <span className="mt-0.5 block text-[11px] text-gray-400 dark:text-gray-500 sm:mt-0 sm:inline sm:ml-1.5">{explanation}</span>
             </div>
 
             {/* Mobile row 2: value + badge side-by-side; desktop: separate cols */}
             <div className="flex items-center gap-2 sm:contents">
               {/* Col 2: value */}
               <div className="sm:w-40 sm:shrink-0 sm:text-right">
-                <span className="text-sm font-semibold text-gray-800">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
                   {value != null
                     ? <>{isCustom ? "" : "~"}{value}</>
-                    : <span className="text-xs font-normal text-gray-400">—</span>
+                    : <span className="text-xs font-normal text-gray-400 dark:text-gray-500">—</span>
                   }
                 </span>
               </div>
@@ -730,10 +738,10 @@ function CalculatedEstimateRow({
                 <span className={[
                   "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none",
                   isCustom
-                    ? "border-amber-200 bg-amber-50 text-amber-700"
-                    : "border-indigo-100 bg-indigo-50 text-indigo-600",
+                    ? "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400"
+                    : "border-indigo-100 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400",
                 ].join(" ")}>
-                  {isCustom ? "Custom" : "Estimated"}
+                  {isCustom ? t('profile.badge_custom') : t('profile.badge_estimated')}
                 </span>
               </div>
             </div>
@@ -748,15 +756,15 @@ function CalculatedEstimateRow({
                     onClick={() => setIsEditing(true)}
                     className="text-xs font-medium text-indigo-600 transition-colors hover:text-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-50"
                   >
-                    Edit
+                    {t('common.edit')}
                   </button>
                   <button
                     type="button"
                     disabled={disabled}
                     onClick={onRevertToAuto}
-                    className="text-xs text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-50"
+                    className="text-xs text-gray-400 dark:text-gray-500 transition-colors hover:text-gray-600 dark:hover:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-50"
                   >
-                    Use estimate
+                    {t('profile.use_estimate')}
                   </button>
                 </div>
               ) : (
@@ -766,7 +774,7 @@ function CalculatedEstimateRow({
                   onClick={handleUseOwn}
                   className="text-xs font-medium text-indigo-600 transition-colors hover:text-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-50"
                 >
-                  Use my own
+                  {t('profile.use_own')}
                 </button>
               )}
             </div>
@@ -777,7 +785,7 @@ function CalculatedEstimateRow({
       {/* Edit panel — shown while editing */}
       {isEditing && (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-gray-700">{label}</p>
+          <p className="text-xs font-medium text-gray-700 dark:text-gray-300">{label}</p>
           <div className="relative">
             <input
               // eslint-disable-next-line jsx-a11y/no-autofocus
@@ -790,18 +798,18 @@ function CalculatedEstimateRow({
               disabled={disabled || isSaving}
               placeholder={inputPlaceholder}
               className={[
-                "block w-full rounded-md border bg-white px-3 py-2 text-sm text-gray-900 transition-colors focus:outline-none",
-                "disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400",
+                "block w-full rounded-md border bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 transition-colors focus:outline-none",
+                "disabled:cursor-not-allowed disabled:bg-gray-50 dark:disabled:bg-gray-900 disabled:text-gray-400 dark:disabled:text-gray-500",
                 unit ? "pr-16" : "pr-3",
                 error
                   ? "border-red-300 hover:border-red-400 focus:border-red-400 focus:ring-2 focus:ring-red-400/20"
                   : isDirty
-                    ? "border-indigo-300 bg-indigo-50/40 hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                    : "border-gray-200 hover:border-gray-300 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20",
+                    ? "border-indigo-300 dark:border-indigo-600 bg-indigo-50/40 dark:bg-indigo-900/20 hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20",
               ].join(" ")}
             />
             {unit && (
-              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center select-none text-xs text-gray-400">
+              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center select-none text-xs text-gray-400 dark:text-gray-500">
                 {unit}
               </span>
             )}
@@ -814,24 +822,24 @@ function CalculatedEstimateRow({
               onClick={handleConfirm}
               className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-50"
             >
-              {isSaving ? "Saving\u2026" : "Save"}
+              {isSaving ? t('common.saving') : t('common.save')}
             </button>
             <button
               type="button"
               disabled={disabled || isSaving}
               onClick={handleRevert}
-              className="text-xs text-gray-500 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 disabled:opacity-50"
+              className="text-xs text-gray-500 dark:text-gray-400 transition-colors hover:text-gray-700 dark:hover:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 disabled:opacity-50"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <span className="flex-1" />
             <button
               type="button"
               disabled={disabled || isSaving}
               onClick={onRevertToAuto}
-              className="text-xs text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-50"
+              className="text-xs text-gray-400 dark:text-gray-500 transition-colors hover:text-gray-600 dark:hover:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-50"
             >
-              ← Use estimate
+              {t('profile.revert_auto')}
             </button>
           </div>
         </div>
@@ -841,25 +849,18 @@ function CalculatedEstimateRow({
 }
 
 function fieldCls(hasError: boolean, isDirty: boolean): string {
-  const base = "mt-1 block w-full rounded-md border bg-white px-3 py-2 text-sm text-gray-900 transition-colors focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400";
+  const base = "mt-1 block w-full rounded-md border bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 transition-colors focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-50 dark:disabled:bg-gray-900 disabled:text-gray-400 dark:disabled:text-gray-500";
   if (hasError) return `${base} border-red-300 hover:border-red-400 focus:border-red-400 focus:ring-2 focus:ring-red-400/20`;
-  if (isDirty)  return `${base} border-indigo-300 bg-indigo-50/40 hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20`;
-  return `${base} border-gray-200 hover:border-gray-300 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20`;
+  if (isDirty)  return `${base} border-indigo-300 dark:border-indigo-600 bg-indigo-50/40 dark:bg-indigo-900/20 hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20`;
+  return `${base} border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20`;
 }
 
 // Same as fieldCls but without mt-1 (margin lives on the wrapper) and with pr-10 for unit suffix
 function suffixInputCls(hasError: boolean, isDirty: boolean): string {
-  const base = "block w-full rounded-md border bg-white px-3 py-2 pr-10 text-sm text-gray-900 transition-colors focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400";
+  const base = "block w-full rounded-md border bg-white dark:bg-gray-800 px-3 py-2 pr-10 text-sm text-gray-900 dark:text-gray-100 transition-colors focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-50 dark:disabled:bg-gray-900 disabled:text-gray-400 dark:disabled:text-gray-500";
   if (hasError) return `${base} border-red-300 hover:border-red-400 focus:border-red-400 focus:ring-2 focus:ring-red-400/20`;
-  if (isDirty)  return `${base} border-indigo-300 bg-indigo-50/40 hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20`;
-  return `${base} border-gray-200 hover:border-gray-300 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20`;
-}
-
-// For the Sex <select>: no mt-1 (wrapper handles it), appearance-none, pr-8 for custom chevron
-function selectCls(hasError: boolean): string {
-  const base = "block w-full appearance-none rounded-md border bg-white px-3 py-2 pr-8 text-sm text-gray-900 transition-colors focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400";
-  if (hasError) return `${base} border-red-300 hover:border-red-400 focus:border-red-400 focus:ring-2 focus:ring-red-400/20`;
-  return `${base} border-gray-200 hover:border-gray-300 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20`;
+  if (isDirty)  return `${base} border-indigo-300 dark:border-indigo-600 bg-indigo-50/40 dark:bg-indigo-900/20 hover:border-indigo-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20`;
+  return `${base} border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20`;
 }
 
 interface FieldWrapProps {
@@ -874,37 +875,112 @@ interface FieldWrapProps {
 }
 
 function FieldWrap({ label, dirty, saving, error, hint, onConfirm, onRevert, children }: FieldWrapProps) {
+  const { t } = useTranslation();
   return (
     <div>
-      {label && <label className="block text-xs font-medium text-gray-600">{label}</label>}
-      <div className="flex items-start gap-1.5">
-        <div className="flex-1 min-w-0">{children}</div>
-        {/* Always reserve 2 button slots so input width never shifts */}
-        <div className={`flex gap-1 mt-1 shrink-0 transition-opacity ${dirty && !saving ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-          <button
-            type="button"
-            onClick={onConfirm}
-            title="Save change"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-green-600 hover:bg-green-50 hover:text-green-700 transition-colors focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-1 focus-visible:outline-none"
-          >
-            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          </button>
+      {label && <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{label}</label>}
+      {children}
+      {saving ? (
+        <p className="mt-1.5 text-xs text-indigo-400">{t('common.saving')}</p>
+      ) : dirty ? (
+        <div className="mt-2 grid grid-cols-2 gap-1.5">
           <button
             type="button"
             onClick={onRevert}
-            title="Revert change"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-1 focus-visible:outline-none"
+            className="rounded-lg bg-gray-100 dark:bg-gray-700 py-2.5 text-sm font-semibold text-gray-600 dark:text-gray-300 transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
           >
-            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-lg bg-indigo-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-600 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+          >
+            {t('common.save')}
           </button>
         </div>
+      ) : null}
+      {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
+      {hint && !dirty && !error && <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">{hint}</p>}
+    </div>
+  );
+}
+
+// ── MetricTile ───────────────────────────────────────────────────────────
+
+interface MetricTileProps {
+  label: string;
+  inputId: string;
+  type: string;
+  step: string;
+  inputMode: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  value: string;
+  unit: string;
+  dirty: boolean;
+  saving: boolean;
+  error?: string;
+  disabled: boolean;
+  ariaLabel: string;
+  onChange: (v: string) => void;
+  onConfirm: () => void;
+  onRevert: () => void;
+}
+
+function MetricTile({
+  label, inputId, type, step, inputMode, value, unit,
+  dirty, saving, error, disabled, ariaLabel,
+  onChange, onConfirm, onRevert,
+}: MetricTileProps) {
+  const { t } = useTranslation();
+  const borderCls = error
+    ? "border-red-300 dark:border-red-700 bg-red-50/40 dark:bg-red-900/10"
+    : dirty
+      ? "border-indigo-300 dark:border-indigo-600 bg-indigo-50/40 dark:bg-indigo-900/20"
+      : "border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/40";
+
+  return (
+    <div className={`rounded-xl border p-3 transition-colors ${borderCls}`}>
+      <label htmlFor={inputId} className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+        {label}
+      </label>
+      <div className="mt-2 flex items-baseline gap-1">
+        <input
+          id={inputId}
+          type={type}
+          step={step}
+          inputMode={inputMode}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          aria-label={ariaLabel}
+          aria-required="true"
+          placeholder="—"
+          className="min-w-0 flex-1 bg-transparent border-0 p-0 text-2xl font-bold text-gray-900 dark:text-gray-100 focus:ring-0 focus:outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
+        <span className="shrink-0 text-xs font-medium text-gray-400 dark:text-gray-500" aria-hidden="true">{unit}</span>
       </div>
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
-      {hint && !error && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+      {error ? (
+        <p className="mt-2 text-[10px] leading-tight text-red-500">{error}</p>
+      ) : saving ? (
+        <p className="mt-2 text-[10px] text-indigo-400">{t('common.saving')}</p>
+      ) : dirty ? (
+        <div className="mt-3 grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            onClick={onRevert}
+            className="rounded-lg bg-gray-100 dark:bg-gray-700 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300 transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-lg bg-indigo-500 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-600 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+          >
+            {t('common.save')}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

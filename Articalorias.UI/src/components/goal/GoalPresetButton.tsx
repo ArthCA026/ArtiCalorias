@@ -31,8 +31,8 @@ function GoalPresetButton({ preset, isSelected, isAdjacent, isLeftOfSelected: _i
         isSelected
           ? "bg-indigo-600 text-white font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
           : isAdjacent
-          ? "bg-indigo-50 text-indigo-500"
-          : "bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700",
+          ? "bg-indigo-50 dark:bg-indigo-950 text-indigo-500 dark:text-indigo-400"
+          : "bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200",
         disabled ? "pointer-events-none opacity-50" : "",
       ]
         .filter(Boolean)
