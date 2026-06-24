@@ -50,6 +50,12 @@ public static class ServiceCollectionExtensions
         // OpenAI activity parsing
         services.AddScoped<IActivityParsingService, ActivityParsingService>();
 
+        // Food templates (favorites)
+        services.AddScoped<IFoodTemplateService, FoodTemplateService>();
+
+        // Favorite routines (P3)
+        services.AddScoped<IFavoriteRoutineService, FavoriteRoutineService>();
+
         // Push notifications
         services.Configure<VapidSettings>(configuration.GetSection(VapidSettings.SectionName));
         services.AddScoped<IPushNotificationService, PushNotificationService>();

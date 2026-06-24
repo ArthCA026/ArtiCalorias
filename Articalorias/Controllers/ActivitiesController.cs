@@ -16,12 +16,14 @@ public class ActivitiesController : ControllerBase
     private readonly IActivityService _activityService;
     private readonly IDailyLogService _dailyLogService;
     private readonly IActivityParsingService _activityParsing;
+    private readonly IFavoriteRoutineService _routineService;
 
-    public ActivitiesController(IActivityService activityService, IDailyLogService dailyLogService, IActivityParsingService activityParsing)
+    public ActivitiesController(IActivityService activityService, IDailyLogService dailyLogService, IActivityParsingService activityParsing, IFavoriteRoutineService routineService)
     {
         _activityService = activityService;
         _dailyLogService = dailyLogService;
         _activityParsing = activityParsing;
+        _routineService = routineService;
     }
 
     // ── Daily activity entries ──
@@ -94,6 +96,9 @@ public class ActivitiesController : ControllerBase
     {
         var userId = GetUserId();
 
+        if (request.TemplateScope != "SYSTEM" &&
+            (!request.DefaultDurationMinutes.HasValue || !request.DefaultMET.HasValue))
+            return BadRequest(new { message = "Duration and MET value are required for user activity templates." });
         var template = new ActivityTemplate
         {
             UserId = request.TemplateScope == "SYSTEM" ? null : userId,
@@ -112,9 +117,11 @@ public class ActivitiesController : ControllerBase
     [HttpPut("templates/{templateId}")]
     public async Task<IActionResult> UpdateTemplate(long templateId, [FromBody] ActivityTemplateRequest request)
     {
+        var userId = GetUserId();
         var template = new ActivityTemplate
         {
             ActivityTemplateId = templateId,
+            UserId = userId,
             TemplateName = request.TemplateName,
             AutoAddToNewDay = request.AutoAddToNewDay,
             DefaultDurationMinutes = request.DefaultDurationMinutes,
@@ -122,14 +129,26 @@ public class ActivitiesController : ControllerBase
         };
 
         var updated = await _activityService.UpdateTemplateAsync(template);
+        if (updated is null) return NotFound();
         return Ok(MapTemplateToResponse(updated));
     }
 
     [HttpDelete("templates/{templateId}")]
-    public async Task<IActionResult> DeleteTemplate(long templateId)
+    public async Task<IActionResult> DeleteTemplate(long templateId, CancellationToken ct)
     {
-        await _activityService.DeleteTemplateAsync(templateId);
+        var userId = GetUserId();
+        await _routineService.RemoveItemsByActivityTemplateAsync(templateId, userId, ct);
+        var deleted = await _activityService.DeleteTemplateAsync(templateId, userId);
+        if (!deleted) return NotFound();
         return NoContent();
+    }
+
+    [HttpGet("templates/{templateId}/routines")]
+    public async Task<IActionResult> GetTemplateRoutines(long templateId, CancellationToken ct)
+    {
+        var userId = GetUserId();
+        var names = await _routineService.GetRoutineNamesByActivityTemplateAsync(templateId, userId, ct);
+        return Ok(names);
     }
 
     // ── AI activity parsing (proposes structured data, does NOT save) ──

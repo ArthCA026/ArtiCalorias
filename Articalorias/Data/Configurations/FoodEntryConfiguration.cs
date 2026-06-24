@@ -21,7 +21,6 @@ public class FoodEntryConfiguration : IEntityTypeConfiguration<FoodEntry>
         builder.Property(f => f.CarbsGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
         builder.Property(f => f.AlcoholGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
 
-        builder.Property(f => f.SourceType).HasMaxLength(20).IsUnicode(false).IsRequired();
         builder.Property(f => f.SortOrder).HasDefaultValue(0);
         builder.Property(f => f.Notes).HasMaxLength(500);
 
@@ -36,5 +35,12 @@ public class FoodEntryConfiguration : IEntityTypeConfiguration<FoodEntry>
                .HasForeignKey(f => f.DailyLogId)
                .HasConstraintName("FK_FoodEntry_DailyLog")
                .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Property(f => f.FoodTemplateId);
+        builder.HasOne(f => f.FoodTemplate)
+               .WithMany(t => t.FoodEntries)
+               .HasForeignKey(f => f.FoodTemplateId)
+               .HasConstraintName("FK_FoodEntry_FoodTemplate")
+               .OnDelete(DeleteBehavior.SetNull);
     }
 }

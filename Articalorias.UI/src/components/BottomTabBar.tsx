@@ -22,11 +22,14 @@ const tabs: TabItem[] = [
     ),
   },
   {
-    to: '/activities',
-    labelKey: 'nav.activities',
+    to: '/favorites',
+    labelKey: 'nav.favorites',
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+        <rect x="2" y="2" width="20" height="20" rx="2" />
+        <polygon points="12,4 13.2,7.4 16.8,7.5 13.9,9.6 15,13 12,11 9,13 10.1,9.6 7.2,7.5 10.8,7.4" />
+        <line x1="5" y1="16.5" x2="19" y2="16.5" />
+        <line x1="5" y1="19.5" x2="14" y2="19.5" />
       </svg>
     ),
   },

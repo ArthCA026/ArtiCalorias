@@ -13,6 +13,9 @@ public class AppDbContext : DbContext
     public DbSet<FoodEntry> FoodEntries => Set<FoodEntry>();
     public DbSet<ActivityTemplate> ActivityTemplates => Set<ActivityTemplate>();
     public DbSet<ActivityEntry> ActivityEntries => Set<ActivityEntry>();
+    public DbSet<FoodTemplate> FoodTemplates => Set<FoodTemplate>();
+    public DbSet<FavoriteRoutine> FavoriteRoutines => Set<FavoriteRoutine>();
+    public DbSet<FavoriteRoutineItem> FavoriteRoutineItems => Set<FavoriteRoutineItem>();
     public DbSet<MonthlySummary> MonthlySummaries => Set<MonthlySummary>();
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
     public DbSet<NotificationSchedule> NotificationSchedules => Set<NotificationSchedule>();

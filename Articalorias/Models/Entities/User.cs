@@ -19,6 +19,8 @@ public class User
     public UserProfile? UserProfile { get; set; }
     public ICollection<DailyLog> DailyLogs { get; set; } = [];
     public ICollection<ActivityTemplate> ActivityTemplates { get; set; } = [];
+    public ICollection<FoodTemplate> FoodTemplates { get; set; } = [];
+    public ICollection<FavoriteRoutine> FavoriteRoutines { get; set; } = [];
     public ICollection<MonthlySummary> MonthlySummaries { get; set; } = [];
     public ICollection<PushSubscription> PushSubscriptions { get; set; } = [];
     public ICollection<NotificationSchedule> NotificationSchedules { get; set; } = [];

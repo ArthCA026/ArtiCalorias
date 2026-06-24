@@ -14,7 +14,7 @@ import OnboardingPage from '@/pages/OnboardingPage';
 import DashboardPage from '@/pages/DashboardPage';
 import HistoryPage from '@/pages/HistoryPage';
 import ProfilePage from '@/pages/ProfilePage';
-import ActivitiesPage from '@/pages/ActivitiesPage';
+import FavoritesPage from '@/pages/FavoritesPage';
 import SettingsPage from '@/pages/SettingsPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 
@@ -57,7 +57,8 @@ const router = createBrowserRouter([
           { path: '/history', element: <HistoryPage /> },
           { path: '/history/:date', element: <HistoryPage /> },
           { path: '/profile', element: <ProfilePage /> },
-          { path: '/activities', element: <ActivitiesPage /> },
+          { path: '/favorites', element: <FavoritesPage /> },
+          { path: '/activities', element: <Navigate replace to="/favorites" /> },
           { path: '/settings', element: <SettingsPage /> },
         ],
       },

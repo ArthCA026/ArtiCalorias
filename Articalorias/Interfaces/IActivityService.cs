@@ -11,6 +11,6 @@ public interface IActivityService
 
     Task<IReadOnlyList<ActivityTemplate>> GetTemplatesAsync(long? userId);
     Task<ActivityTemplate> CreateTemplateAsync(ActivityTemplate template);
-    Task<ActivityTemplate> UpdateTemplateAsync(ActivityTemplate template);
-    Task DeleteTemplateAsync(long activityTemplateId);
+    Task<ActivityTemplate?> UpdateTemplateAsync(ActivityTemplate template);
+    Task<bool> DeleteTemplateAsync(long activityTemplateId, long userId);
 }

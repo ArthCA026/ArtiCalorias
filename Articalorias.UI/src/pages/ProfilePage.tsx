@@ -313,9 +313,10 @@ export default function ProfilePage() {
               <MetricTile
                 label={t('profile.field_weight')}
                 inputId="field-weight"
-                type="number"
+                type="text"
                 step="0.1"
                 inputMode="decimal"
+                pattern="[0-9]*[.,]?[0-9]*"
                 value={weightUnit === "lbs" ? String(Math.round(kgToDisplay(parseFloat(form.currentWeightKg) || 0, "lbs") * 10) / 10) : form.currentWeightKg}
                 unit={weightLabel(weightUnit)}
                 dirty={dirtyFields.has("currentWeightKg")}
@@ -332,9 +333,10 @@ export default function ProfilePage() {
               <MetricTile
                 label={t('profile.field_height')}
                 inputId="field-height"
-                type="number"
+                type="text"
                 step="0.1"
                 inputMode="decimal"
+                pattern="[0-9]*[.,]?[0-9]*"
                 value={form.heightCm}
                 unit="cm"
                 dirty={dirtyFields.has("heightCm")}
@@ -351,9 +353,10 @@ export default function ProfilePage() {
               <MetricTile
                 label={t('profile.field_age')}
                 inputId="field-age"
-                type="number"
+                type="text"
                 step="1"
                 inputMode="numeric"
+                pattern="[0-9]*"
                 value={form.age}
                 unit="yrs"
                 dirty={dirtyFields.has("age")}
@@ -516,8 +519,10 @@ export default function ProfilePage() {
             >
               <div className="relative">
                 <input
-                  type="number"
-                  min={0} max={23} step={0.5}
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9]*[.,]?[0-9]*"
+                  min={0} max={23}
                   value={form.sleepHours}
                   onChange={(e) => setField("sleepHours", e.target.value)}
                   disabled={isSaving}
@@ -538,8 +543,10 @@ export default function ProfilePage() {
             >
               <div className="relative">
                 <input
-                  type="number"
-                  min={0} max={23} step={0.5}
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9]*[.,]?[0-9]*"
+                  min={0} max={23}
                   value={form.neatHours}
                   onChange={(e) => setField("neatHours", e.target.value)}
                   disabled={isSaving}
@@ -790,9 +797,10 @@ function CalculatedEstimateRow({
             <input
               // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus
-              type="number"
+              type="text"
               step={inputStep}
               inputMode={inputMode}
+              pattern={inputMode === "numeric" ? "[0-9]*" : "[0-9]*[.,]?[0-9]*"}
               value={inputValue}
               onChange={(e) => onInputChange(e.target.value)}
               disabled={disabled || isSaving}
@@ -914,6 +922,7 @@ interface MetricTileProps {
   type: string;
   step: string;
   inputMode: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  pattern?: string;
   value: string;
   unit: string;
   dirty: boolean;
@@ -927,7 +936,7 @@ interface MetricTileProps {
 }
 
 function MetricTile({
-  label, inputId, type, step, inputMode, value, unit,
+  label, inputId, type, step, inputMode, pattern, value, unit,
   dirty, saving, error, disabled, ariaLabel,
   onChange, onConfirm, onRevert,
 }: MetricTileProps) {
@@ -949,6 +958,7 @@ function MetricTile({
           type={type}
           step={step}
           inputMode={inputMode}
+          pattern={pattern}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}

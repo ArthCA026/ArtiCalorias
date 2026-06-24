@@ -1,16 +1,18 @@
-﻿import { useEffect, useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef } from "react";
+import { DecimalInput } from "@/components/DecimalInput";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { dailyLogService } from "@/services/dailyLogService";
 import { foodService } from "@/services/foodService";
 import { activityService } from "@/services/activityService";
+import { foodTemplateService } from "@/services/foodTemplateService";
+import TemplatePickerDialog from "@/components/TemplatePickerDialog";
 import type {
   DailyDashboardResponse,
   FoodEntryResponse,
   UpdateFoodEntryRequest,
   ActivityEntryResponse,
   UpdateActivityEntryRequest,
-  ActivityTemplateRequest,
   ParsedFoodItem,
 } from "@/types";
 import { fmt, toDateString } from "@/utils/format";
@@ -80,9 +82,9 @@ function CompactDayProgress({ dash, isToday, chartMode }: { dash: DailyDashboard
     dash.totalDailyExpenditureKcal + dash.suggestedDailyAverageRemainingKcal;
 
   const budgetNote =
-    effectiveMode === "net"  ? "· vs. TDEE" :
-    effectiveMode === "goal" ? "· daily goal" :
-    "· weekly adjusted";
+    effectiveMode === "net"  ? "� vs. TDEE" :
+    effectiveMode === "goal" ? "� daily goal" :
+    "� weekly adjusted";
   const foodCal = dash.totalFoodCaloriesKcal;
   const calRemaining = dailyBudget - foodCal;
   const calOver = calRemaining < 0;
@@ -92,7 +94,7 @@ function CompactDayProgress({ dash, isToday, chartMode }: { dash: DailyDashboard
   const protGoalReached = protRemaining <= 0;
   const protAbs = Math.abs(protRemaining);
 
-  // Status line – a quick, human-friendly take on the numbers
+  // Status line � a quick, human-friendly take on the numbers
   const protPct = dash.snapshotProteinGoalGrams > 0 ? dash.totalProteinGrams / dash.snapshotProteinGoalGrams : 1;
 
   const calPct = dailyBudget > 0 ? Math.round((foodCal / dailyBudget) * 100) : 0;
@@ -179,22 +181,6 @@ function IconX({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
-function IconBookmark({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-    </svg>
-  );
-}
-
-function IconBookmarkFilled({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-    </svg>
-  );
-}
-
 function IconCamera({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -210,6 +196,14 @@ function IconPhoto({ className = "w-4 h-4" }: { className?: string }) {
       <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
       <circle cx="8.5" cy="8.5" r="1.5" />
       <polyline points="21 15 16 10 5 21" />
+    </svg>
+  );
+}
+
+function IconStar({ className = "w-4 h-4", filled = false }: { className?: string; filled?: boolean }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
     </svg>
   );
 }
@@ -261,7 +255,6 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
     setError(null);
     try {
       let parsed: ParsedFoodItem[];
-      let sourceType: string;
 
       if (imageData) {
         const { data } = await dailyLogService.parseFoodWithImage(date, {
@@ -274,7 +267,6 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
           return;
         }
         parsed = data;
-        sourceType = "AI_IMAGE";
       } else {
         const { data } = await dailyLogService.parseFood(date, { freeText: text });
         if (!data.length) {
@@ -282,7 +274,6 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
           return;
         }
         parsed = data;
-        sourceType = "AI";
       }
 
       await dailyLogService.confirmParsedFoods(date, {
@@ -295,7 +286,6 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
           fatGrams: p.fatGrams,
           carbsGrams: p.carbsGrams,
           alcoholGrams: p.alcoholGrams,
-          sourceType,
         })),
       });
       setText("");
@@ -321,7 +311,7 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
 
   const foodBody = (
     <>
-      {/* Hidden file input — triggers native camera on mobile via capture="environment" */}
+      {/* Hidden file input � triggers native camera on mobile via capture="environment" */}
       <input
         ref={fileInputRef}
         type="file"
@@ -331,7 +321,7 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
         className="sr-only"
         onChange={handleImageSelected}
       />
-      {/* Hidden file input — opens gallery/file picker (no capture attribute) */}
+      {/* Hidden file input � opens gallery/file picker (no capture attribute) */}
       <input
         ref={galleryInputRef}
         type="file"
@@ -445,22 +435,11 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
 }
 
 /* --- Activity Input (parse free text) --- */
-interface LastLoggedActivity {
-  activityName: string;
-  durationMinutes: number | null;
-  metValue: number | null;
-}
-
 function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: () => void; isToday: boolean; noCard?: boolean }) {
   const { t } = useTranslation();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastLogged, setLastLogged] = useState<LastLoggedActivity[] | null>(null);
-  const [savingTemplate, setSavingTemplate] = useState(false);
-  const [templateSaved, setTemplateSaved] = useState(false);
-  const [editingTemplateName, setEditingTemplateName] = useState(false);
-  const [templateName, setTemplateName] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   function autoResize(el: HTMLTextAreaElement) {
@@ -468,28 +447,10 @@ function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSav
     el.style.height = `${el.scrollHeight}px`;
   }
 
-  // Auto-dismiss the template prompt after 8s if the user ignores it
-  useEffect(() => {
-    if (!lastLogged || editingTemplateName) return;
-    const id = setTimeout(() => setLastLogged(null), 8000);
-    return () => clearTimeout(id);
-  }, [lastLogged, editingTemplateName]);
-
-  // Auto-dismiss the success confirmation after 4s
-  useEffect(() => {
-    if (!templateSaved) return;
-    const id = setTimeout(() => setTemplateSaved(false), 4000);
-    return () => clearTimeout(id);
-  }, [templateSaved]);
-
   async function handleAdd() {
     if (!text.trim()) return;
     setBusy(true);
     setError(null);
-    setLastLogged(null);
-    setTemplateSaved(false);
-    setEditingTemplateName(false);
-    setTemplateName("");
     try {
       const { data } = await dailyLogService.parseActivity(date, { freeText: text });
       if (!data.length) {
@@ -502,11 +463,6 @@ function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSav
         metValue: p.metValue,
       }));
       await dailyLogService.confirmParsedActivities(date, { items });
-      setLastLogged(data.map((p) => ({
-        activityName: p.activityName,
-        durationMinutes: p.durationMinutes,
-        metValue: p.metValue,
-      })));
       setText("");
       if (textareaRef.current) textareaRef.current.style.height = "auto";
       onSaved();
@@ -515,43 +471,6 @@ function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSav
     } finally {
       setBusy(false);
     }
-  }
-
-  function startTemplateSave() {
-    if (!lastLogged?.length) return;
-    setTemplateName(lastLogged.length === 1 ? lastLogged[0].activityName : "");
-    setEditingTemplateName(true);
-  }
-
-  async function confirmTemplateSave() {
-    if (!lastLogged?.length) return;
-    const name = templateName.trim();
-    if (!name && lastLogged.length === 1) return;
-    setSavingTemplate(true);
-    try {
-      for (const a of lastLogged) {
-        const req: ActivityTemplateRequest = {
-          templateScope: "USER",
-          templateName: lastLogged.length === 1 ? name : a.activityName,
-          autoAddToNewDay: false,
-          defaultDurationMinutes: a.durationMinutes,
-          defaultMET: a.metValue,
-        };
-        await activityService.createTemplate(req);
-      }
-      setTemplateSaved(true);
-      setLastLogged(null);
-      setEditingTemplateName(false);
-      setTemplateName("");
-    } catch { /* ignore */ }
-    setSavingTemplate(false);
-  }
-
-  function dismissTemplatePrompt() {
-    setLastLogged(null);
-    setTemplateSaved(false);
-    setEditingTemplateName(false);
-    setTemplateName("");
   }
 
   const activityBody = (
@@ -580,71 +499,12 @@ function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSav
         </button>
       </div>
       {error && <p className="mt-1.5 text-sm text-red-600" role="alert">{error}</p>}
-
-      {/* Post-success template prompt – step 1: subtle suggestion */}
-      {lastLogged && !templateSaved && !editingTemplateName && (
-        <div className="mt-2 flex items-center gap-2 rounded-lg bg-indigo-50/40 dark:bg-indigo-900/20 px-3 py-2 text-sm text-indigo-600 dark:text-indigo-400">
-          <IconBookmark className="w-3.5 h-3.5 flex-shrink-0 text-indigo-400" />
-          <span className="flex-1 text-gray-500 dark:text-gray-400">{t('dashboard.template_prompt')}</span>
-          <button
-            onClick={startTemplateSave}
-            className="text-xs font-medium text-indigo-600 underline underline-offset-2 hover:text-indigo-800 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
-          >
-            {t('dashboard.template_save')}
-          </button>
-          <button
-            onClick={dismissTemplatePrompt}
-            aria-label={t('common.dismiss')}
-            className="rounded-md p-0.5 text-gray-300 hover:text-gray-500 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
-          >
-            <IconX className="w-3 h-3" />
-          </button>
-        </div>
-      )}
-      {/* Step 2: inline name input (only after user opts in) */}
-      {lastLogged && editingTemplateName && (
-        <div className="mt-2 rounded-lg bg-indigo-50/50 dark:bg-indigo-900/20 px-3 py-2.5 space-y-2">
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">{t('dashboard.template_name_label')}</label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={templateName}
-              onChange={(e) => setTemplateName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") confirmTemplateSave(); if (e.key === "Escape") dismissTemplatePrompt(); }}
-              autoFocus
-              placeholder={t('dashboard.template_name_placeholder')}
-              aria-label={t('dashboard.template_name_label')}
-              className="flex-1 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-            />
-            <button
-              onClick={confirmTemplateSave}
-              disabled={savingTemplate || !templateName.trim()}
-              className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600"
-            >
-              {savingTemplate ? "Saving…" : "Save"}
-            </button>
-            <button
-              onClick={dismissTemplatePrompt}
-              className="rounded-md px-2 py-1.5 text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-      {/* Compact success confirmation (auto-dismisses after 4s) */}
-      {templateSaved && (
-        <div className="mt-2 flex items-center gap-2 rounded-lg bg-green-50/40 dark:bg-green-900/20 px-3 py-1.5 text-xs text-green-600 dark:text-green-400">
-          <IconCheck className="w-3.5 h-3.5 flex-shrink-0 text-green-500" />
-          <span>Saved – you'll find it in the activity list next time.</span>
-        </div>
-      )}
     </>
   );
 
   if (noCard) return activityBody;
   return (
-    <Card title={isToday ? "Log activity" : "Add activity"} subtitle={isToday ? "Describe what you did and for how long – we'll estimate calories for you" : "Add what you did that day – we'll estimate the calories"}>
+    <Card title={isToday ? t('dashboard.log_activity_title') : t('dashboard.add_activity_title')} subtitle={isToday ? t('dashboard.log_activity_subtitle') : t('dashboard.add_activity_subtitle')}>
       {activityBody}
     </Card>
   );
@@ -657,21 +517,22 @@ function ActivityMobileCard({
   a,
   onEdit,
   onDelete,
-  onSaveTemplate,
-  onRemoveTemplate,
-  isSavedTemplate,
   busy,
+  onToggleFavorite,
+  favState,
+  isFavorite,
 }: {
   a: ActivityEntryResponse;
   onEdit: () => void;
   onDelete: () => void;
-  onSaveTemplate: () => void;
-  onRemoveTemplate: () => void;
-  isSavedTemplate: boolean;
   busy: boolean;
+  onToggleFavorite: () => void;
+  favState: 'idle' | 'saving' | 'saved' | 'error';
+  isFavorite: boolean;
 }) {
   const { t } = useTranslation();
   const { energyUnit } = useUnits();
+  const isFav = isFavorite || favState === 'saved';
   return (
     <div className="rounded-lg border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 shadow-sm">
       <div className="flex items-start justify-between gap-2">
@@ -682,11 +543,7 @@ function ActivityMobileCard({
           </p>
         </div>
         <div className="flex gap-1.5 flex-shrink-0">
-          {isSavedTemplate ? (
-            <button onClick={onRemoveTemplate} disabled={busy} title={t('dashboard.remove_template')} aria-label={t('dashboard.remove_template_aria', { name: a.activityName })} className="rounded-md p-2 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"><IconBookmarkFilled className="w-4 h-4" /></button>
-          ) : (
-            <button onClick={onSaveTemplate} disabled={busy} title={t('dashboard.save_as_template')} aria-label={t('dashboard.save_template_aria', { name: a.activityName })} className="rounded-md p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"><IconBookmark className="w-4 h-4" /></button>
-          )}
+          <button onClick={favState !== 'saving' ? onToggleFavorite : undefined} disabled={favState === 'saving'} title={isFav ? t('dashboard.remove_from_favorites') : t('dashboard.save_as_favorite')} aria-label={isFav ? t('dashboard.remove_from_favorites') : t('dashboard.save_as_favorite')} className={`rounded-md p-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500 ${isFav ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/20 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20' : favState === 'error' ? 'text-red-500 disabled:opacity-50' : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50'}`}>{favState === 'saving' ? <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> : <IconStar className="w-4 h-4" filled={isFav} />}</button>
           <button onClick={onEdit} title={t('common.edit')} aria-label={t('dashboard.edit_aria', { name: a.activityName })} className="rounded-md p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"><IconEdit className="w-4 h-4" /></button>
           <button onClick={onDelete} disabled={busy} title={t('common.delete')} aria-label={t('dashboard.delete_aria', { name: a.activityName })} className="rounded-md p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"><IconTrash className="w-4 h-4" /></button>
         </div>
@@ -712,6 +569,9 @@ function MealMobileCard({
   onQtyEditChange,
   onQtyEditConfirm,
   onQtyEditCancel,
+  onToggleFavorite,
+  favState,
+  isFavorite,
 }: {
   f: FoodEntryResponse;
   onEdit: () => void;
@@ -724,15 +584,28 @@ function MealMobileCard({
   onQtyEditChange: (v: string) => void;
   onQtyEditConfirm: () => void;
   onQtyEditCancel: () => void;
+  onToggleFavorite: () => void;
+  favState: 'idle' | 'saving' | 'saved' | 'error';
+  isFavorite: boolean;
 }) {
   const { t } = useTranslation();
   const { energyUnit } = useUnits();
+  const isFav = isFavorite || favState === 'saved';
   return (
     <div className="rounded-lg border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
       {/* Header: name + actions */}
       <div className="flex items-start justify-between gap-2 px-3 pt-2 pb-0.5">
         <p className="font-medium text-gray-900 dark:text-gray-100 text-sm leading-snug">{f.foodName}</p>
         <div className="flex gap-0.5 shrink-0 -mt-0.5">
+          <button
+            onClick={favState !== 'saving' ? onToggleFavorite : undefined}
+            disabled={favState === 'saving'}
+            title={isFav ? t('dashboard.remove_from_favorites') : t('dashboard.save_as_favorite')}
+            aria-label={isFav ? t('dashboard.remove_from_favorites') : t('dashboard.save_as_favorite')}
+            className={`rounded-md p-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500 ${isFav ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/20 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20' : favState === 'error' ? 'text-red-500 disabled:opacity-50' : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50'}`}
+          >
+            {favState === 'saving' ? <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> : <IconStar className="w-4 h-4" filled={isFav} />}
+          </button>
           <button
             onClick={onEdit}
             title={t('common.edit')}
@@ -752,13 +625,14 @@ function MealMobileCard({
           </button>
         </div>
       </div>
-      {/* Qty row — tappable chip */}
+      {/* Qty row � tappable chip */}
       <div className="px-3 pb-1.5">
         {isQtyEditing ? (
           <div className="flex items-center gap-1.5">
             <input
-              type="number"
-              step="0.1"
+              type="text"
+              inputMode="decimal"
+              pattern="[0-9]*[.,]?[0-9]*"
               autoFocus
               value={qtyEditValue}
               onChange={(e) => onQtyEditChange(e.target.value)}
@@ -807,7 +681,7 @@ function MealMobileCard({
             </button>
             {f.portionDescription && (
               <>
-                <span aria-hidden="true" className="text-gray-300 dark:text-gray-600 select-none text-xs">·</span>
+                <span aria-hidden="true" className="text-gray-300 dark:text-gray-600 select-none text-xs">�</span>
                 <span className="text-xs text-gray-500 dark:text-gray-400">{f.portionDescription}</span>
               </>
             )}
@@ -850,12 +724,91 @@ function MobileStat({ label, value, accent }: { label: string; value: string; ac
 function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { date: string; foods: FoodEntryResponse[]; onChanged: () => void; isToday: boolean; noCard?: boolean }) {
   const { t } = useTranslation();
   const { energyUnit } = useUnits();
+  const queryClient = useQueryClient();
+  const { data: foodTemplates = [] } = useQuery({
+    queryKey: queryKeys.foodTemplates(),
+    queryFn: () => foodTemplateService.getAll().then(r => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<UpdateFoodEntryRequest | null>(null);
   const [busy, setBusy] = useState(false);
   const [qtyEditId, setQtyEditId] = useState<number | null>(null);
   const [qtyEditValue, setQtyEditValue] = useState<string>("");
   const [qtyBusy, setQtyBusy] = useState(false);
+  const [favStates, setFavStates] = useState<Record<number, 'idle' | 'saving' | 'saved' | 'error'>>({});
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+
+  async function saveFoodTemplate(f: FoodEntryResponse) {
+    setFavStates(s => ({ ...s, [f.foodEntryId]: 'saving' }));
+    try {
+      await foodTemplateService.create({
+        templateName: f.foodName,
+        portionDescription: f.portionDescription ?? '',
+        defaultQuantity: f.quantity ?? 1,
+        caloriesKcal: f.caloriesKcal,
+        proteinGrams: f.proteinGrams,
+        fatGrams: f.fatGrams,
+        carbsGrams: f.carbsGrams,
+        alcoholGrams: f.alcoholGrams,
+        autoAddToNewDay: false,
+      });
+      setFavStates(s => ({ ...s, [f.foodEntryId]: 'saved' }));
+      queryClient.invalidateQueries({ queryKey: queryKeys.foodTemplates() });
+      setTimeout(() => setFavStates(s => ({ ...s, [f.foodEntryId]: 'idle' })), 2000);
+    } catch {
+      setFavStates(s => ({ ...s, [f.foodEntryId]: 'error' }));
+      setTimeout(() => setFavStates(s => ({ ...s, [f.foodEntryId]: 'idle' })), 2000);
+    }
+  }
+
+  async function removeFoodTemplate(f: FoodEntryResponse) {
+    const d = (a: number, b: number) => Math.abs(a - b) < 0.5;
+    const matchingTemplate = foodTemplates.find(t =>
+      t.isActive &&
+      t.templateName.toLowerCase() === f.foodName.toLowerCase() &&
+      d(f.caloriesKcal, t.caloriesKcal) &&
+      d(f.proteinGrams, t.proteinGrams) &&
+      d(f.fatGrams, t.fatGrams) &&
+      d(f.carbsGrams, t.carbsGrams) &&
+      d(f.alcoholGrams, t.alcoholGrams)
+    );
+    const tmpl = matchingTemplate ?? foodTemplates.find(t => t.isActive && t.templateName.toLowerCase() === f.foodName.toLowerCase());
+    if (!tmpl) return;
+    setFavStates(s => ({ ...s, [f.foodEntryId]: 'saving' }));
+    try {
+      await foodTemplateService.remove(tmpl.foodTemplateId);
+      setFavStates(s => ({ ...s, [f.foodEntryId]: 'idle' }));
+      queryClient.invalidateQueries({ queryKey: queryKeys.foodTemplates() });
+    } catch {
+      setFavStates(s => ({ ...s, [f.foodEntryId]: 'error' }));
+      setTimeout(() => setFavStates(s => ({ ...s, [f.foodEntryId]: 'idle' })), 2000);
+    }
+  }
+
+  function foodEditMatchesTemplate(form: UpdateFoodEntryRequest): boolean {
+    const tmpl = foodTemplates.find(t => t.isActive && t.templateName.toLowerCase() === form.foodName.toLowerCase());
+    if (!tmpl) return false;
+    const d = (a: number, b: number) => Math.abs(a - b) < 0.5;
+    return d(form.caloriesKcal, tmpl.caloriesKcal) &&
+      d(form.proteinGrams, tmpl.proteinGrams) &&
+      d(form.fatGrams, tmpl.fatGrams) &&
+      d(form.carbsGrams, tmpl.carbsGrams) &&
+      d(form.alcoholGrams, tmpl.alcoholGrams);
+  }
+
+  function foodEntryMatchesTemplate(f: FoodEntryResponse): boolean {
+    const d = (a: number, b: number) => Math.abs(a - b) < 0.5;
+    return foodTemplates.some(t =>
+      t.isActive &&
+      t.templateName.toLowerCase() === f.foodName.toLowerCase() &&
+      d(f.caloriesKcal, t.caloriesKcal) &&
+      d(f.proteinGrams, t.proteinGrams) &&
+      d(f.fatGrams, t.fatGrams) &&
+      d(f.carbsGrams, t.carbsGrams) &&
+      d(f.alcoholGrams, t.alcoholGrams)
+    );
+  }
 
   function startEdit(f: FoodEntryResponse) {
     setQtyEditId(null);
@@ -876,7 +829,8 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
   }
 
   async function saveQtyEdit(f: FoodEntryResponse) {
-    const newQty = qtyEditValue !== "" ? +qtyEditValue : null;
+    const parsed = qtyEditValue !== "" ? parseFloat(qtyEditValue.replace(",", ".")) : null;
+    const newQty = parsed !== null && !isNaN(parsed) && parsed > 0 ? parsed : null;
     if (newQty === f.quantity) {
       setQtyEditId(null);
       setQtyEditValue("");
@@ -916,6 +870,7 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
   }
 
   async function handleDelete(id: number) {
+    setDeleteConfirmId(null);
     setBusy(true);
     try {
       await foodService.remove(date, id);
@@ -964,40 +919,7 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {foods.map((f, idx) =>
-                  editId === f.foodEntryId && editForm ? (
-                    <tr key={f.foodEntryId} className="bg-indigo-50/40">
-                      <td className="py-2 px-3"><input value={editForm.foodName} onChange={(e) => setEditForm({ ...editForm, foodName: e.target.value })} className="w-full rounded-md border border-gray-200 px-2 py-1 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Food name" /></td>
-                      <td className="py-2 px-2 text-right tabular-nums text-sm text-gray-500">{editForm.quantity != null ? fmt(editForm.quantity, 1) : "\u2013"}</td>
-                      <td className="py-2 px-2"><input value={editForm.portionDescription ?? ""} onChange={(e) => setEditForm({ ...editForm, portionDescription: e.target.value })} className="w-full rounded-md border border-gray-200 px-1.5 py-1 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Portion" /></td>
-                      <td className="py-2 px-2"><input type="number" value={Math.round(kcalToDisplay(editForm.caloriesKcal, energyUnit))} onChange={(e) => setEditForm({ ...editForm, caloriesKcal: displayToKcal(+e.target.value, energyUnit) })} className="w-full rounded-md border border-gray-200 px-1.5 py-1 text-right text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Calories" /></td>
-                      <td className="py-2 px-2"><input type="number" value={editForm.proteinGrams} onChange={(e) => setEditForm({ ...editForm, proteinGrams: +e.target.value })} className="w-full rounded-md border border-gray-200 px-1.5 py-1 text-right text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Protein" /></td>
-                      <td className="py-2 px-2"><input type="number" value={editForm.fatGrams} onChange={(e) => setEditForm({ ...editForm, fatGrams: +e.target.value })} className="w-full rounded-md border border-gray-200 px-1.5 py-1 text-right text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Fat" /></td>
-                      <td className="py-2 px-2"><input type="number" value={editForm.carbsGrams} onChange={(e) => setEditForm({ ...editForm, carbsGrams: +e.target.value })} className="w-full rounded-md border border-gray-200 px-1.5 py-1 text-right text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Carbs" /></td>
-                      <td className="py-2 px-2"><input type="number" value={editForm.alcoholGrams} onChange={(e) => setEditForm({ ...editForm, alcoholGrams: +e.target.value })} className="w-full rounded-md border border-gray-200 px-1.5 py-1 text-right text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Alcohol" /></td>
-                      <td className="py-2 px-2">
-                        <div className="flex gap-1 justify-end">
-                          <button
-                            onClick={saveEdit}
-                            disabled={busy}
-                            title={t('dashboard.qty_save')}
-                            aria-label={t('dashboard.qty_save')}
-                            className="rounded-md p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 hover:text-green-700 disabled:opacity-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-500"
-                          >
-                            <IconCheck className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => { setEditId(null); setEditForm(null); }}
-                            title={t('dashboard.qty_cancel')}
-                            aria-label={t('dashboard.qty_cancel')}
-                            className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-gray-500"
-                          >
-                            <IconX className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
+                {foods.map((f, idx) => (
                     <tr
                       key={f.foodEntryId}
                       className={`group transition-colors hover:bg-indigo-50/30 ${idx % 2 === 1 ? "bg-gray-50/40" : ""}`}
@@ -1009,8 +931,9 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
                         {qtyEditId === f.foodEntryId ? (
                           <div className="flex items-center gap-0.5 justify-end">
                             <input
-                              type="number"
-                              step="0.1"
+                              type="text"
+                              inputMode="decimal"
+                              pattern="[0-9]*[.,]?[0-9]*"
                               autoFocus
                               value={qtyEditValue}
                               onChange={(e) => setQtyEditValue(e.target.value)}
@@ -1032,7 +955,7 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
                         ) : (
                           <button
                             onClick={() => { setEditId(null); setEditForm(null); setQtyEditId(f.foodEntryId); setQtyEditValue(f.quantity != null ? String(f.quantity) : ""); }}
-                            title="Click to change quantity — scales all macros"
+                            title="Click to change quantity � scales all macros"
                             aria-label={`Quantity: ${f.quantity != null ? fmt(f.quantity, 1) : "not set"}. Click to edit.`}
                             className="group/qty tabular-nums text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
                           >
@@ -1051,6 +974,15 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
                       <td className="py-1.5 px-2">
                         <div className="flex gap-1 justify-end">
                           <button
+                            onClick={() => { const isMatch = foodEntryMatchesTemplate(f); const state = favStates[f.foodEntryId] ?? 'idle'; if (isMatch && state === 'idle') removeFoodTemplate(f); else if (!isMatch && !['saving','saved'].includes(state)) saveFoodTemplate(f); }}
+                            disabled={favStates[f.foodEntryId] === 'saving'}
+                            title={(foodEntryMatchesTemplate(f) || favStates[f.foodEntryId] === 'saved') ? t('dashboard.remove_from_favorites') : t('dashboard.save_as_favorite')}
+                            aria-label={(foodEntryMatchesTemplate(f) || favStates[f.foodEntryId] === 'saved') ? t('dashboard.remove_from_favorites') : t('dashboard.save_as_favorite')}
+                            className={`rounded-md p-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500 ${(foodEntryMatchesTemplate(f) || favStates[f.foodEntryId] === 'saved') ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/20 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20' : favStates[f.foodEntryId] === 'error' ? 'text-red-500 disabled:opacity-50' : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50'}`}
+                          >
+                            {favStates[f.foodEntryId] === 'saving' ? <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> : <IconStar className="w-4 h-4" filled={foodEntryMatchesTemplate(f) || favStates[f.foodEntryId] === 'saved'} />}
+                          </button>
+                          <button
                             onClick={() => startEdit(f)}
                             title={t('common.edit')}
                             aria-label={t('dashboard.edit_aria', { name: f.foodName })}
@@ -1059,7 +991,7 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
                             <IconEdit className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDelete(f.foodEntryId)}
+                            onClick={() => setDeleteConfirmId(f.foodEntryId)}
                             disabled={busy}
                             title={t('common.delete')}
                             aria-label={t('dashboard.delete_aria', { name: f.foodName })}
@@ -1080,50 +1012,21 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
 
           {/* -- Mobile stacked cards (visible on small screens) -- */}
           <div className="md:hidden space-y-2">
-            {foods.map((f) =>
-              editId === f.foodEntryId && editForm ? (
-                <div key={f.foodEntryId} className="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-900/20 p-3 space-y-2">
-                  <input value={editForm.foodName} onChange={(e) => setEditForm({ ...editForm, foodName: e.target.value })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm font-medium focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Food name" />
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Portion</label>
-                      <input value={editForm.portionDescription ?? ""} onChange={(e) => setEditForm({ ...editForm, portionDescription: e.target.value })} aria-label="Portion description" className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-5 gap-1.5">
-                    <div>
-                      <label className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">{energyLabel(energyUnit)}</label>
-                      <input type="number" value={Math.round(kcalToDisplay(editForm.caloriesKcal, energyUnit))} onChange={(e) => setEditForm({ ...editForm, caloriesKcal: displayToKcal(+e.target.value, energyUnit) })} aria-label="Calories" className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-1.5 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Prot</label>
-                      <input type="number" value={editForm.proteinGrams} onChange={(e) => setEditForm({ ...editForm, proteinGrams: +e.target.value })} aria-label="Protein" className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-1.5 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Fat</label>
-                      <input type="number" value={editForm.fatGrams} onChange={(e) => setEditForm({ ...editForm, fatGrams: +e.target.value })} aria-label="Fat" className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-1.5 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Carbs</label>
-                      <input type="number" value={editForm.carbsGrams} onChange={(e) => setEditForm({ ...editForm, carbsGrams: +e.target.value })} aria-label="Carbs" className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-1.5 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Alc</label>
-                      <input type="number" value={editForm.alcoholGrams} onChange={(e) => setEditForm({ ...editForm, alcoholGrams: +e.target.value })} aria-label="Alcohol" className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-1.5 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2 pt-1">
-                    <button onClick={() => { setEditId(null); setEditForm(null); }} aria-label={t('common.cancel')} className="rounded-md px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">{t('common.cancel')}</button>
-                    <button onClick={saveEdit} disabled={busy} aria-label={t('dashboard.qty_save')} className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">{t('common.save')}</button>
-                  </div>
-                </div>
-              ) : (
+            {foods.map((f) => (
                 <MealMobileCard
                   key={f.foodEntryId}
                   f={f}
                   onEdit={() => startEdit(f)}
-                  onDelete={() => handleDelete(f.foodEntryId)}
+                  onDelete={() => setDeleteConfirmId(f.foodEntryId)}
                   busy={busy}
+                  onToggleFavorite={() => {
+                    const isMatch = foodEntryMatchesTemplate(f);
+                    const state = favStates[f.foodEntryId] ?? 'idle';
+                    if (isMatch && state === 'idle') removeFoodTemplate(f);
+                    else if (!isMatch && !['saving', 'saved'].includes(state)) saveFoodTemplate(f);
+                  }}
+                  favState={favStates[f.foodEntryId] ?? 'idle'}
+                  isFavorite={foodEntryMatchesTemplate(f)}
                   isQtyEditing={qtyEditId === f.foodEntryId}
                   qtyEditValue={qtyEditValue}
                   qtyBusy={qtyBusy}
@@ -1132,13 +1035,62 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
                   onQtyEditConfirm={() => saveQtyEdit(f)}
                   onQtyEditCancel={() => { setQtyEditId(null); setQtyEditValue(""); }}
                 />
-              )
-            )}
+            ))}
           </div>
         </>
       );
 
-  if (noCard) return <div>{mealsContent}</div>;
+  const foodEditModal = editId !== null && editForm !== null ? (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={e => { if (e.target === e.currentTarget) { setEditId(null); setEditForm(null); } }}
+    >
+      <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4 overflow-y-auto max-h-[85vh]">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('common.edit')}</h3>
+        <div>
+          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Food name</label>
+          <input value={editForm.foodName} onChange={(e) => setEditForm({ ...editForm, foodName: e.target.value })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Food name" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Portion</label>
+            <input value={editForm.portionDescription ?? ""} onChange={(e) => setEditForm({ ...editForm, portionDescription: e.target.value })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Portion description" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">{energyLabel(energyUnit)}</label>
+            <DecimalInput value={Math.round(kcalToDisplay(editForm.caloriesKcal, energyUnit)) as number} onChange={(n) => setEditForm({ ...editForm, caloriesKcal: displayToKcal(typeof n === 'number' ? n : 0, energyUnit) })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Calories" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Prot</label>
+            <DecimalInput value={editForm.proteinGrams} onChange={(n) => setEditForm({ ...editForm, proteinGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Protein" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Fat</label>
+            <DecimalInput value={editForm.fatGrams} onChange={(n) => setEditForm({ ...editForm, fatGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Fat" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Carbs</label>
+            <DecimalInput value={editForm.carbsGrams} onChange={(n) => setEditForm({ ...editForm, carbsGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Carbs" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Alc</label>
+            <DecimalInput value={editForm.alcoholGrams} onChange={(n) => setEditForm({ ...editForm, alcoholGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Alcohol" />
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <span title={foodEditMatchesTemplate(editForm) ? t('dashboard.template_matches') : t('dashboard.template_differs')} className={`p-1 pointer-events-none ${foodEditMatchesTemplate(editForm) ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'}`}><IconStar className="w-4 h-4" filled={foodEditMatchesTemplate(editForm)} /></span>
+          <div className="flex gap-2">
+            <button onClick={() => { setEditId(null); setEditForm(null); }} className="rounded-xl py-2.5 px-4 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{t('common.cancel')}</button>
+            <button onClick={saveEdit} disabled={busy} className="rounded-xl bg-indigo-600 py-2.5 px-4 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors">{t('common.save')}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  if (noCard) return <><div>{mealsContent}</div><DashDeleteConfirm open={deleteConfirmId !== null} message={t('dashboard.delete_food_confirm')} onConfirm={() => { if (deleteConfirmId !== null) void handleDelete(deleteConfirmId); }} onClose={() => setDeleteConfirmId(null)} isPending={busy} />{foodEditModal}</>;
   return (
     <Card
       title={t('dashboard.meals_title')}
@@ -1149,6 +1101,8 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
       }
     >
       {mealsContent}
+      <DashDeleteConfirm open={deleteConfirmId !== null} message={t('dashboard.delete_food_confirm')} onConfirm={() => { if (deleteConfirmId !== null) void handleDelete(deleteConfirmId); }} onClose={() => setDeleteConfirmId(null)} isPending={busy} />
+      {foodEditModal}
     </Card>
   );
 }
@@ -1163,10 +1117,10 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
     queryFn: () => activityService.getTemplates().then(r => r.data),
     staleTime: 10 * 60 * 1000,
   });
-  const [selectKey, setSelectKey] = useState(0);
   const [addError, setAddError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [addingFromTemplate, setAddingFromTemplate] = useState(false);
+  const [showActivityPicker, setShowActivityPicker] = useState(false);
   const [alwaysShowAdvanced] = useState(() => {
     try { return localStorage.getItem("articalorias:showAdvancedActivity") === "true"; } catch { return false; }
   });
@@ -1174,6 +1128,68 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<UpdateActivityEntryRequest | null>(null);
   const [showEditAdvanced, setShowEditAdvanced] = useState(false);
+  const [favStates, setFavStates] = useState<Record<number, 'idle' | 'saving' | 'saved' | 'error'>>({});
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+
+  async function saveActivityTemplate(a: ActivityEntryResponse) {
+    setFavStates(s => ({ ...s, [a.activityEntryId]: 'saving' }));
+    try {
+      await activityService.createTemplate({
+        templateScope: 'USER',
+        templateName: a.activityName,
+        autoAddToNewDay: false,
+        defaultDurationMinutes: a.durationMinutes,
+        defaultMET: a.metValue,
+      });
+      setFavStates(s => ({ ...s, [a.activityEntryId]: 'saved' }));
+      queryClientInstance.invalidateQueries({ queryKey: queryKeys.activityTemplates() });
+      setTimeout(() => setFavStates(s => ({ ...s, [a.activityEntryId]: 'idle' })), 2000);
+    } catch {
+      setFavStates(s => ({ ...s, [a.activityEntryId]: 'error' }));
+      setTimeout(() => setFavStates(s => ({ ...s, [a.activityEntryId]: 'idle' })), 2000);
+    }
+  }
+
+  async function removeActivityTemplate(a: ActivityEntryResponse) {
+    // Prefer the template whose values match the current entry (handles multiple same-name templates)
+    const matchingTemplate = templates.find(t =>
+      t.isActive &&
+      t.templateName.toLowerCase() === a.activityName.toLowerCase() &&
+      !(a.metValue != null && t.defaultMET != null && Math.abs(a.metValue - t.defaultMET) >= 0.1) &&
+      !(a.durationMinutes != null && t.defaultDurationMinutes != null && Math.abs(a.durationMinutes - t.defaultDurationMinutes) >= 1)
+    );
+    const templateId = matchingTemplate?.activityTemplateId
+      ?? templates.find(tmpl => tmpl.isActive && tmpl.templateName.toLowerCase() === a.activityName.toLowerCase())?.activityTemplateId
+      ?? a.activityTemplateId;
+    if (!templateId) return;
+    setFavStates(s => ({ ...s, [a.activityEntryId]: 'saving' }));
+    try {
+      await activityService.removeTemplate(templateId);
+      setFavStates(s => ({ ...s, [a.activityEntryId]: 'idle' }));
+      queryClientInstance.invalidateQueries({ queryKey: queryKeys.activityTemplates() });
+    } catch {
+      setFavStates(s => ({ ...s, [a.activityEntryId]: 'error' }));
+      setTimeout(() => setFavStates(s => ({ ...s, [a.activityEntryId]: 'idle' })), 2000);
+    }
+  }
+
+  function activityEditMatchesTemplate(form: UpdateActivityEntryRequest): boolean {
+    return templates.some(t =>
+      t.isActive &&
+      t.templateName.toLowerCase() === form.activityName.toLowerCase() &&
+      !(form.durationMinutes != null && t.defaultDurationMinutes != null && Math.abs(form.durationMinutes - t.defaultDurationMinutes) >= 1) &&
+      !(form.metValue != null && t.defaultMET != null && Math.abs(form.metValue - t.defaultMET) >= 0.1)
+    );
+  }
+
+  function activityEntryMatchesTemplate(a: ActivityEntryResponse): boolean {
+    return templates.some(t =>
+      t.isActive &&
+      t.templateName.toLowerCase() === a.activityName.toLowerCase() &&
+      !(a.metValue != null && t.defaultMET != null && Math.abs(a.metValue - t.defaultMET) >= 0.1) &&
+      !(a.durationMinutes != null && t.defaultDurationMinutes != null && Math.abs(a.durationMinutes - t.defaultDurationMinutes) >= 1)
+    );
+  }
 
   async function addFromTemplate(id: string) {
     const tpl = templates.find((tpl) => tpl.activityTemplateId === +id);
@@ -1188,7 +1204,6 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
         durationMinutes: tpl.defaultDurationMinutes,
         metValue: tpl.defaultMET,
       });
-      setSelectKey(k => k + 1);
       onChanged();
     } catch (err) {
       setAddError(extractApiError(err, t('dashboard.activity_error')));
@@ -1221,6 +1236,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
   }
 
   async function handleDelete(id: number) {
+    setDeleteConfirmId(null);
     setBusy(true);
     try {
       await activityService.remove(date, id);
@@ -1229,40 +1245,8 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
     setBusy(false);
   }
 
-  async function handleRemoveTemplate(a: ActivityEntryResponse) {
-    const match = templates.find(t => t.isActive && t.templateName.toLowerCase() === a.activityName.toLowerCase());
-    if (!match) return;
-    setBusy(true);
-    try {
-      await activityService.removeTemplate(match.activityTemplateId);
-      queryClientInstance.invalidateQueries({ queryKey: queryKeys.activityTemplates() });
-    } catch { /* ignore */ }
-    setBusy(false);
-  }
-
-  async function saveActivityAsTemplate(a: ActivityEntryResponse) {
-    const name = a.activityName.trim();
-    if (!name) return;
-    setBusy(true);
-    try {
-      const req: ActivityTemplateRequest = {
-        templateScope: "USER",
-        templateName: name,
-        autoAddToNewDay: false,
-        defaultDurationMinutes: a.durationMinutes,
-        defaultMET: a.metValue,
-      };
-      await activityService.createTemplate(req);
-      queryClientInstance.invalidateQueries({ queryKey: queryKeys.activityTemplates() });
-    } catch { /* ignore */ }
-    setBusy(false);
-  }
-
   const userActivities = activities.filter(a =>
     a.activityName !== "Daily movement"
-  );
-  const savedTemplateNames = new Set(
-    templates.filter(t => t.isActive).map(t => t.templateName.toLowerCase()),
   );
 
   const activitiesContent = (
@@ -1303,60 +1287,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                        {userActivities.map((a, idx) =>
-                          editId === a.activityEntryId && editForm ? (
-                            <tr key={a.activityEntryId} className="bg-indigo-50/40 dark:bg-indigo-900/20">
-                              <td className="py-1.5 px-3">
-                                <span className="font-medium text-gray-900 dark:text-gray-100">{a.activityName}</span>
-                                {!alwaysShowAdvanced && (
-                                  <button
-                                    onClick={() => setShowEditAdvanced((v) => !v)}
-                                    aria-expanded={showEditAdvanced}
-                                    className="mt-1 flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-medium rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 transition-colors"
-                                  >
-                                    <svg className={`h-3.5 w-3.5 transition-transform ${showEditAdvanced ? "rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
-                                    Advanced options
-                                  </button>
-                                )}
-                                {(alwaysShowAdvanced || showEditAdvanced) && (
-                                  <div className="mt-2 space-y-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-800/60 px-2.5 py-1.5">
-                                    <div className="flex items-center gap-2">
-                                      <label className="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">MET</label>
-                                      <input type="number" step="0.1" min="0.5" max="50" value={editForm.metValue ?? ""} onChange={(e) => setEditForm({ ...editForm, metValue: e.target.value ? +e.target.value : null })} placeholder="Auto" aria-label="MET value" className="w-20 rounded border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-1.5 py-1 text-right text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-                                      <p className="text-xs text-gray-400 dark:text-gray-500">{t('dashboard.activity_met_hint')}</p>
-                                    </div>
-                                    {!savedTemplateNames.has(a.activityName.toLowerCase()) && (
-                                      <button
-                                        onClick={() => saveActivityAsTemplate(a)}
-                                        disabled={busy}
-                                        aria-label={t('dashboard.save_template_aria', { name: a.activityName })}
-                                        className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
-                                      >
-                                        <IconBookmark className="w-3 h-3" />
-                                        {t('dashboard.save_as_template')}
-                                      </button>
-                                    )}
-                                  </div>
-                                )}
-                              </td>
-                              <td className="py-1.5 px-2">
-                                <div className="flex gap-1 justify-end">
-                                  <input type="number" step={editDurationUnit === "hours" ? "0.25" : "1"} value={editForm.durationMinutes != null ? (editDurationUnit === "hours" ? +(editForm.durationMinutes / 60).toFixed(2) : editForm.durationMinutes) : ""} onChange={(e) => { const v = e.target.value ? +e.target.value : null; setEditForm({ ...editForm, durationMinutes: v != null ? (editDurationUnit === "hours" ? v * 60 : v) : null }); }} aria-label="Duration" className="w-16 rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-1.5 py-1 text-right text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-                                  <select value={editDurationUnit} onChange={(e) => setEditDurationUnit(e.target.value as "minutes" | "hours")} aria-label="Duration unit" className="rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-1 py-1 text-xs">
-                                    <option value="minutes">min</option>
-                                    <option value="hours">hr</option>
-                                  </select>
-                                </div>
-                              </td>
-                              <td className={`py-1.5 px-2 text-right tabular-nums font-semibold ${a.calculatedCaloriesKcal < 0 ? "text-blue-600" : "text-gray-900 dark:text-gray-100"}`}>{Math.round(kcalToDisplay(a.calculatedCaloriesKcal, energyUnit)).toLocaleString()}</td>
-                              <td className="py-1.5 px-2">
-                                <div className="flex gap-1 justify-end">
-                                  <button onClick={saveEditActivity} disabled={busy} title={t('dashboard.qty_save')} aria-label={t('dashboard.qty_save')} className="rounded-md p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 hover:text-green-700 disabled:opacity-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-500"><IconCheck className="w-4 h-4" /></button>
-                                  <button onClick={() => { setEditId(null); setEditForm(null); }} title={t('common.cancel')} aria-label={t('common.cancel')} className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-gray-500"><IconX className="w-4 h-4" /></button>
-                                </div>
-                              </td>
-                            </tr>
-                          ) : (
+                        {userActivities.map((a, idx) => (
                             <tr
                               key={a.activityEntryId}
                               className={`group transition-colors hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 ${idx % 2 === 1 ? "bg-gray-50/40 dark:bg-gray-800/30" : ""}`}
@@ -1365,16 +1296,12 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
                                 <span className="line-clamp-2">{a.activityName}</span>
                               </td>
                               <td className="py-1.5 px-2 text-right tabular-nums text-gray-700">{a.durationMinutes != null ? (a.durationMinutes >= 60 ? `${+(a.durationMinutes / 60).toFixed(1)}h` : `${fmt(a.durationMinutes)} min`) : "\u2013"}</td>
-                              <td className={`py-1.5 px-2 text-right tabular-nums font-semibold ${a.calculatedCaloriesKcal < 0 ? "text-blue-600" : "text-gray-900"}`} title={a.calculatedCaloriesKcal < 0 ? "Below resting rate – burns less than your baseline" : undefined}>{Math.round(kcalToDisplay(a.calculatedCaloriesKcal, energyUnit)).toLocaleString()}</td>
+                              <td className={`py-1.5 px-2 text-right tabular-nums font-semibold ${a.calculatedCaloriesKcal < 0 ? "text-blue-600" : "text-gray-900"}`} title={a.calculatedCaloriesKcal < 0 ? "Below resting rate � burns less than your baseline" : undefined}>{Math.round(kcalToDisplay(a.calculatedCaloriesKcal, energyUnit)).toLocaleString()}</td>
                               <td className="py-1.5 px-2">
                                 <div className="flex gap-1 justify-end">
-                                  {savedTemplateNames.has(a.activityName.toLowerCase()) ? (
-                                    <button onClick={() => handleRemoveTemplate(a)} disabled={busy} title={t('dashboard.remove_template')} aria-label={t('dashboard.remove_template_aria', { name: a.activityName })} className="rounded-md p-1.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"><IconBookmarkFilled className="w-4 h-4" /></button>
-                                  ) : (
-                                    <button onClick={() => saveActivityAsTemplate(a)} disabled={busy} title={t('dashboard.save_as_template')} aria-label={t('dashboard.save_template_aria', { name: a.activityName })} className="rounded-md p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"><IconBookmark className="w-4 h-4" /></button>
-                                  )}
+                                  <button onClick={() => { const isMatch = activityEntryMatchesTemplate(a); const state = favStates[a.activityEntryId] ?? 'idle'; if (isMatch && state === 'idle') removeActivityTemplate(a); else if (!isMatch && !['saving','saved'].includes(state)) saveActivityTemplate(a); }} disabled={favStates[a.activityEntryId] === 'saving'} title={(activityEntryMatchesTemplate(a) || favStates[a.activityEntryId] === 'saved') ? t('dashboard.remove_from_favorites') : t('dashboard.save_as_favorite')} aria-label={(activityEntryMatchesTemplate(a) || favStates[a.activityEntryId] === 'saved') ? t('dashboard.remove_from_favorites') : t('dashboard.save_as_favorite')} className={`rounded-md p-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500 ${(activityEntryMatchesTemplate(a) || favStates[a.activityEntryId] === 'saved') ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/20 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20' : favStates[a.activityEntryId] === 'error' ? 'text-red-500 disabled:opacity-50' : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50'}`}>{favStates[a.activityEntryId] === 'saving' ? <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> : <IconStar className="w-4 h-4" filled={activityEntryMatchesTemplate(a) || favStates[a.activityEntryId] === 'saved'} />}</button>
                                   <button onClick={() => startEditActivity(a)} title={t('common.edit')} aria-label={t('dashboard.edit_aria', { name: a.activityName })} className="rounded-md p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"><IconEdit className="w-4 h-4" /></button>
-                                  <button onClick={() => handleDelete(a.activityEntryId)} disabled={busy} title={t('common.delete')} aria-label={t('dashboard.delete_aria', { name: a.activityName })} className="rounded-md p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"><IconTrash className="w-4 h-4" /></button>
+                                  <button onClick={() => setDeleteConfirmId(a.activityEntryId)} disabled={busy} title={t('common.delete')} aria-label={t('dashboard.delete_aria', { name: a.activityName })} className="rounded-md p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"><IconTrash className="w-4 h-4" /></button>
                                 </div>
                               </td>
                             </tr>
@@ -1386,58 +1313,23 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
 
                   {/* -- Mobile stacked cards (visible on small screens) -- */}
                   <div className="md:hidden space-y-2">
-                    {userActivities.map((a) =>
-                      editId === a.activityEntryId && editForm ? (
-                        <div key={a.activityEntryId} className="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-900/20 p-3 space-y-2">
-                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{a.activityName}</p>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">{t('dashboard.activity_header_dur')}</label>
-                              <div className="flex gap-1">
-                                <input type="number" step={editDurationUnit === "hours" ? "0.25" : "1"} value={editForm.durationMinutes != null ? (editDurationUnit === "hours" ? +(editForm.durationMinutes / 60).toFixed(2) : editForm.durationMinutes) : ""} onChange={(e) => { const v = e.target.value ? +e.target.value : null; setEditForm({ ...editForm, durationMinutes: v != null ? (editDurationUnit === "hours" ? v * 60 : v) : null }); }} aria-label="Duration" className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-                                <select value={editDurationUnit} onChange={(e) => setEditDurationUnit(e.target.value as "minutes" | "hours")} aria-label="Duration unit" className="rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-1 py-1 text-xs">
-                                  <option value="minutes">min</option>
-                                  <option value="hours">hr</option>
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-                          {!alwaysShowAdvanced && (
-                            <button
-                              onClick={() => setShowEditAdvanced((v) => !v)}
-                              aria-expanded={showEditAdvanced}
-                              className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-medium rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 transition-colors"
-                            >
-                              <svg className={`h-3.5 w-3.5 transition-transform ${showEditAdvanced ? "rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
-                              {t('dashboard.activity_advanced_options')}
-                            </button>
-                          )}
-                          {(alwaysShowAdvanced || showEditAdvanced) && (
-                            <div className="rounded-md border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-800/60 px-2.5 py-1.5">
-                              <div className="flex items-center gap-2">
-                                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">MET</label>
-                                <input type="number" step="0.1" min="0.5" max="50" value={editForm.metValue ?? ""} onChange={(e) => setEditForm({ ...editForm, metValue: e.target.value ? +e.target.value : null })} placeholder="Auto" aria-label="MET value" className="w-20 rounded border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-1.5 py-1 text-right text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-                              </div>
-                            </div>
-                          )}
-                          <div className="flex justify-end gap-2 pt-1">
-                            <button onClick={() => { setEditId(null); setEditForm(null); }} aria-label={t('common.cancel')} className="rounded-md px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500">{t('common.cancel')}</button>
-                            <button onClick={saveEditActivity} disabled={busy} aria-label={t('dashboard.qty_save')} className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">{t('common.save')}</button>
-                          </div>
-                        </div>
-                      ) : (
+                    {userActivities.map((a) => (
                         <ActivityMobileCard
                           key={a.activityEntryId}
                           a={a}
                           onEdit={() => startEditActivity(a)}
-                          onDelete={() => handleDelete(a.activityEntryId)}
-                          onSaveTemplate={() => saveActivityAsTemplate(a)}
-                          onRemoveTemplate={() => handleRemoveTemplate(a)}
-                          isSavedTemplate={savedTemplateNames.has(a.activityName.toLowerCase())}
+                          onDelete={() => setDeleteConfirmId(a.activityEntryId)}
                           busy={busy}
+                          onToggleFavorite={() => {
+                            const isMatch = activityEntryMatchesTemplate(a);
+                            const state = favStates[a.activityEntryId] ?? 'idle';
+                            if (isMatch && state === 'idle') removeActivityTemplate(a);
+                            else if (!isMatch && !['saving', 'saved'].includes(state)) saveActivityTemplate(a);
+                          }}
+                          favState={favStates[a.activityEntryId] ?? 'idle'}
+                          isFavorite={activityEntryMatchesTemplate(a)}
                         />
-                      )
-                    )}
+                    ))}
                   </div>
                 </>
               )}
@@ -1446,30 +1338,77 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
         </>
       )}
 
-      {templates.filter((t) => t.isActive).length > 0 && (
-        <div className="mt-3">
-          <select
-            key={selectKey}
-            defaultValue=""
-            onChange={(e) => { if (e.target.value) addFromTemplate(e.target.value); }}
-            disabled={busy}
-            aria-label="Add activity from templates"
-            className="rounded-md border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-sm text-indigo-700 dark:text-indigo-300 font-medium w-full focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none disabled:opacity-50 cursor-pointer"
-          >
-            <option value="" disabled>
-              {addingFromTemplate ? t('common.adding') : t('dashboard.add_from_templates')}
-            </option>
-            {templates.filter((t) => t.isActive).map((t) => (
-              <option key={t.activityTemplateId} value={t.activityTemplateId}>{t.templateName}</option>
-            ))}
-          </select>
-          {addError && <p className="mt-1 text-xs text-red-600" role="alert">{addError}</p>}
-        </div>
-      )}
+      <div className="mt-3">
+        <button
+          onClick={() => setShowActivityPicker(true)}
+          disabled={busy}
+          className="rounded-md border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-sm text-indigo-700 dark:text-indigo-300 font-medium w-full hover:bg-indigo-50 dark:hover:bg-indigo-900/30 disabled:opacity-50 transition-colors text-left"
+        >
+          {addingFromTemplate ? t('common.adding') : t('dashboard.add_from_templates')}
+        </button>
+        {addError && <p className="mt-1 text-xs text-red-600" role="alert">{addError}</p>}
+        <TemplatePickerDialog
+          open={showActivityPicker}
+          title={t('dashboard.add_from_templates')}
+          items={templates.filter(t => t.isActive).map(t => ({
+            id: t.activityTemplateId,
+            label: t.templateName,
+            meta: t.defaultDurationMinutes ? `${t.defaultDurationMinutes} min` : undefined,
+          }))}
+          onSelect={id => addFromTemplate(id.toString())}
+          onClose={() => setShowActivityPicker(false)}
+          busy={addingFromTemplate}
+        />
+      </div>
     </>
   );
 
-  if (noCard) return <div>{activitiesContent}</div>;
+  const activityEditModal = editId !== null && editForm !== null ? (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={e => { if (e.target === e.currentTarget) { setEditId(null); setEditForm(null); } }}
+    >
+      <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4 overflow-y-auto max-h-[85vh]">
+        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{userActivities.find(a => a.activityEntryId === editId)?.activityName}</p>
+        <div>
+          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">{t('dashboard.activity_header_dur')}</label>
+          <div className="flex gap-2">
+            <DecimalInput value={editForm.durationMinutes != null ? (editDurationUnit === "hours" ? parseFloat((editForm.durationMinutes / 60).toFixed(2)) : editForm.durationMinutes) : ""} onChange={(n) => { const v = typeof n === 'number' ? n : null; setEditForm({ ...editForm, durationMinutes: v != null ? (editDurationUnit === "hours" ? v * 60 : v) : null }); }} aria-label="Duration" className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
+            <select value={editDurationUnit} onChange={(e) => setEditDurationUnit(e.target.value as "minutes" | "hours")} aria-label="Duration unit" className="rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm">
+              <option value="minutes">min</option>
+              <option value="hours">hr</option>
+            </select>
+          </div>
+        </div>
+        {!alwaysShowAdvanced && (
+          <button type="button" onClick={() => setShowEditAdvanced(v => !v)} aria-expanded={showEditAdvanced} className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-medium transition-colors">
+            <svg className={`h-3.5 w-3.5 transition-transform ${showEditAdvanced ? "rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+            {t('dashboard.activity_advanced_options')}
+          </button>
+        )}
+        {(alwaysShowAdvanced || showEditAdvanced) && (
+          <div className="rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/60 px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">MET</label>
+              <DecimalInput value={editForm.metValue ?? ""} onChange={(n) => setEditForm({ ...editForm, metValue: typeof n === 'number' ? n : null })} placeholder="Auto" aria-label="MET value" className="w-20 rounded border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-1.5 py-1 text-right text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
+              <p className="text-xs text-gray-400 dark:text-gray-500">{t('dashboard.activity_met_hint')}</p>
+            </div>
+          </div>
+        )}
+        <div className="flex items-center justify-between">
+          <span title={activityEditMatchesTemplate(editForm) ? t('dashboard.template_matches') : t('dashboard.template_differs')} className={`p-1 pointer-events-none ${activityEditMatchesTemplate(editForm) ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'}`}><IconStar className="w-4 h-4" filled={activityEditMatchesTemplate(editForm)} /></span>
+          <div className="flex gap-2">
+            <button onClick={() => { setEditId(null); setEditForm(null); }} className="rounded-xl py-2.5 px-4 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{t('common.cancel')}</button>
+            <button onClick={saveEditActivity} disabled={busy} className="rounded-xl bg-indigo-600 py-2.5 px-4 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors">{t('common.save')}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  if (noCard) return <><div>{activitiesContent}</div><DashDeleteConfirm open={deleteConfirmId !== null} message={t('dashboard.delete_activity_confirm')} onConfirm={() => { if (deleteConfirmId !== null) void handleDelete(deleteConfirmId); }} onClose={() => setDeleteConfirmId(null)} isPending={busy} />{activityEditModal}</>;
   return (
     <Card
       title={t('dashboard.activities_section')}
@@ -1481,7 +1420,56 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
       }
     >
       {activitiesContent}
+      <DashDeleteConfirm open={deleteConfirmId !== null} message={t('dashboard.delete_activity_confirm')} onConfirm={() => { if (deleteConfirmId !== null) void handleDelete(deleteConfirmId); }} onClose={() => setDeleteConfirmId(null)} isPending={busy} />
+      {activityEditModal}
     </Card>
+  );
+}
+
+
+/* --- Dash Delete Confirm Dialog --- */
+function DashDeleteConfirm({
+  open, message, onConfirm, onClose, isPending,
+}: {
+  open: boolean;
+  message: string;
+  onConfirm: () => void;
+  onClose: () => void;
+  isPending?: boolean;
+}) {
+  const { t } = useTranslation();
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="w-full max-w-xs rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4">
+        <div className="flex flex-col items-center gap-2 text-center">
+          <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+            <IconTrash className="w-6 h-6 text-red-600 dark:text-red-400" />
+          </div>
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{message}</p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={onConfirm}
+            disabled={isPending}
+            className="w-full rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50 transition-colors inline-flex items-center justify-center"
+          >
+            {isPending ? <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> : t('common.delete')}
+          </button>
+          <button
+            onClick={onClose}
+            className="w-full rounded-xl py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            {t('common.cancel')}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1509,6 +1497,40 @@ function DailyLogWorkspace({
   const activities = dash?.activityEntries ?? [];
   const mealCount = foods.length;
   const activityCount = activities.length;
+
+  const { data: foodTemplates = [] } = useQuery({
+    queryKey: queryKeys.foodTemplates(),
+    queryFn: () => foodTemplateService.getAll().then(r => r.data),
+    staleTime: 10 * 60 * 1000,
+  });
+  const activeFoodTemplates = foodTemplates.filter(ft => ft.isActive);
+  const [showFoodPicker, setShowFoodPicker] = useState(false);
+  const [addingFromFoodTemplate, setAddingFromFoodTemplate] = useState(false);
+  const [foodAddError, setFoodAddError] = useState<string | null>(null);
+
+  async function addFromFoodTemplate(id: number) {
+    const tpl = activeFoodTemplates.find(ft => ft.foodTemplateId === id);
+    if (!tpl) return;
+    setAddingFromFoodTemplate(true);
+    setFoodAddError(null);
+    try {
+      await foodService.create(date, {
+        foodName: tpl.templateName,
+        portionDescription: tpl.portionDescription,
+        quantity: tpl.defaultQuantity,
+        caloriesKcal: tpl.caloriesKcal,
+        proteinGrams: tpl.proteinGrams,
+        fatGrams: tpl.fatGrams,
+        carbsGrams: tpl.carbsGrams,
+        alcoholGrams: tpl.alcoholGrams,
+        foodTemplateId: tpl.foodTemplateId,
+      });
+      onChanged();
+    } catch (err) {
+      setFoodAddError(extractApiError(err, t('dashboard.confirm_food_error')));
+    }
+    setAddingFromFoodTemplate(false);
+  }
 
   return (
     <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
@@ -1558,11 +1580,33 @@ function DailyLogWorkspace({
         </div>
       </div>
 
-      {/* Tab content – both panels stay mounted to preserve typed input on tab switch */}
+      {/* Tab content � both panels stay mounted to preserve typed input on tab switch */}
       <div className="p-3">
         <div className={`space-y-4${tab !== "meals" ? " hidden" : ""}`}>
           <FoodInput date={date} onSaved={onChanged} isToday={isToday} noCard />
           <MealsTable date={date} foods={foods} onChanged={onChanged} isToday={isToday} noCard />
+          <div className="mt-1">
+            <button
+              onClick={() => setShowFoodPicker(true)}
+              disabled={addingFromFoodTemplate}
+              className="rounded-md border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-sm text-indigo-700 dark:text-indigo-300 font-medium w-full hover:bg-indigo-50 dark:hover:bg-indigo-900/30 disabled:opacity-50 transition-colors text-left"
+            >
+              {addingFromFoodTemplate ? t('common.adding') : t('dashboard.add_food_from_templates')}
+            </button>
+            {foodAddError && <p className="mt-1 text-xs text-red-600" role="alert">{foodAddError}</p>}
+            <TemplatePickerDialog
+              open={showFoodPicker}
+              title={t('dashboard.add_food_from_templates')}
+              items={activeFoodTemplates.map(ft => ({
+                id: ft.foodTemplateId,
+                label: ft.templateName,
+                meta: `${ft.defaultQuantity}${ft.portionDescription ? ' ' + ft.portionDescription : ''} � ${Math.round(ft.caloriesKcal)} kcal`,
+              }))}
+              onSelect={addFromFoodTemplate}
+              onClose={() => setShowFoodPicker(false)}
+              busy={addingFromFoodTemplate}
+            />
+          </div>
         </div>
         <div className={`space-y-4${tab !== "activities" ? " hidden" : ""}`}>
           <ActivityInput date={date} onSaved={onChanged} isToday={isToday} noCard />

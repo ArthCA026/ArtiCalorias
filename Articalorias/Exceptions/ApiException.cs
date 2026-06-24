@@ -20,4 +20,5 @@ public static class ErrorCodes
     public const string CodeInvalid = "CODE_INVALID";
     public const string TooManyAttempts = "TOO_MANY_ATTEMPTS";
     public const string ResendCooldown = "RESEND_COOLDOWN";
+    public const string InvalidInput = "INVALID_INPUT";
 }

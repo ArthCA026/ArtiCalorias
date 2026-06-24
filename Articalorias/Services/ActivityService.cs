@@ -140,11 +140,14 @@ public class ActivityService : IActivityService
         return template;
     }
 
-    public async Task<ActivityTemplate> UpdateTemplateAsync(ActivityTemplate template)
+    public async Task<ActivityTemplate?> UpdateTemplateAsync(ActivityTemplate template)
     {
         var existing = await _db.ActivityTemplates
-            .FirstOrDefaultAsync(t => t.ActivityTemplateId == template.ActivityTemplateId)
-            ?? throw new InvalidOperationException("ActivityTemplate not found.");
+            .FirstOrDefaultAsync(t => t.ActivityTemplateId == template.ActivityTemplateId
+                && t.IsActive
+                && (t.TemplateScope == "SYSTEM" || t.UserId == template.UserId));
+
+        if (existing is null) return null;
 
         if (existing.TemplateScope == "SYSTEM")
         {
@@ -165,17 +168,22 @@ public class ActivityService : IActivityService
         return existing;
     }
 
-    public async Task DeleteTemplateAsync(long activityTemplateId)
+    public async Task<bool> DeleteTemplateAsync(long activityTemplateId, long userId)
     {
-        var template = await _db.ActivityTemplates.FindAsync(activityTemplateId)
-            ?? throw new InvalidOperationException("ActivityTemplate not found.");
+        var template = await _db.ActivityTemplates
+            .FirstOrDefaultAsync(t => t.ActivityTemplateId == activityTemplateId
+                && t.UserId == userId
+                && t.IsActive);
+
+        if (template is null) return false;
 
         if (template.TemplateScope == "SYSTEM")
-            throw new InvalidOperationException("System templates cannot be deleted.");
+            return false;
 
         template.IsActive = false;
         template.UpdatedAtUtc = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+        return true;
     }
 
     // ── Calculation logic ──

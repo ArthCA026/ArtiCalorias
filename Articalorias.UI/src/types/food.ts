@@ -8,7 +8,6 @@ export interface FoodEntryResponse {
   fatGrams: number;
   carbsGrams: number;
   alcoholGrams: number;
-  sourceType: string;
   sortOrder: number;
   notes: string | null;
 }
@@ -22,7 +21,7 @@ export interface CreateFoodEntryRequest {
   fatGrams: number;
   carbsGrams: number;
   alcoholGrams: number;
-  sourceType: string;
+  foodTemplateId?: number;
   notes?: string | null;
 }
 

@@ -48,6 +48,10 @@ export const activityService = {
     return api.delete(`/activities/templates/${templateId}`);
   },
 
+  getRoutinesForActivityTemplate(templateId: number) {
+    return api.get<string[]>(`/favorites/activity-templates/${templateId}/routines`);
+  },
+
   // --- AI activity parsing ---
 
   parseActivity(data: ParseActivityRequest) {

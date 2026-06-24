@@ -23,6 +23,7 @@ public class DailyLogController : ControllerBase
     private readonly IFoodParsingService _foodParsing;
     private readonly IActivityParsingService _activityParsing;
     private readonly IUserProfileService _profileService;
+    private readonly IFoodTemplateService _foodTemplateService;
 
     public DailyLogController(
         IDailyLogService dailyLogService,
@@ -31,7 +32,8 @@ public class DailyLogController : ControllerBase
         IRecalculationService recalculation,
         IFoodParsingService foodParsing,
         IActivityParsingService activityParsing,
-        IUserProfileService profileService)
+        IUserProfileService profileService,
+        IFoodTemplateService foodTemplateService)
     {
         _dailyLogService = dailyLogService;
         _foodEntryService = foodEntryService;
@@ -40,6 +42,7 @@ public class DailyLogController : ControllerBase
         _foodParsing = foodParsing;
         _activityParsing = activityParsing;
         _profileService = profileService;
+        _foodTemplateService = foodTemplateService;
     }
 
     [HttpGet("{date}")]
@@ -134,7 +137,6 @@ public class DailyLogController : ControllerBase
             FatGrams = i.FatGrams,
             CarbsGrams = i.CarbsGrams,
             AlcoholGrams = i.AlcoholGrams,
-            SourceType = i.SourceType,
             Notes = i.Notes
         }).ToList();
 
@@ -202,6 +204,14 @@ public class DailyLogController : ControllerBase
         var userId = GetUserId();
         var log = await _dailyLogService.GetOrCreateAsync(userId, date);
 
+        // Validate FoodTemplateId ownership if provided
+        if (request.FoodTemplateId.HasValue)
+        {
+            var template = await _foodTemplateService.GetByIdAsync(request.FoodTemplateId.Value, userId);
+            if (template is null)
+                return BadRequest("Invalid FoodTemplateId.");
+        }
+
         var entry = new FoodEntry
         {
             DailyLogId = log.DailyLogId,
@@ -213,7 +223,7 @@ public class DailyLogController : ControllerBase
             FatGrams = request.FatGrams,
             CarbsGrams = request.CarbsGrams,
             AlcoholGrams = request.AlcoholGrams,
-            SourceType = request.SourceType,
+            FoodTemplateId = request.FoodTemplateId,
             Notes = request.Notes
         };
 
@@ -291,7 +301,6 @@ public class DailyLogController : ControllerBase
         FatGrams = f.FatGrams,
         CarbsGrams = f.CarbsGrams,
         AlcoholGrams = f.AlcoholGrams,
-        SourceType = f.SourceType,
         SortOrder = f.SortOrder,
         Notes = f.Notes
     };

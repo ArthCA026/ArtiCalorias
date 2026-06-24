@@ -111,9 +111,9 @@ function CustomInput({ initialGrams, weightKg, onApply, onBack, disabled }: Cust
           <input
             ref={inputRef}
             id="custom-protein-input"
-            type="number"
-            step="1"
+            type="text"
             inputMode="numeric"
+            pattern="[0-9]*"
             value={value}
             onChange={(e) => { setValue(e.target.value); if (touched) setTouched(false); }}
             onKeyDown={(e) => { if (e.key === "Enter") handleApply(); }}

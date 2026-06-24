@@ -15,9 +15,10 @@ public class FoodEntry
     public decimal CarbsGrams { get; set; }
     public decimal AlcoholGrams { get; set; }
 
-    public string SourceType { get; set; } = "MANUAL";
     public int SortOrder { get; set; }
     public string? Notes { get; set; }
+
+    public long? FoodTemplateId { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
@@ -25,4 +26,5 @@ public class FoodEntry
 
     // Navigation
     public DailyLog DailyLog { get; set; } = null!;
+    public FoodTemplate? FoodTemplate { get; set; }
 }

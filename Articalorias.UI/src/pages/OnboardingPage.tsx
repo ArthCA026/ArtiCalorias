@@ -204,11 +204,11 @@ export default function OnboardingPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('onboarding.weight_label')}</label>
               <input
-                type="number"
-                step="0.1"
+                type="text"
                 inputMode="decimal"
+                pattern="[0-9]*[.,]?[0-9]*"
                 value={weightUnit === "lbs" ? String(Math.round(kgToDisplay(parseFloat(form.currentWeightKg) || 0, "lbs") * 10) / 10) : form.currentWeightKg}
-                onChange={(e) => set("currentWeightKg", weightUnit === "lbs" ? String(displayToKg(parseFloat(e.target.value) || 0, "lbs")) : e.target.value)}
+                onChange={(e) => set("currentWeightKg", weightUnit === "lbs" ? String(displayToKg(parseFloat(e.target.value.replace(",", ".")) || 0, "lbs")) : e.target.value)}
                 className={`mt-1 block w-full rounded-md border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm shadow-sm focus:ring-1 focus:outline-none ${fieldErrors.currentWeightKg ? "border-red-300 dark:border-red-600 focus:border-red-500 focus:ring-red-500" : "border-gray-300 dark:border-gray-600 focus:border-indigo-500 focus:ring-indigo-500"}`}
               />
               {fieldErrors.currentWeightKg && <p className="mt-1 text-xs text-red-600">{fieldErrors.currentWeightKg}</p>}
@@ -216,9 +216,9 @@ export default function OnboardingPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('onboarding.height_label')}</label>
               <input
-                type="number"
-                step="0.1"
+                type="text"
                 inputMode="decimal"
+                pattern="[0-9]*[.,]?[0-9]*"
                 value={form.heightCm}
                 onChange={(e) => set("heightCm", e.target.value)}
                 className={`mt-1 block w-full rounded-md border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm shadow-sm focus:ring-1 focus:outline-none ${fieldErrors.heightCm ? "border-red-300 dark:border-red-600 focus:border-red-500 focus:ring-red-500" : "border-gray-300 dark:border-gray-600 focus:border-indigo-500 focus:ring-indigo-500"}`}
@@ -231,9 +231,9 @@ export default function OnboardingPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('onboarding.age_label')}</label>
               <input
-                type="number"
-                step="1"
+                type="text"
                 inputMode="numeric"
+                pattern="[0-9]*"
                 value={form.age}
                 onChange={(e) => set("age", e.target.value)}
                 className={`mt-1 block w-full rounded-md border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm shadow-sm focus:ring-1 focus:outline-none ${fieldErrors.age ? "border-red-300 dark:border-red-600 focus:border-red-500 focus:ring-red-500" : "border-gray-300 dark:border-gray-600 focus:border-indigo-500 focus:ring-indigo-500"}`}
@@ -371,9 +371,9 @@ export default function OnboardingPage() {
                   ) : (
                     <>
                       <input
-                        type="number"
-                        step="1"
+                        type="text"
                         inputMode="numeric"
+                        pattern="[0-9]*"
                         value={energyUnit === "kJ" ? String(Math.round(kcalToDisplay(parseFloat(form.bmrKcal) || 0, "kJ"))) : form.bmrKcal}
                         onChange={(e) => set("bmrKcal", energyUnit === "kJ" ? String(displayToKcal(parseFloat(e.target.value) || 0, "kJ")) : e.target.value)}
                         placeholder={energyUnit === "kJ" ? "e.g. 7113" : "e.g. 1700"}
@@ -411,9 +411,9 @@ export default function OnboardingPage() {
                   ) : (
                     <>
                       <input
-                        type="number"
-                        step="0.1"
+                        type="text"
                         inputMode="decimal"
+                        pattern="[0-9]*[.,]?[0-9]*"
                         value={form.bodyFatPercent}
                         onChange={(e) => set("bodyFatPercent", e.target.value)}
                         placeholder="e.g. 25"

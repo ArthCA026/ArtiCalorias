@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Articalorias.Configuration;
 using Articalorias.DTOs.FoodParsing;
+using Articalorias.Exceptions;
 using Articalorias.Interfaces;
 using Microsoft.Extensions.Options;
 using OpenAI.Chat;
@@ -40,6 +41,19 @@ public class FoodParsingService : IFoodParsingService
     {
         if (string.IsNullOrWhiteSpace(freeText))
             return [];
+
+        if (PromptInjectionScanner.ContainsInjection(freeText))
+        {
+            _logger.LogWarning("Prompt injection detected in food free-text input: {Input}",
+                PromptInjectionScanner.SanitizeForLog(freeText));
+            throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
+        }
+        if (PromptInjectionScanner.ContainsInjection(country))
+        {
+            _logger.LogWarning("Prompt injection detected in food country field: {Input}",
+                PromptInjectionScanner.SanitizeForLog(country!));
+            throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
+        }
 
         var systemPrompt = string.IsNullOrWhiteSpace(country)
             ? DeveloperPrompt
@@ -263,6 +277,19 @@ public class FoodParsingService : IFoodParsingService
     {
         if (string.IsNullOrWhiteSpace(imageBase64))
             throw new ArgumentException("Image data is required.", nameof(imageBase64));
+
+        if (PromptInjectionScanner.ContainsInjection(freeText))
+        {
+            _logger.LogWarning("Prompt injection detected in image food text hint: {Input}",
+                PromptInjectionScanner.SanitizeForLog(freeText!));
+            throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
+        }
+        if (PromptInjectionScanner.ContainsInjection(country))
+        {
+            _logger.LogWarning("Prompt injection detected in food country field: {Input}",
+                PromptInjectionScanner.SanitizeForLog(country!));
+            throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
+        }
 
         var systemPrompt = string.IsNullOrWhiteSpace(country)
             ? DeveloperPrompt

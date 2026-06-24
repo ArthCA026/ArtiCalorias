@@ -98,9 +98,36 @@ public class DailyLogService : IDailyLogService
                 CalculateActivityCalories(entry, dailyLog.SnapshotWeightKg);
                 _db.ActivityEntries.Add(entry);
             }
-
-            await _db.SaveChangesAsync();
         }
+
+        // Auto-add food entries from food templates with AutoAddToNewDay = true.
+        var autoAddFoodTemplates = await _db.FoodTemplates
+            .Where(f => f.IsActive && f.AutoAddToNewDay && f.UserId == userId)
+            .ToListAsync();
+
+        var foodSortOrder = 1;
+        foreach (var template in autoAddFoodTemplates)
+        {
+            var foodEntry = new FoodEntry
+            {
+                DailyLogId = dailyLog.DailyLogId,
+                FoodTemplateId = template.FoodTemplateId,
+                FoodName = template.TemplateName,
+                PortionDescription = template.PortionDescription,
+                Quantity = template.DefaultQuantity,
+                CaloriesKcal = template.CaloriesKcal,
+                ProteinGrams = template.ProteinGrams,
+                FatGrams = template.FatGrams,
+                CarbsGrams = template.CarbsGrams,
+                AlcoholGrams = template.AlcoholGrams,
+                SortOrder = foodSortOrder++,
+                CreatedAtUtc = DateTime.UtcNow,
+                UpdatedAtUtc = DateTime.UtcNow,
+            };
+            _db.FoodEntries.Add(foodEntry);
+        }
+
+        await _db.SaveChangesAsync();
 
         // Run full pipeline on the new day
         await _recalculation.RecalculateFullPipelineAsync(dailyLog.DailyLogId);

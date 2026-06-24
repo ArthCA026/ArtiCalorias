@@ -29,9 +29,7 @@ public class CreateFoodEntryRequest
     [Range(0, 10000)]
     public decimal AlcoholGrams { get; set; }
 
-    [Required]
-    [StringLength(10)]
-    public string SourceType { get; set; } = "MANUAL";
+    public long? FoodTemplateId { get; set; }
 
     [StringLength(500)]
     public string? Notes { get; set; }

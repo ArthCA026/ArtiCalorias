@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Articalorias.Configuration;
 using Articalorias.DTOs.ActivityParsing;
+using Articalorias.Exceptions;
 using Articalorias.Interfaces;
 using Microsoft.Extensions.Options;
 using OpenAI.Chat;
@@ -40,6 +41,13 @@ public class ActivityParsingService : IActivityParsingService
         if (string.IsNullOrWhiteSpace(freeText))
             return [];
 
+        if (PromptInjectionScanner.ContainsInjection(freeText))
+        {
+            _logger.LogWarning("Prompt injection detected in activity free-text input: {Input}",
+                PromptInjectionScanner.SanitizeForLog(freeText));
+            throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
+        }
+
         var messages = new List<ChatMessage>
         {
             new SystemChatMessage(ActivityParseSystemPrompt),
@@ -73,6 +81,13 @@ public class ActivityParsingService : IActivityParsingService
     {
         if (string.IsNullOrWhiteSpace(activityName))
             throw new ArgumentException("Activity name is required.", nameof(activityName));
+
+        if (PromptInjectionScanner.ContainsInjection(activityName))
+        {
+            _logger.LogWarning("Prompt injection detected in MET estimate input: {Input}",
+                PromptInjectionScanner.SanitizeForLog(activityName));
+            throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
+        }
 
         var userMessage = durationMinutes.HasValue
             ? $"{activityName} ({durationMinutes.Value} minutes)"
@@ -118,25 +133,19 @@ public class ActivityParsingService : IActivityParsingService
 
         Each item must have exactly these fields:
         - activityName (string): normalized activity name in the same language as the user's input for that activity; do not translate
-        - activityType (string): always "MET_SIMPLE"
-        - durationMinutes (number | null): total duration in minutes, or null if not specified
-        - metValue (number | null): estimated MET value for the activity
-        - notes (null): always null
-        - segments (null): always null
+        - durationMinutes (number): duration in minutes; if the user stated it, use their value; otherwise estimate a typical duration for that activity type
+        - metValue (number): estimated MET value for the activity
 
         Rules:
         - Parse each distinct activity as a separate item.
         - Keep activityName in the same language as the user’s activity text; normalize but never translate.
         - If the user mentions multiple activities joined by "and", "y", commas, or similar separators, return one item per activity.
-        - activityType must always be "MET_SIMPLE".
-        - notes must always be null.
-        - segments must always be null.
         - Estimate a reasonable MET value based on the Compendium of Physical Activities.
         - Round metValue to 1 decimal place.
         - Convert durations to minutes.
         - Support inputs in English or Spanish.
         - Never return negative values.
-        - If duration is not stated clearly, use null instead of inventing a duration.
+        - If duration is not stated clearly, estimate a typical duration for that activity (e.g., aerobics class → 45, yoga → 60, running → 30, weight training → 45, stretching → 15). Use the most common session length for recreational exercise.
         - If the activity is too vague to assign a confident MET value, use the most reasonable common estimate for that activity label.
         - Output valid JSON only, with no markdown or extra text.
 
@@ -156,19 +165,13 @@ public class ActivityParsingService : IActivityParsingService
           "items": [
             {
               "activityName": "Correr",
-              "activityType": "MET_SIMPLE",
               "durationMinutes": 30,
-              "metValue": 8.3,
-              "notes": null,
-              "segments": null
+              "metValue": 8.3
             },
             {
               "activityName": "Estiramiento",
-              "activityType": "MET_SIMPLE",
               "durationMinutes": 15,
-              "metValue": 2.3,
-              "notes": null,
-              "segments": null
+              "metValue": 2.3
             }
           ]
         }
