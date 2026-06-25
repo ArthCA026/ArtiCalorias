@@ -1,5 +1,7 @@
 import { useState, useRef } from 'react';
 import { DecimalInput } from '@/components/DecimalInput';
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { Toast, useToast } from '@/components/Toast';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
@@ -92,7 +94,7 @@ function IconChevronDown({ className = 'w-4 h-4' }: { className?: string }) {
 // --- Shared label/input helpers ---
 
 function Label({ htmlFor, text }: { htmlFor: string; text: string }) {
-  return <label htmlFor={htmlFor} className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5">{text}</label>;
+  return <label htmlFor={htmlFor} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{text}</label>;
 }
 
 function TextInput({ id, value, onChange, placeholder, required, maxLength }: {
@@ -183,12 +185,8 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
   const [estimatingMet, setEstimatingMet] = useState(false);
 
   const activeTemplates = templates.filter(t => t.isActive);
-  const systemTemplates = activeTemplates.filter(t => t.templateScope === 'SYSTEM');
-  const userTemplates = activeTemplates.filter(t => t.templateScope !== 'SYSTEM');
-
   const lowerSearch = search.toLowerCase();
-  const filteredSystem = systemTemplates.filter(t => t.templateName.toLowerCase().includes(lowerSearch));
-  const filteredUser = userTemplates.filter(t => t.templateName.toLowerCase().includes(lowerSearch));
+  const filtered = activeTemplates.filter(t => t.templateName.toLowerCase().includes(lowerSearch));
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -196,7 +194,6 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
         ? (form.durationUnit === 'hours' ? Number(form.durationMinutes) * 60 : Number(form.durationMinutes))
         : null;
       const req: ActivityTemplateRequest = {
-        templateScope: 'USER',
         templateName: form.templateName.trim(),
         autoAddToNewDay: form.autoAddToNewDay,
         defaultDurationMinutes: durationMins,
@@ -274,6 +271,7 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
         metValue: tmpl.defaultMET ?? null,
       });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard(today) });
+      qc.invalidateQueries({ queryKey: queryKeys.historyAll() });
       setQuickAddStates(s => ({ ...s, [tmpl.activityTemplateId]: 'success' }));
       setTimeout(() => setQuickAddStates(s => ({ ...s, [tmpl.activityTemplateId]: 'idle' })), 2000);
       onToast(t('favorites.activities.quick_add_success', { name: tmpl.templateName }), 'success');
@@ -286,7 +284,6 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
 
   function toggleAutoAdd(tmpl: ActivityTemplateResponse) {
     activityService.updateTemplate(tmpl.activityTemplateId, {
-      templateScope: tmpl.templateScope,
       templateName: tmpl.templateName,
       autoAddToNewDay: !tmpl.autoAddToNewDay,
       defaultDurationMinutes: tmpl.defaultDurationMinutes,
@@ -323,7 +320,7 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
       {formOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4" role="dialog" aria-modal="true" onClick={e => { if (e.target === e.currentTarget) cancelForm(); }}>
           <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4 overflow-y-auto max-h-[85vh]">
-          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             {editId !== null ? t('favorites.activities.edit_button') : t('favorites.activities.add_button')}
           </h3>
           <div>
@@ -359,13 +356,13 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
             <button
               type="button"
               onClick={() => setShowAdvanced(v => !v)}
-              className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 transition-colors"
+              className="flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
             >
               {showAdvanced ? <IconChevronUp className="w-3.5 h-3.5" /> : <IconChevronDown className="w-3.5 h-3.5" />}
               {t('dashboard.activity_advanced_options')}
             </button>
             {showAdvanced && (
-              <div className="mt-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-gray-800/60 px-3 py-2 space-y-2">
+              <div className="mt-2 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/60 px-3 py-2.5 space-y-2">
                 <Label htmlFor="act-met" text={t('favorites.activities.met_label')} />
                 <div className="flex gap-2 items-center">
                   <NumberInput id="act-met" value={form.met} onChange={v => setForm(f => ({ ...f, met: v }))} min="0.5" max="50" placeholder="Auto" />
@@ -382,15 +379,15 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
             )}
           </div>
           {formError && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{formError}</p>}
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-2 pt-2">
             <button
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending || !form.templateName.trim() || form.durationMinutes === '' || form.met === ''}
-              className="rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+              className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
             >
               {saveMutation.isPending ? <IconSpinner className="w-4 h-4" /> : t('common.save')}
             </button>
-            <button onClick={cancelForm} className="rounded-md px-4 py-1.5 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+            <button onClick={cancelForm} className="rounded-xl px-4 py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
               {t('common.cancel')}
             </button>
           </div>
@@ -398,11 +395,10 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
         </div>
       )}
 
-      {/* User templates */}
-      {filteredUser.length > 0 && (
+      {filtered.length > 0 && (
         <section>
           <div className="space-y-2">
-            {filteredUser.map(tmpl => (
+            {filtered.map(tmpl => (
               <TemplateCard
                 key={tmpl.activityTemplateId}
                 title={tmpl.templateName}
@@ -419,28 +415,7 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
         </section>
       )}
 
-      {/* System templates */}
-      {filteredSystem.length > 0 && (
-        <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-2">{t('favorites.activities.system_section_title')}</h3>
-          <div className="space-y-2">
-            {filteredSystem.map(tmpl => (
-              <TemplateCard
-                key={tmpl.activityTemplateId}
-                title={tmpl.templateName}
-                subtitle={tmpl.defaultDurationMinutes ? `${tmpl.defaultDurationMinutes} min` : undefined}
-                autoAdd={tmpl.autoAddToNewDay}
-                onToggleAutoAdd={() => toggleAutoAdd(tmpl)}
-                onQuickAdd={() => handleQuickAdd(tmpl)}
-                quickAddState={quickAddStates[tmpl.activityTemplateId] ?? 'idle'}
-                isSystem
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {filteredUser.length === 0 && filteredSystem.length === 0 && search && !formOpen && (
+      {filtered.length === 0 && search && !formOpen && (
         <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">{t('common.no_results')}</p>
       )}
 
@@ -586,6 +561,7 @@ function FoodsTab({ search, onToast }: { search: string; onToast: (msg: string, 
         alcoholGrams: tmpl.alcoholGrams,
       });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard(today) });
+      qc.invalidateQueries({ queryKey: queryKeys.historyAll() });
       setQuickAddStates(s => ({ ...s, [tmpl.foodTemplateId]: 'success' }));
       setTimeout(() => setQuickAddStates(s => ({ ...s, [tmpl.foodTemplateId]: 'idle' })), 2000);
       onToast(t('favorites.foods.quick_add_success', { name: tmpl.templateName }), 'success');
@@ -651,7 +627,7 @@ function FoodsTab({ search, onToast }: { search: string; onToast: (msg: string, 
       {formOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4" role="dialog" aria-modal="true" onClick={e => { if (e.target === e.currentTarget) cancelForm(); }}>
           <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4 overflow-y-auto max-h-[85vh]">
-          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             {editId !== null ? t('favorites.foods.edit_button') : t('favorites.foods.add_button')}
           </h3>
           <div>
@@ -675,15 +651,15 @@ function FoodsTab({ search, onToast }: { search: string; onToast: (msg: string, 
           {numberField('alcoholGrams', t('favorites.foods.alcohol_label'))}
           <Checkbox id="food-auto" checked={form.autoAddToNewDay} onChange={v => setForm(f => ({ ...f, autoAddToNewDay: v }))} label={t('favorites.foods.auto_add_label')} />
           {formError && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{formError}</p>}
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-2 pt-2">
             <button
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending || !form.templateName.trim()}
-              className="rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+              className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
             >
               {saveMutation.isPending ? <IconSpinner className="w-4 h-4" /> : t('common.save')}
             </button>
-            <button onClick={cancelForm} className="rounded-md px-4 py-1.5 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+            <button onClick={cancelForm} className="rounded-xl px-4 py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
               {t('common.cancel')}
             </button>
           </div>
@@ -839,6 +815,7 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
     try {
       const res = await foodTemplateService.addRoutineToToday(r.favoriteRoutineId);
       qc.invalidateQueries({ queryKey: queryKeys.dashboard(toDateString()) });
+      qc.invalidateQueries({ queryKey: queryKeys.historyAll() });
       if (res.data.skippedItems.length > 0) {
         setSkippedNotice(s => ({ ...s, [r.favoriteRoutineId]: res.data.skippedItems.length }));
         setTimeout(() => setSkippedNotice(s => { const n = { ...s }; delete n[r.favoriteRoutineId]; return n; }), 5000);
@@ -867,7 +844,7 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
       {formOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4" role="dialog" aria-modal="true" onClick={e => { if (e.target === e.currentTarget) { setFormOpen(false); setEditId(null); setRoutineName(''); setItems([]); setFormError(null); } }}>
           <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4 overflow-y-auto max-h-[85vh]">
-          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
             {editId !== null ? t('common.edit') : t('favorites.routines.add_button')}
           </h3>
           <div>
@@ -950,7 +927,7 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
           />
 
           {formError && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{formError}</p>}
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-2 pt-2">
             <button
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending || !routineName.trim()}
@@ -1119,7 +1096,6 @@ function AiInputSection({ tab, onToast }: { tab: 'activities' | 'foods'; onToast
         items.map(item =>
           item.type === 'activity' && item.activity
             ? activityService.createTemplate({
-                templateScope: 'USER',
                 templateName: item.activity.activityName,
                 autoAddToNewDay: false,
                 defaultDurationMinutes: item.activity.durationMinutes,
@@ -1179,85 +1155,6 @@ function AiInputSection({ tab, onToast }: { tab: 'activities' | 'foods'; onToast
         </button>
       </div>
       {error && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
-    </div>
-  );
-}
-
-// ============================================================
-// TOAST
-// ============================================================
-
-function Toast({ message, type }: { message: string; type: 'success' | 'error' }) {
-  return (
-    <div
-      className={`fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl text-sm font-medium pointer-events-none max-w-xs w-[calc(100%-2rem)] ${
-        type === 'success'
-          ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
-          : 'bg-red-600 text-white'
-      }`}
-    >
-      {type === 'success'
-        ? <IconCheck className="w-4 h-4 shrink-0" />
-        : <IconX className="w-4 h-4 shrink-0" />}
-      <span className="truncate">{message}</span>
-    </div>
-  );
-}
-
-// ============================================================
-// DELETE CONFIRM DIALOG
-// ============================================================
-
-function DeleteConfirmDialog({
-  open, itemName, message, affectedRoutines, onConfirm, onClose, isPending,
-}: {
-  open: boolean;
-  itemName?: string;
-  message: string;
-  affectedRoutines?: string[];
-  onConfirm: () => void;
-  onClose: () => void;
-  isPending?: boolean;
-}) {
-  const { t } = useTranslation();
-  if (!open) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="w-full max-w-xs rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4">
-        <div className="flex flex-col items-center gap-2 text-center">
-          <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-            <IconTrash className="w-6 h-6 text-red-600 dark:text-red-400" />
-          </div>
-          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{message}</p>
-          {itemName && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-full">{itemName}</p>
-          )}
-          {affectedRoutines && affectedRoutines.length > 0 && (
-            <p className="text-xs text-amber-600 dark:text-amber-400">{t('favorites.delete_used_in', { names: affectedRoutines.join(', ') })}</p>
-          )}
-        </div>
-        <div className="flex flex-col gap-2">
-          <button
-            onClick={onConfirm}
-            disabled={isPending}
-            className="w-full rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50 transition-colors inline-flex items-center justify-center"
-          >
-            {isPending ? <IconSpinner className="w-4 h-4" /> : t('common.delete')}
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full rounded-xl py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          >
-            {t('common.cancel')}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1381,14 +1278,7 @@ export default function FavoritesPage() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('activities');
   const [search, setSearch] = useState('');
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function showToast(message: string, type: 'success' | 'error') {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToast({ message, type });
-    toastTimerRef.current = setTimeout(() => { setToast(null); toastTimerRef.current = null; }, 3000);
-  }
+  const { toast, exiting, showToast } = useToast();
 
   function handleTabChange(newTab: Tab) {
     setTab(newTab);
@@ -1422,7 +1312,7 @@ export default function FavoritesPage() {
       {tab === 'activities' && <ActivitiesTab search={search} onToast={showToast} />}
       {tab === 'foods' && <FoodsTab search={search} onToast={showToast} />}
       {tab === 'routines' && <RoutinesTab search={search} onToast={showToast} />}
-      {toast && <Toast message={toast.message} type={toast.type} />}
+      {toast && <Toast message={toast.message} type={toast.type} exiting={exiting} />}
     </div>
   );
 }

@@ -531,7 +531,13 @@
     "activity_delete": "Eliminar",
     "meals_section_title": "Tus comidas",
     "activities_section_title": "Tus actividades",
-    "activities_subtitle": "Registrar actividades ayuda a ajustar tu estimación calórica diaria"
+    "activities_subtitle": "Registrar actividades ayuda a ajustar tu estimación calórica diaria",
+    "toast_food_template_saved": "{{name}} guardado en favoritos",
+    "toast_food_template_error": "No se pudo guardar en favoritos",
+    "toast_activity_template_saved": "{{name}} guardado en favoritos",
+    "toast_activity_template_error": "No se pudo guardar en favoritos",
+    "toast_food_added": "{{name}} añadido",
+    "toast_activity_added": "{{name}} añadido"
   },
   "settings": {
     "wip_title": "Los ajustes están en desarrollo",

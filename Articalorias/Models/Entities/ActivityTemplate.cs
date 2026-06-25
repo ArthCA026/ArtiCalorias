@@ -4,8 +4,6 @@ public class ActivityTemplate
 {
     public long ActivityTemplateId { get; set; }
     public long? UserId { get; set; }
-    public string TemplateScope { get; set; } = "USER";
-
     public string TemplateName { get; set; } = string.Empty;
 
     public bool AutoAddToNewDay { get; set; }

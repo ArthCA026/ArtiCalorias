@@ -77,7 +77,7 @@ public class DailyLogService : IDailyLogService
 
         // Auto-add activity entries from templates with AutoAddToNewDay = true.
         var autoAddTemplates = await _db.ActivityTemplates
-            .Where(t => t.IsActive && t.AutoAddToNewDay && (t.TemplateScope == "SYSTEM" || t.UserId == userId))
+            .Where(t => t.IsActive && t.AutoAddToNewDay && t.UserId == userId)
             .ToListAsync();
 
         if (autoAddTemplates.Count > 0)

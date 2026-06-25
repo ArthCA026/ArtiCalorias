@@ -1,5 +1,7 @@
 import { useState, useMemo, useRef } from "react";
 import { DecimalInput } from "@/components/DecimalInput";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { Toast, useToast } from "@/components/Toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { dailyLogService } from "@/services/dailyLogService";
@@ -52,6 +54,8 @@ export default function DayDashboard({ date }: DayDashboardProps) {
   const { mode: chartMode } = useCalorieMode();
   const isToday = useMemo(() => date === toDateString(), [date]);
 
+  const { toast, exiting, showToast } = useToast();
+
   function handleChanged() {
     queryClientInstance.invalidateQueries({ queryKey: queryKeys.dashboard(date) });
     queryClientInstance.invalidateQueries({ queryKey: queryKeys.historyAll() });
@@ -63,7 +67,8 @@ export default function DayDashboard({ date }: DayDashboardProps) {
   return (
     <div className="space-y-2">
       <CompactDayProgress dash={dash} isToday={isToday} chartMode={chartMode} />
-      <DailyLogWorkspace date={date} dash={dash} onChanged={handleChanged} isToday={isToday} activeTab={activeTab} onTabChange={setActiveTab} />
+      <DailyLogWorkspace date={date} dash={dash} onChanged={handleChanged} isToday={isToday} activeTab={activeTab} onTabChange={setActiveTab} onToast={showToast} />
+      {toast && <Toast message={toast.message} type={toast.type} exiting={exiting} />}
     </div>
   );
 }
@@ -82,9 +87,9 @@ function CompactDayProgress({ dash, isToday, chartMode }: { dash: DailyDashboard
     dash.totalDailyExpenditureKcal + dash.suggestedDailyAverageRemainingKcal;
 
   const budgetNote =
-    effectiveMode === "net"  ? "� vs. TDEE" :
-    effectiveMode === "goal" ? "� daily goal" :
-    "� weekly adjusted";
+    effectiveMode === "net"  ? "· vs. TDEE" :
+    effectiveMode === "goal" ? "· daily goal" :
+    "· weekly adjusted";
   const foodCal = dash.totalFoodCaloriesKcal;
   const calRemaining = dailyBudget - foodCal;
   const calOver = calRemaining < 0;
@@ -94,7 +99,7 @@ function CompactDayProgress({ dash, isToday, chartMode }: { dash: DailyDashboard
   const protGoalReached = protRemaining <= 0;
   const protAbs = Math.abs(protRemaining);
 
-  // Status line � a quick, human-friendly take on the numbers
+  // Status line · a quick, human-friendly take on the numbers
   const protPct = dash.snapshotProteinGoalGrams > 0 ? dash.totalProteinGrams / dash.snapshotProteinGoalGrams : 1;
 
   const calPct = dailyBudget > 0 ? Math.round((foodCal / dailyBudget) * 100) : 0;
@@ -311,7 +316,7 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
 
   const foodBody = (
     <>
-      {/* Hidden file input � triggers native camera on mobile via capture="environment" */}
+      {/* Hidden file input · triggers native camera on mobile via capture="environment" */}
       <input
         ref={fileInputRef}
         type="file"
@@ -321,7 +326,7 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
         className="sr-only"
         onChange={handleImageSelected}
       />
-      {/* Hidden file input � opens gallery/file picker (no capture attribute) */}
+      {/* Hidden file input · opens gallery/file picker (no capture attribute) */}
       <input
         ref={galleryInputRef}
         type="file"
@@ -625,7 +630,7 @@ function MealMobileCard({
           </button>
         </div>
       </div>
-      {/* Qty row � tappable chip */}
+      {/* Qty row · tappable chip */}
       <div className="px-3 pb-1.5">
         {isQtyEditing ? (
           <div className="flex items-center gap-1.5">
@@ -681,7 +686,7 @@ function MealMobileCard({
             </button>
             {f.portionDescription && (
               <>
-                <span aria-hidden="true" className="text-gray-300 dark:text-gray-600 select-none text-xs">�</span>
+                <span aria-hidden="true" className="text-gray-300 dark:text-gray-600 select-none text-xs">·</span>
                 <span className="text-xs text-gray-500 dark:text-gray-400">{f.portionDescription}</span>
               </>
             )}
@@ -721,7 +726,7 @@ function MobileStat({ label, value, accent }: { label: string; value: string; ac
 }
 
 /* --- Meals Table --- */
-function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { date: string; foods: FoodEntryResponse[]; onChanged: () => void; isToday: boolean; noCard?: boolean }) {
+function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard, onToast }: { date: string; foods: FoodEntryResponse[]; onChanged: () => void; isToday: boolean; noCard?: boolean; onToast: (msg: string, type: 'success' | 'error') => void }) {
   const { t } = useTranslation();
   const { energyUnit } = useUnits();
   const queryClient = useQueryClient();
@@ -755,9 +760,11 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
       });
       setFavStates(s => ({ ...s, [f.foodEntryId]: 'saved' }));
       queryClient.invalidateQueries({ queryKey: queryKeys.foodTemplates() });
+      onToast(t('dashboard.toast_food_template_saved', { name: f.foodName }), 'success');
       setTimeout(() => setFavStates(s => ({ ...s, [f.foodEntryId]: 'idle' })), 2000);
     } catch {
       setFavStates(s => ({ ...s, [f.foodEntryId]: 'error' }));
+      onToast(t('dashboard.toast_food_template_error'), 'error');
       setTimeout(() => setFavStates(s => ({ ...s, [f.foodEntryId]: 'idle' })), 2000);
     }
   }
@@ -955,7 +962,7 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
                         ) : (
                           <button
                             onClick={() => { setEditId(null); setEditForm(null); setQtyEditId(f.foodEntryId); setQtyEditValue(f.quantity != null ? String(f.quantity) : ""); }}
-                            title="Click to change quantity � scales all macros"
+                            title="Click to change quantity · scales all macros"
                             aria-label={`Quantity: ${f.quantity != null ? fmt(f.quantity, 1) : "not set"}. Click to edit.`}
                             className="group/qty tabular-nums text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
                           >
@@ -1051,35 +1058,35 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('common.edit')}</h3>
         <div>
           <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Food name</label>
-          <input value={editForm.foodName} onChange={(e) => setEditForm({ ...editForm, foodName: e.target.value })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Food name" />
+          <input value={editForm.foodName} onChange={(e) => setEditForm({ ...editForm, foodName: e.target.value })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Food name" />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Portion</label>
-            <input value={editForm.portionDescription ?? ""} onChange={(e) => setEditForm({ ...editForm, portionDescription: e.target.value })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Portion description" />
+            <input value={editForm.portionDescription ?? ""} onChange={(e) => setEditForm({ ...editForm, portionDescription: e.target.value })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Portion description" />
           </div>
           <div>
             <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">{energyLabel(energyUnit)}</label>
-            <DecimalInput value={Math.round(kcalToDisplay(editForm.caloriesKcal, energyUnit)) as number} onChange={(n) => setEditForm({ ...editForm, caloriesKcal: displayToKcal(typeof n === 'number' ? n : 0, energyUnit) })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Calories" />
+            <DecimalInput value={Math.round(kcalToDisplay(editForm.caloriesKcal, energyUnit)) as number} onChange={(n) => setEditForm({ ...editForm, caloriesKcal: displayToKcal(typeof n === 'number' ? n : 0, energyUnit) })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Calories" />
           </div>
           <div>
             <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Prot</label>
-            <DecimalInput value={editForm.proteinGrams} onChange={(n) => setEditForm({ ...editForm, proteinGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Protein" />
+            <DecimalInput value={editForm.proteinGrams} onChange={(n) => setEditForm({ ...editForm, proteinGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Protein" />
           </div>
           <div>
             <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Fat</label>
-            <DecimalInput value={editForm.fatGrams} onChange={(n) => setEditForm({ ...editForm, fatGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Fat" />
+            <DecimalInput value={editForm.fatGrams} onChange={(n) => setEditForm({ ...editForm, fatGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Fat" />
           </div>
           <div>
             <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Carbs</label>
-            <DecimalInput value={editForm.carbsGrams} onChange={(n) => setEditForm({ ...editForm, carbsGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Carbs" />
+            <DecimalInput value={editForm.carbsGrams} onChange={(n) => setEditForm({ ...editForm, carbsGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Carbs" />
           </div>
           <div>
             <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Alc</label>
-            <DecimalInput value={editForm.alcoholGrams} onChange={(n) => setEditForm({ ...editForm, alcoholGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Alcohol" />
+            <DecimalInput value={editForm.alcoholGrams} onChange={(n) => setEditForm({ ...editForm, alcoholGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Alcohol" />
           </div>
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between pt-2">
           <span title={foodEditMatchesTemplate(editForm) ? t('dashboard.template_matches') : t('dashboard.template_differs')} className={`p-1 pointer-events-none ${foodEditMatchesTemplate(editForm) ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'}`}><IconStar className="w-4 h-4" filled={foodEditMatchesTemplate(editForm)} /></span>
           <div className="flex gap-2">
             <button onClick={() => { setEditId(null); setEditForm(null); }} className="rounded-xl py-2.5 px-4 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{t('common.cancel')}</button>
@@ -1090,7 +1097,7 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
     </div>
   ) : null;
 
-  if (noCard) return <><div>{mealsContent}</div><DashDeleteConfirm open={deleteConfirmId !== null} message={t('dashboard.delete_food_confirm')} onConfirm={() => { if (deleteConfirmId !== null) void handleDelete(deleteConfirmId); }} onClose={() => setDeleteConfirmId(null)} isPending={busy} />{foodEditModal}</>;
+  if (noCard) return <><div>{mealsContent}</div><DeleteConfirmDialog open={deleteConfirmId !== null} message={t('dashboard.delete_food_confirm')} onConfirm={() => { if (deleteConfirmId !== null) void handleDelete(deleteConfirmId); }} onClose={() => setDeleteConfirmId(null)} isPending={busy} />{foodEditModal}</>;
   return (
     <Card
       title={t('dashboard.meals_title')}
@@ -1101,14 +1108,14 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard }: { dat
       }
     >
       {mealsContent}
-      <DashDeleteConfirm open={deleteConfirmId !== null} message={t('dashboard.delete_food_confirm')} onConfirm={() => { if (deleteConfirmId !== null) void handleDelete(deleteConfirmId); }} onClose={() => setDeleteConfirmId(null)} isPending={busy} />
+      <DeleteConfirmDialog open={deleteConfirmId !== null} message={t('dashboard.delete_food_confirm')} onConfirm={() => { if (deleteConfirmId !== null) void handleDelete(deleteConfirmId); }} onClose={() => setDeleteConfirmId(null)} isPending={busy} />
       {foodEditModal}
     </Card>
   );
 }
 
 /* --- Activity Section --- */
-function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCard }: { date: string; activities: ActivityEntryResponse[]; onChanged: () => void; isToday: boolean; noCard?: boolean }) {
+function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCard, onToast }: { date: string; activities: ActivityEntryResponse[]; onChanged: () => void; isToday: boolean; noCard?: boolean; onToast: (msg: string, type: 'success' | 'error') => void }) {
   const { t } = useTranslation();
   const { energyUnit } = useUnits();
   const queryClientInstance = useQueryClient();
@@ -1135,7 +1142,6 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
     setFavStates(s => ({ ...s, [a.activityEntryId]: 'saving' }));
     try {
       await activityService.createTemplate({
-        templateScope: 'USER',
         templateName: a.activityName,
         autoAddToNewDay: false,
         defaultDurationMinutes: a.durationMinutes,
@@ -1143,9 +1149,11 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
       });
       setFavStates(s => ({ ...s, [a.activityEntryId]: 'saved' }));
       queryClientInstance.invalidateQueries({ queryKey: queryKeys.activityTemplates() });
+      onToast(t('dashboard.toast_activity_template_saved', { name: a.activityName }), 'success');
       setTimeout(() => setFavStates(s => ({ ...s, [a.activityEntryId]: 'idle' })), 2000);
     } catch {
       setFavStates(s => ({ ...s, [a.activityEntryId]: 'error' }));
+      onToast(t('dashboard.toast_activity_template_error'), 'error');
       setTimeout(() => setFavStates(s => ({ ...s, [a.activityEntryId]: 'idle' })), 2000);
     }
   }
@@ -1205,6 +1213,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
         metValue: tpl.defaultMET,
       });
       onChanged();
+      onToast(t('dashboard.toast_activity_added', { name: tpl.templateName }), 'success');
     } catch (err) {
       setAddError(extractApiError(err, t('dashboard.activity_error')));
     }
@@ -1216,6 +1225,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
     setEditId(a.activityEntryId);
     setEditDurationUnit("minutes");
     setShowEditAdvanced(false);
+    setEditError(null);
     setEditForm({
       activityName: a.activityName,
       durationMinutes: a.durationMinutes,
@@ -1226,12 +1236,15 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
   async function saveEditActivity() {
     if (!editForm || editId === null) return;
     setBusy(true);
+    setEditError(null);
     try {
       await activityService.update(date, editId, editForm);
       setEditId(null);
       setEditForm(null);
       onChanged();
-    } catch { /* ignore */ }
+    } catch (err) {
+      setEditError(extractApiError(err, t('dashboard.activity_error')));
+    }
     setBusy(false);
   }
 
@@ -1296,7 +1309,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
                                 <span className="line-clamp-2">{a.activityName}</span>
                               </td>
                               <td className="py-1.5 px-2 text-right tabular-nums text-gray-700">{a.durationMinutes != null ? (a.durationMinutes >= 60 ? `${+(a.durationMinutes / 60).toFixed(1)}h` : `${fmt(a.durationMinutes)} min`) : "\u2013"}</td>
-                              <td className={`py-1.5 px-2 text-right tabular-nums font-semibold ${a.calculatedCaloriesKcal < 0 ? "text-blue-600" : "text-gray-900"}`} title={a.calculatedCaloriesKcal < 0 ? "Below resting rate � burns less than your baseline" : undefined}>{Math.round(kcalToDisplay(a.calculatedCaloriesKcal, energyUnit)).toLocaleString()}</td>
+                              <td className={`py-1.5 px-2 text-right tabular-nums font-semibold ${a.calculatedCaloriesKcal < 0 ? "text-blue-600" : "text-gray-900"}`} title={a.calculatedCaloriesKcal < 0 ? "Below resting rate · burns less than your baseline" : undefined}>{Math.round(kcalToDisplay(a.calculatedCaloriesKcal, energyUnit)).toLocaleString()}</td>
                               <td className="py-1.5 px-2">
                                 <div className="flex gap-1 justify-end">
                                   <button onClick={() => { const isMatch = activityEntryMatchesTemplate(a); const state = favStates[a.activityEntryId] ?? 'idle'; if (isMatch && state === 'idle') removeActivityTemplate(a); else if (!isMatch && !['saving','saved'].includes(state)) saveActivityTemplate(a); }} disabled={favStates[a.activityEntryId] === 'saving'} title={(activityEntryMatchesTemplate(a) || favStates[a.activityEntryId] === 'saved') ? t('dashboard.remove_from_favorites') : t('dashboard.save_as_favorite')} aria-label={(activityEntryMatchesTemplate(a) || favStates[a.activityEntryId] === 'saved') ? t('dashboard.remove_from_favorites') : t('dashboard.save_as_favorite')} className={`rounded-md p-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500 ${(activityEntryMatchesTemplate(a) || favStates[a.activityEntryId] === 'saved') ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/20 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20' : favStates[a.activityEntryId] === 'error' ? 'text-red-500 disabled:opacity-50' : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50'}`}>{favStates[a.activityEntryId] === 'saving' ? <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> : <IconStar className="w-4 h-4" filled={activityEntryMatchesTemplate(a) || favStates[a.activityEntryId] === 'saved'} />}</button>
@@ -1368,20 +1381,21 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
       role="dialog"
       aria-modal="true"
-      onClick={e => { if (e.target === e.currentTarget) { setEditId(null); setEditForm(null); } }}
+      onClick={e => { if (e.target === e.currentTarget) { setEditId(null); setEditForm(null); setEditError(null); } }}
     >
       <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4 overflow-y-auto max-h-[85vh]">
-        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{userActivities.find(a => a.activityEntryId === editId)?.activityName}</p>
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{userActivities.find(a => a.activityEntryId === editId)?.activityName}</h3>
         <div>
           <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">{t('dashboard.activity_header_dur')}</label>
           <div className="flex gap-2">
-            <DecimalInput value={editForm.durationMinutes != null ? (editDurationUnit === "hours" ? parseFloat((editForm.durationMinutes / 60).toFixed(2)) : editForm.durationMinutes) : ""} onChange={(n) => { const v = typeof n === 'number' ? n : null; setEditForm({ ...editForm, durationMinutes: v != null ? (editDurationUnit === "hours" ? v * 60 : v) : null }); }} aria-label="Duration" className="w-full rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-            <select value={editDurationUnit} onChange={(e) => setEditDurationUnit(e.target.value as "minutes" | "hours")} aria-label="Duration unit" className="rounded-md border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm">
+            <DecimalInput value={editForm.durationMinutes != null ? (editDurationUnit === "hours" ? parseFloat((editForm.durationMinutes / 60).toFixed(2)) : editForm.durationMinutes) : ""} onChange={(n) => { const v = typeof n === 'number' ? n : null; setEditForm({ ...editForm, durationMinutes: v != null ? (editDurationUnit === "hours" ? v * 60 : v) : null }); }} aria-label="Duration" className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
+            <select value={editDurationUnit} onChange={(e) => setEditDurationUnit(e.target.value as "minutes" | "hours")} aria-label="Duration unit" className="rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm">
               <option value="minutes">min</option>
               <option value="hours">hr</option>
             </select>
           </div>
         </div>
+        {editError && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{editError}</p>}
         {!alwaysShowAdvanced && (
           <button type="button" onClick={() => setShowEditAdvanced(v => !v)} aria-expanded={showEditAdvanced} className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-medium transition-colors">
             <svg className={`h-3.5 w-3.5 transition-transform ${showEditAdvanced ? "rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
@@ -1397,10 +1411,10 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
             </div>
           </div>
         )}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between pt-2">
           <span title={activityEditMatchesTemplate(editForm) ? t('dashboard.template_matches') : t('dashboard.template_differs')} className={`p-1 pointer-events-none ${activityEditMatchesTemplate(editForm) ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'}`}><IconStar className="w-4 h-4" filled={activityEditMatchesTemplate(editForm)} /></span>
           <div className="flex gap-2">
-            <button onClick={() => { setEditId(null); setEditForm(null); }} className="rounded-xl py-2.5 px-4 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{t('common.cancel')}</button>
+            <button onClick={() => { setEditId(null); setEditForm(null); setEditError(null); }} className="rounded-xl py-2.5 px-4 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{t('common.cancel')}</button>
             <button onClick={saveEditActivity} disabled={busy} className="rounded-xl bg-indigo-600 py-2.5 px-4 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors">{t('common.save')}</button>
           </div>
         </div>
@@ -1408,7 +1422,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
     </div>
   ) : null;
 
-  if (noCard) return <><div>{activitiesContent}</div><DashDeleteConfirm open={deleteConfirmId !== null} message={t('dashboard.delete_activity_confirm')} onConfirm={() => { if (deleteConfirmId !== null) void handleDelete(deleteConfirmId); }} onClose={() => setDeleteConfirmId(null)} isPending={busy} />{activityEditModal}</>;
+  if (noCard) return <><div>{activitiesContent}</div><DeleteConfirmDialog open={deleteConfirmId !== null} message={t('dashboard.delete_activity_confirm')} onConfirm={() => { if (deleteConfirmId !== null) void handleDelete(deleteConfirmId); }} onClose={() => setDeleteConfirmId(null)} isPending={busy} />{activityEditModal}</>;
   return (
     <Card
       title={t('dashboard.activities_section')}
@@ -1420,56 +1434,9 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
       }
     >
       {activitiesContent}
-      <DashDeleteConfirm open={deleteConfirmId !== null} message={t('dashboard.delete_activity_confirm')} onConfirm={() => { if (deleteConfirmId !== null) void handleDelete(deleteConfirmId); }} onClose={() => setDeleteConfirmId(null)} isPending={busy} />
+      <DeleteConfirmDialog open={deleteConfirmId !== null} message={t('dashboard.delete_activity_confirm')} onConfirm={() => { if (deleteConfirmId !== null) void handleDelete(deleteConfirmId); }} onClose={() => setDeleteConfirmId(null)} isPending={busy} />
       {activityEditModal}
     </Card>
-  );
-}
-
-
-/* --- Dash Delete Confirm Dialog --- */
-function DashDeleteConfirm({
-  open, message, onConfirm, onClose, isPending,
-}: {
-  open: boolean;
-  message: string;
-  onConfirm: () => void;
-  onClose: () => void;
-  isPending?: boolean;
-}) {
-  const { t } = useTranslation();
-  if (!open) return null;
-  return (
-    <div
-      className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="w-full max-w-xs rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4">
-        <div className="flex flex-col items-center gap-2 text-center">
-          <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-            <IconTrash className="w-6 h-6 text-red-600 dark:text-red-400" />
-          </div>
-          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{message}</p>
-        </div>
-        <div className="flex flex-col gap-2">
-          <button
-            onClick={onConfirm}
-            disabled={isPending}
-            className="w-full rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50 transition-colors inline-flex items-center justify-center"
-          >
-            {isPending ? <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> : t('common.delete')}
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full rounded-xl py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-          >
-            {t('common.cancel')}
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -1482,6 +1449,7 @@ function DailyLogWorkspace({
   isToday,
   activeTab,
   onTabChange,
+  onToast,
 }: {
   date: string;
   dash: DailyDashboardResponse | null;
@@ -1489,6 +1457,7 @@ function DailyLogWorkspace({
   isToday: boolean;
   activeTab: "meals" | "activities";
   onTabChange: (tab: "meals" | "activities") => void;
+  onToast: (msg: string, type: 'success' | 'error') => void;
 }) {
   const { t } = useTranslation();
   const tab = activeTab;
@@ -1526,6 +1495,7 @@ function DailyLogWorkspace({
         foodTemplateId: tpl.foodTemplateId,
       });
       onChanged();
+      onToast(t('dashboard.toast_food_added', { name: tpl.templateName }), 'success');
     } catch (err) {
       setFoodAddError(extractApiError(err, t('dashboard.confirm_food_error')));
     }
@@ -1580,11 +1550,11 @@ function DailyLogWorkspace({
         </div>
       </div>
 
-      {/* Tab content � both panels stay mounted to preserve typed input on tab switch */}
+      {/* Tab content · both panels stay mounted to preserve typed input on tab switch */}
       <div className="p-3">
         <div className={`space-y-4${tab !== "meals" ? " hidden" : ""}`}>
           <FoodInput date={date} onSaved={onChanged} isToday={isToday} noCard />
-          <MealsTable date={date} foods={foods} onChanged={onChanged} isToday={isToday} noCard />
+          <MealsTable date={date} foods={foods} onChanged={onChanged} isToday={isToday} noCard onToast={onToast} />
           <div className="mt-1">
             <button
               onClick={() => setShowFoodPicker(true)}
@@ -1600,7 +1570,7 @@ function DailyLogWorkspace({
               items={activeFoodTemplates.map(ft => ({
                 id: ft.foodTemplateId,
                 label: ft.templateName,
-                meta: `${ft.defaultQuantity}${ft.portionDescription ? ' ' + ft.portionDescription : ''} � ${Math.round(ft.caloriesKcal)} kcal`,
+                meta: `${ft.defaultQuantity}${ft.portionDescription ? ' ' + ft.portionDescription : ''} · ${Math.round(ft.caloriesKcal)} kcal`,
               }))}
               onSelect={addFromFoodTemplate}
               onClose={() => setShowFoodPicker(false)}
@@ -1610,7 +1580,7 @@ function DailyLogWorkspace({
         </div>
         <div className={`space-y-4${tab !== "activities" ? " hidden" : ""}`}>
           <ActivityInput date={date} onSaved={onChanged} isToday={isToday} noCard />
-          <ActivitySection date={date} activities={activities} onChanged={onChanged} isToday={isToday} noCard />
+          <ActivitySection date={date} activities={activities} onChanged={onChanged} isToday={isToday} noCard onToast={onToast} />
         </div>
       </div>
     </div>

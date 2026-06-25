@@ -5,10 +5,6 @@ namespace Articalorias.DTOs.Activities;
 public class ActivityTemplateRequest
 {
     [Required]
-    [StringLength(10)]
-    public string TemplateScope { get; set; } = "USER";
-
-    [Required]
     [StringLength(200)]
     public string TemplateName { get; set; } = string.Empty;
 

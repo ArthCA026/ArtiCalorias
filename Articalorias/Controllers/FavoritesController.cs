@@ -360,7 +360,6 @@ public class FavoritesController : ControllerBase
                 i.ActivityTemplate.DefaultDurationMinutes,
                 i.ActivityTemplate.DefaultMET,
                 i.ActivityTemplate.AutoAddToNewDay,
-                i.ActivityTemplate.TemplateScope,
             },
             FoodTemplate = i.FoodTemplate is null ? null : (object)MapToResponse(i.FoodTemplate),
         }).ToList(),

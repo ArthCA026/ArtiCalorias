@@ -171,8 +171,7 @@ public class FoodParsingService : IFoodParsingService
               - Alcohol calories must be included in caloriesKcal
 
             LANGUAGE RULES
-            - Preserve foodName and portionDescription in the same language as the user input when possible.
-            - Keep in the same language as the user’s activity text; normalize but never translate.
+            - Preserve foodName and portionDescription in the same language as the user input when possible. Preserve natural casing (e.g. "Coca-Cola", "Big Mac"); do not translate.
 
             OUTPUT SCHEMA (STRICT)
             Each item must contain exactly these fields:

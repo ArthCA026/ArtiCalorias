@@ -11,7 +11,6 @@ public class ActivityTemplateConfiguration : IEntityTypeConfiguration<ActivityTe
         builder.ToTable("ActivityTemplate", "app");
         builder.HasKey(a => a.ActivityTemplateId);
 
-        builder.Property(a => a.TemplateScope).HasMaxLength(20).IsUnicode(false).IsRequired();
         builder.Property(a => a.TemplateName).HasMaxLength(150).IsRequired();
 
         builder.Property(a => a.AutoAddToNewDay).HasDefaultValue(false);

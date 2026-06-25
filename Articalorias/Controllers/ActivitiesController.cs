@@ -96,13 +96,11 @@ public class ActivitiesController : ControllerBase
     {
         var userId = GetUserId();
 
-        if (request.TemplateScope != "SYSTEM" &&
-            (!request.DefaultDurationMinutes.HasValue || !request.DefaultMET.HasValue))
-            return BadRequest(new { message = "Duration and MET value are required for user activity templates." });
+        if (!request.DefaultDurationMinutes.HasValue || !request.DefaultMET.HasValue)
+            return BadRequest(new { message = "Duration and MET value are required for activity templates." });
         var template = new ActivityTemplate
         {
-            UserId = request.TemplateScope == "SYSTEM" ? null : userId,
-            TemplateScope = request.TemplateScope,
+            UserId = userId,
             TemplateName = request.TemplateName,
             AutoAddToNewDay = request.AutoAddToNewDay,
             DefaultDurationMinutes = request.DefaultDurationMinutes,
@@ -192,7 +190,6 @@ public class ActivitiesController : ControllerBase
     private static ActivityTemplateResponse MapTemplateToResponse(ActivityTemplate t) => new()
     {
         ActivityTemplateId = t.ActivityTemplateId,
-        TemplateScope = t.TemplateScope,
         TemplateName = t.TemplateName,
         AutoAddToNewDay = t.AutoAddToNewDay,
         IsActive = t.IsActive,

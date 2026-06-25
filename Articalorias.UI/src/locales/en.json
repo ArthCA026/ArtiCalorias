@@ -533,7 +533,13 @@
     "activity_delete": "Delete",
     "meals_section_title": "Your meals",
     "activities_section_title": "Your activities",
-    "activities_subtitle": "Logging activities helps fine-tune your daily calorie estimate"
+    "activities_subtitle": "Logging activities helps fine-tune your daily calorie estimate",
+    "toast_food_template_saved": "{{name}} saved to favorites",
+    "toast_food_template_error": "Couldn't save to favorites",
+    "toast_activity_template_saved": "{{name}} saved to favorites",
+    "toast_activity_template_error": "Couldn't save to favorites",
+    "toast_food_added": "{{name}} added",
+    "toast_activity_added": "{{name}} added"
   },
   "settings": {
     "wip_title": "Settings is a work in progress",

@@ -1,4 +1,5 @@
 using Articalorias.Data;
+using Articalorias.Exceptions;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -43,12 +44,9 @@ public class ActivityService : IActivityService
         var newEntryMinutes = entry.DurationMinutes ?? 0m;
 
         if (existingMinutes + newEntryMinutes > availableMinutes)
-            throw new InvalidOperationException(
-                $"Cannot exceed available activity time per day. " +
-                $"Reserved for sleep/NEAT: {reservedMinutes / 60m:F1}h. " +
-                $"Available: {availableMinutes / 60m:F1}h. " +
-                $"Already logged: {existingMinutes / 60m:F1}h. " +
-                $"Attempted to add: {newEntryMinutes / 60m:F1}h.");
+            throw new ApiException(ErrorCodes.ActivityDurationExceeded,
+                $"Activity duration exceeds the available time for this day " +
+                $"({availableMinutes / 60m:F1} h available, {existingMinutes / 60m:F1} h already logged).");
 
         var maxSort = await _db.ActivityEntries
             .Where(a => a.DailyLogId == entry.DailyLogId)
@@ -72,19 +70,9 @@ public class ActivityService : IActivityService
         var dailyLog = await _db.DailyLogs.FindAsync(existing.DailyLogId)
             ?? throw new InvalidOperationException("DailyLog not found.");
 
-        var isDurationOnly = existing.ActivityTemplate?.TemplateScope == "SYSTEM";
-
-        if (isDurationOnly)
-        {
-            // Global defaults and SYSTEM-template entries: only duration may be changed
-            existing.DurationMinutes = entry.DurationMinutes;
-        }
-        else
-        {
-            existing.ActivityName = entry.ActivityName;
-            existing.DurationMinutes = entry.DurationMinutes;
-            existing.METValue = entry.METValue;
-        }
+        existing.ActivityName = entry.ActivityName;
+        existing.DurationMinutes = entry.DurationMinutes;
+        existing.METValue = entry.METValue;
 
         existing.UpdatedAtUtc = DateTime.UtcNow;
         CalculateActivityCalories(existing, dailyLog.SnapshotWeightKg);
@@ -98,12 +86,9 @@ public class ActivityService : IActivityService
         var updatedMinutes = existing.DurationMinutes ?? 0m;
 
         if (otherMinutes + updatedMinutes > availableMinutes)
-            throw new InvalidOperationException(
-                $"Cannot exceed available activity time per day. " +
-                $"Reserved for sleep/NEAT: {reservedMinutes / 60m:F1}h. " +
-                $"Available: {availableMinutes / 60m:F1}h. " +
-                $"Other activities: {otherMinutes / 60m:F1}h. " +
-                $"This entry: {updatedMinutes / 60m:F1}h.");
+            throw new ApiException(ErrorCodes.ActivityDurationExceeded,
+                $"Activity duration exceeds the available time for this day " +
+                $"({availableMinutes / 60m:F1} h available, {otherMinutes / 60m:F1} h from other activities).");
 
         await _db.SaveChangesAsync();
 
@@ -128,7 +113,7 @@ public class ActivityService : IActivityService
     public async Task<IReadOnlyList<ActivityTemplate>> GetTemplatesAsync(long? userId)
     {
         return await _db.ActivityTemplates
-            .Where(t => t.IsActive && (t.TemplateScope == "SYSTEM" || t.UserId == userId))
+            .Where(t => t.IsActive && t.UserId == userId)
             .OrderBy(t => t.TemplateName)
             .ToListAsync();
     }
@@ -145,18 +130,9 @@ public class ActivityService : IActivityService
         var existing = await _db.ActivityTemplates
             .FirstOrDefaultAsync(t => t.ActivityTemplateId == template.ActivityTemplateId
                 && t.IsActive
-                && (t.TemplateScope == "SYSTEM" || t.UserId == template.UserId));
+                && t.UserId == template.UserId);
 
         if (existing is null) return null;
-
-        if (existing.TemplateScope == "SYSTEM")
-        {
-            // Only allow toggling AutoAddToNewDay on system templates
-            existing.AutoAddToNewDay = template.AutoAddToNewDay;
-            existing.UpdatedAtUtc = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
-            return existing;
-        }
 
         existing.TemplateName = template.TemplateName;
         existing.AutoAddToNewDay = template.AutoAddToNewDay;
@@ -176,9 +152,6 @@ public class ActivityService : IActivityService
                 && t.IsActive);
 
         if (template is null) return false;
-
-        if (template.TemplateScope == "SYSTEM")
-            return false;
 
         template.IsActive = false;
         template.UpdatedAtUtc = DateTime.UtcNow;

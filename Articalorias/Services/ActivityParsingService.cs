@@ -132,13 +132,13 @@ public class ActivityParsingService : IActivityParsingService
         Return a JSON object with a single key "items" containing an array.
 
         Each item must have exactly these fields:
-        - activityName (string): normalized activity name in the same language as the user's input for that activity; do not translate
+        - activityName (string): activity name in the same language as the user's input; preserve natural casing (e.g. "CrossFit", "Pilates"); do not translate
         - durationMinutes (number): duration in minutes; if the user stated it, use their value; otherwise estimate a typical duration for that activity type
         - metValue (number): estimated MET value for the activity
 
         Rules:
         - Parse each distinct activity as a separate item.
-        - Keep activityName in the same language as the user’s activity text; normalize but never translate.
+        - Keep activityName in the same language as the user's input; preserve natural casing; do not translate.
         - If the user mentions multiple activities joined by "and", "y", commas, or similar separators, return one item per activity.
         - Estimate a reasonable MET value based on the Compendium of Physical Activities.
         - Round metValue to 1 decimal place.

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router";
 import { useTranslation } from "react-i18next";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import i18n from "@/lib/i18n";
 import {
   ResponsiveContainer,
@@ -132,7 +133,7 @@ function MonthlyView() {
         <>
           {days.length >= 1 && <BalanceTrend days={days} />}
           {(days.length > 0 || unloggedDays.length > 0) && (
-            <DailyLogsCard days={days} unloggedDays={unloggedDays} onDayClick={(d) => navigate(d === toDateString() ? "/today" : "/history/" + d)} onDayDeleted={() => queryClientInstance.invalidateQueries({ queryKey: queryKeys.history(from, to) })} />
+            <DailyLogsCard days={days} unloggedDays={unloggedDays} onDayClick={(d) => navigate(d === toDateString() ? "/today" : "/history/" + d)} onDayDeleted={() => queryClientInstance.invalidateQueries({ queryKey: queryKeys.historyAll() })} />
           )}
         </>
       )}
@@ -291,15 +292,15 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
       )}
 
       {/* Delete confirmation dialog */}
-      {deleteTarget && (
-        <DeleteDayDialog
-          date={deleteTarget}
-          deleting={deleting}
-          error={deleteError}
-          onConfirm={handleDeleteConfirm}
-          onCancel={() => { setDeleteTarget(null); setDeleteError(null); }}
-        />
-      )}
+      <DeleteConfirmDialog
+        open={deleteTarget !== null}
+        message={t('history.delete_title')}
+        itemName={deleteTarget ? formatDayLabel(deleteTarget, i18n.language) : undefined}
+        error={deleteError}
+        onConfirm={handleDeleteConfirm}
+        onClose={() => { setDeleteTarget(null); setDeleteError(null); }}
+        isPending={deleting}
+      />
     </Card>
   );
 }
@@ -585,62 +586,6 @@ function DayDetail({ date }: { date: string }) {
       </div>
 
       <DayDashboard date={date} />
-    </div>
-  );
-}
-
-/* --- Delete Day Confirmation Dialog --- */
-
-function DeleteDayDialog({ date, deleting, error, onConfirm, onCancel }: {
-  date: string;
-  deleting: boolean;
-  error: string | null;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
-      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={onCancel} aria-hidden="true" />
-      <div className="relative w-full max-w-sm rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5 shadow-xl">
-        <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 dark:bg-red-900/30">
-            <svg className="h-5 w-5 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-              <line x1="12" y1="9" x2="12" y2="13" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-          </span>
-          <div className="min-w-0">
-            <h3 id="delete-dialog-title" className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('history.delete_title')}</h3>
-            <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400">
-              {t('history.delete_body_prefix')} <span className="font-medium text-gray-700 dark:text-gray-300">{formatDayLabel(date, i18n.language)}</span> {t('history.delete_body_suffix')}
-            </p>
-            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t('history.delete_warning')}</p>
-          </div>
-        </div>
-
-        {error && (
-          <p className="mt-3 rounded-md bg-red-50 dark:bg-red-900/30 px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</p>
-        )}
-
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            onClick={onCancel}
-            disabled={deleting}
-            className="rounded-md border border-gray-300 dark:border-gray-600 px-3.5 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={deleting}
-            className="rounded-md bg-red-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"
-          >
-            {deleting ? t('history.deleting') : t('history.delete_confirm')}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

@@ -23,7 +23,6 @@ export interface UpdateActivityEntryRequest {
 
 export interface ActivityTemplateResponse {
   activityTemplateId: number;
-  templateScope: string;
   templateName: string;
   autoAddToNewDay: boolean;
   isActive: boolean;
@@ -32,7 +31,6 @@ export interface ActivityTemplateResponse {
 }
 
 export interface ActivityTemplateRequest {
-  templateScope: string;
   templateName: string;
   autoAddToNewDay: boolean;
   defaultDurationMinutes?: number | null;
