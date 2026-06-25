@@ -646,7 +646,7 @@ function MealMobileCard({
                 if (e.key === "Escape") onQtyEditCancel();
               }}
               disabled={qtyBusy}
-              className="w-16 rounded-md border border-indigo-300 dark:border-indigo-700 px-2 py-1 text-sm font-semibold text-center dark:bg-gray-800 dark:text-gray-100 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+              className="w-16 rounded-md border border-indigo-300 dark:border-indigo-700 px-2 py-1 text-sm font-semibold text-center bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
               aria-label="Quantity"
             />
             <button
@@ -949,7 +949,7 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard, onToast
                                 if (e.key === "Escape") { setQtyEditId(null); setQtyEditValue(""); }
                               }}
                               disabled={qtyBusy}
-                              className="w-14 rounded border border-indigo-300 dark:border-indigo-700 dark:bg-gray-800 dark:text-gray-100 px-1 py-0.5 text-right text-sm tabular-nums focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                              className="w-14 rounded border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-1 py-0.5 text-right text-sm tabular-nums focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
                               aria-label="Quantity"
                             />
                             <button onClick={() => saveQtyEdit(f)} disabled={qtyBusy} title="Save quantity" aria-label="Save quantity" className="rounded p-0.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 disabled:opacity-50 transition-colors">
@@ -1058,32 +1058,32 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard, onToast
         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('common.edit')}</h3>
         <div>
           <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Food name</label>
-          <input value={editForm.foodName} onChange={(e) => setEditForm({ ...editForm, foodName: e.target.value })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Food name" />
+          <input value={editForm.foodName} onChange={(e) => setEditForm({ ...editForm, foodName: e.target.value })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Food name" />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Portion</label>
-            <input value={editForm.portionDescription ?? ""} onChange={(e) => setEditForm({ ...editForm, portionDescription: e.target.value })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Portion description" />
+            <input value={editForm.portionDescription ?? ""} onChange={(e) => setEditForm({ ...editForm, portionDescription: e.target.value })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Portion description" />
           </div>
           <div>
             <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">{energyLabel(energyUnit)}</label>
-            <DecimalInput value={Math.round(kcalToDisplay(editForm.caloriesKcal, energyUnit)) as number} onChange={(n) => setEditForm({ ...editForm, caloriesKcal: displayToKcal(typeof n === 'number' ? n : 0, energyUnit) })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Calories" />
+            <DecimalInput value={Math.round(kcalToDisplay(editForm.caloriesKcal, energyUnit)) as number} onChange={(n) => setEditForm({ ...editForm, caloriesKcal: displayToKcal(typeof n === 'number' ? n : 0, energyUnit) })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Calories" />
           </div>
           <div>
             <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Prot</label>
-            <DecimalInput value={editForm.proteinGrams} onChange={(n) => setEditForm({ ...editForm, proteinGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Protein" />
+            <DecimalInput value={editForm.proteinGrams} onChange={(n) => setEditForm({ ...editForm, proteinGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Protein" />
           </div>
           <div>
             <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Fat</label>
-            <DecimalInput value={editForm.fatGrams} onChange={(n) => setEditForm({ ...editForm, fatGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Fat" />
+            <DecimalInput value={editForm.fatGrams} onChange={(n) => setEditForm({ ...editForm, fatGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Fat" />
           </div>
           <div>
             <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Carbs</label>
-            <DecimalInput value={editForm.carbsGrams} onChange={(n) => setEditForm({ ...editForm, carbsGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Carbs" />
+            <DecimalInput value={editForm.carbsGrams} onChange={(n) => setEditForm({ ...editForm, carbsGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Carbs" />
           </div>
           <div>
             <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Alc</label>
-            <DecimalInput value={editForm.alcoholGrams} onChange={(n) => setEditForm({ ...editForm, alcoholGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Alcohol" />
+            <DecimalInput value={editForm.alcoholGrams} onChange={(n) => setEditForm({ ...editForm, alcoholGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Alcohol" />
           </div>
         </div>
         <div className="flex items-center justify-between pt-2">
@@ -1135,6 +1135,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<UpdateActivityEntryRequest | null>(null);
   const [showEditAdvanced, setShowEditAdvanced] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [favStates, setFavStates] = useState<Record<number, 'idle' | 'saving' | 'saved' | 'error'>>({});
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
 
@@ -1388,8 +1389,8 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
         <div>
           <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">{t('dashboard.activity_header_dur')}</label>
           <div className="flex gap-2">
-            <DecimalInput value={editForm.durationMinutes != null ? (editDurationUnit === "hours" ? parseFloat((editForm.durationMinutes / 60).toFixed(2)) : editForm.durationMinutes) : ""} onChange={(n) => { const v = typeof n === 'number' ? n : null; setEditForm({ ...editForm, durationMinutes: v != null ? (editDurationUnit === "hours" ? v * 60 : v) : null }); }} aria-label="Duration" className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-            <select value={editDurationUnit} onChange={(e) => setEditDurationUnit(e.target.value as "minutes" | "hours")} aria-label="Duration unit" className="rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-gray-100 px-2.5 py-1.5 text-sm">
+            <DecimalInput value={editForm.durationMinutes != null ? (editDurationUnit === "hours" ? parseFloat((editForm.durationMinutes / 60).toFixed(2)) : editForm.durationMinutes) : ""} onChange={(n) => { const v = typeof n === 'number' ? n : null; setEditForm({ ...editForm, durationMinutes: v != null ? (editDurationUnit === "hours" ? v * 60 : v) : null }); }} aria-label="Duration" className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
+            <select value={editDurationUnit} onChange={(e) => setEditDurationUnit(e.target.value as "minutes" | "hours")} aria-label="Duration unit" className="rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm">
               <option value="minutes">min</option>
               <option value="hours">hr</option>
             </select>
@@ -1406,7 +1407,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
           <div className="rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/60 px-3 py-2.5">
             <div className="flex items-center gap-2">
               <label className="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">MET</label>
-              <DecimalInput value={editForm.metValue ?? ""} onChange={(n) => setEditForm({ ...editForm, metValue: typeof n === 'number' ? n : null })} placeholder="Auto" aria-label="MET value" className="w-20 rounded border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-1.5 py-1 text-right text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
+              <DecimalInput value={editForm.metValue ?? ""} onChange={(n) => setEditForm({ ...editForm, metValue: typeof n === 'number' ? n : null })} placeholder="Auto" aria-label="MET value" className="w-20 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-1.5 py-1 text-right text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
               <p className="text-xs text-gray-400 dark:text-gray-500">{t('dashboard.activity_met_hint')}</p>
             </div>
           </div>
