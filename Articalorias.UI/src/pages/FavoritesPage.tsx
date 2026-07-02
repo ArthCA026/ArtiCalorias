@@ -1,5 +1,4 @@
-import { useState, useRef } from 'react';
-import { DecimalInput } from '@/components/DecimalInput';
+﻿import { useState, useRef } from 'react';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { Toast, useToast } from '@/components/Toast';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +10,13 @@ import { foodTemplateService } from '@/services/foodTemplateService';
 import { toDateString } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 import TemplatePickerDialog from '@/components/TemplatePickerDialog';
+import LoadingSpinner from '@/components/LoadingSpinner';
+import EmptyState from '@/components/EmptyState';
+import { IconEdit, IconTrash, IconCheck, IconX, IconSpinner } from '@/components/icons';
+import { ModalShell } from '@/components/ModalShell';
+import { ModalLabel, ModalTextInput, ModalNumberInput } from '@/components/ModalFormField';
+import { ModalFormActions } from '@/components/ModalFormActions';
+import { SegmentedTabs } from '@/components/SegmentedTabs';
 import type {
   ActivityTemplateResponse,
   ActivityTemplateRequest,
@@ -32,49 +38,6 @@ function IconPlus({ className = 'w-4 h-4' }: { className?: string }) {
   );
 }
 
-function IconEdit({ className = 'w-4 h-4' }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-    </svg>
-  );
-}
-
-function IconTrash({ className = 'w-4 h-4' }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-      <path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" />
-    </svg>
-  );
-}
-
-function IconCheck({ className = 'w-4 h-4' }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-function IconX({ className = 'w-4 h-4' }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}
-
-function IconSpinner({ className = 'w-4 h-4' }: { className?: string }) {
-  return (
-    <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-    </svg>
-  );
-}
-
 function IconChevronUp({ className = 'w-4 h-4' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -88,45 +51,6 @@ function IconChevronDown({ className = 'w-4 h-4' }: { className?: string }) {
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="6 9 12 15 18 9" />
     </svg>
-  );
-}
-
-// --- Shared label/input helpers ---
-
-function Label({ htmlFor, text }: { htmlFor: string; text: string }) {
-  return <label htmlFor={htmlFor} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{text}</label>;
-}
-
-function TextInput({ id, value, onChange, placeholder, required, maxLength }: {
-  id: string; value: string; onChange: (v: string) => void; placeholder?: string; required?: boolean; maxLength?: number;
-}) {
-  return (
-    <input
-      id={id}
-      type="text"
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      placeholder={placeholder}
-      required={required}
-      maxLength={maxLength}
-      className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-    />
-  );
-}
-
-function NumberInput({ id, value, onChange, min, max, placeholder }: {
-  id: string; value: number | ''; onChange: (v: number | '') => void; min?: string; max?: string; placeholder?: string;
-}) {
-  return (
-    <DecimalInput
-      id={id}
-      value={value}
-      onChange={onChange}
-      min={min}
-      max={max}
-      placeholder={placeholder}
-      className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none text-right"
-    />
   );
 }
 
@@ -308,7 +232,7 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
     return (
       <>
         <AiInputSection tab="activities" onToast={onToast} />
-        <div className="flex justify-center py-8"><IconSpinner className="w-6 h-6 text-indigo-500" /></div>
+        <LoadingSpinner />
       </>
     );
   }
@@ -318,19 +242,18 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
       <AiInputSection tab="activities" onToast={onToast} />
     <div className="space-y-4">
       {formOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4" role="dialog" aria-modal="true" onClick={e => { if (e.target === e.currentTarget) cancelForm(); }}>
-          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4 overflow-y-auto max-h-[85vh]">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+        <ModalShell onClose={cancelForm}>
+          <h3 className="text-sm font-semibold text-fg-primary">
             {editId !== null ? t('favorites.activities.edit_button') : t('favorites.activities.add_button')}
           </h3>
           <div>
-            <Label htmlFor="act-name" text={t('favorites.activities.name_label')} />
-            <TextInput id="act-name" value={form.templateName} onChange={v => setForm(f => ({ ...f, templateName: v }))} required maxLength={150} />
+            <ModalLabel htmlFor="act-name" text={t('favorites.activities.name_label')} />
+            <ModalTextInput id="act-name" value={form.templateName} onChange={v => setForm(f => ({ ...f, templateName: v }))} required maxLength={150} />
           </div>
           <div>
-            <Label htmlFor="act-duration" text={t('favorites.activities.duration_label')} />
+            <ModalLabel htmlFor="act-duration" text={t('favorites.activities.duration_label')} />
             <div className="flex gap-2">
-              <NumberInput id="act-duration" value={form.durationMinutes} onChange={v => setForm(f => ({ ...f, durationMinutes: v }))} min="0" />
+              <ModalNumberInput id="act-duration" value={form.durationMinutes} onChange={v => setForm(f => ({ ...f, durationMinutes: v }))} min="0" />
               <select
                 value={form.durationUnit}
                 onChange={e => {
@@ -344,7 +267,7 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
                     return { ...f, durationUnit: newUnit, durationMinutes: converted };
                   });
                 }}
-                className="rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-2 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                className="rounded-md border border-input-border bg-input-bg text-fg-secondary px-2 py-1.5 text-sm focus:border-accent-soft focus:ring-1 focus:ring-accent-soft focus:outline-none"
               >
                 <option value="minutes">min</option>
                 <option value="hours">hr</option>
@@ -356,21 +279,21 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
             <button
               type="button"
               onClick={() => setShowAdvanced(v => !v)}
-              className="flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+              className="flex items-center gap-1 text-xs font-medium text-fg-secondary hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
             >
               {showAdvanced ? <IconChevronUp className="w-3.5 h-3.5" /> : <IconChevronDown className="w-3.5 h-3.5" />}
               {t('dashboard.activity_advanced_options')}
             </button>
             {showAdvanced && (
-              <div className="mt-2 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/60 px-3 py-2.5 space-y-2">
-                <Label htmlFor="act-met" text={t('favorites.activities.met_label')} />
+              <div className="mt-2 rounded-md border border-border bg-surface-muted px-3 py-2.5 space-y-2">
+                <ModalLabel htmlFor="act-met" text={t('favorites.activities.met_label')} />
                 <div className="flex gap-2 items-center">
-                  <NumberInput id="act-met" value={form.met} onChange={v => setForm(f => ({ ...f, met: v }))} min="0.5" max="50" placeholder="Auto" />
+                  <ModalNumberInput id="act-met" value={form.met} onChange={v => setForm(f => ({ ...f, met: v }))} min="0.5" max="50" placeholder="Auto" />
                   <button
                     type="button"
                     onClick={handleEstimateMet}
                     disabled={estimatingMet || !form.templateName.trim()}
-                    className="shrink-0 rounded-md bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 disabled:opacity-50 transition-colors"
+                    className="shrink-0 rounded-md bg-surface-subtle px-2.5 py-1.5 text-xs font-medium text-fg-secondary hover:bg-indigo-100 dark:hover:bg-indigo-900/40 disabled:opacity-50 transition-colors"
                   >
                     {estimatingMet ? <IconSpinner className="w-3.5 h-3.5" /> : t('favorites.activities.estimate_met_button')}
                   </button>
@@ -378,21 +301,14 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
               </div>
             )}
           </div>
-          {formError && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{formError}</p>}
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending || !form.templateName.trim() || form.durationMinutes === '' || form.met === ''}
-              className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
-            >
-              {saveMutation.isPending ? <IconSpinner className="w-4 h-4" /> : t('common.save')}
-            </button>
-            <button onClick={cancelForm} className="rounded-xl px-4 py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-              {t('common.cancel')}
-            </button>
-          </div>
-          </div>
-        </div>
+          <ModalFormActions
+            onSave={() => saveMutation.mutate()}
+            onCancel={cancelForm}
+            isPending={saveMutation.isPending}
+            saveDisabled={!form.templateName.trim() || form.durationMinutes === '' || form.met === ''}
+            formError={formError}
+          />
+        </ModalShell>
       )}
 
       {filtered.length > 0 && (
@@ -416,7 +332,7 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
       )}
 
       {filtered.length === 0 && search && !formOpen && (
-        <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">{t('common.no_results')}</p>
+        <EmptyState message={t('common.no_results')} />
       )}
 
       <DeleteConfirmDialog
@@ -603,15 +519,15 @@ function FoodsTab({ search, onToast }: { search: string; onToast: (msg: string, 
     return (
       <>
         <AiInputSection tab="foods" onToast={onToast} />
-        <div className="flex justify-center py-8"><IconSpinner className="w-6 h-6 text-indigo-500" /></div>
+        <LoadingSpinner />
       </>
     );
   }
 
   const numberField = (id: keyof FoodFormState, label: string) => (
     <div>
-      <Label htmlFor={`food-${id}`} text={label} />
-      <NumberInput
+      <ModalLabel htmlFor={`food-${id}`} text={label} />
+      <ModalNumberInput
         id={`food-${id}`}
         value={form[id] as number | ''}
         onChange={v => setForm(f => ({ ...f, [id]: v }))}
@@ -625,22 +541,21 @@ function FoodsTab({ search, onToast }: { search: string; onToast: (msg: string, 
       <AiInputSection tab="foods" onToast={onToast} />
     <div className="space-y-4">
       {formOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4" role="dialog" aria-modal="true" onClick={e => { if (e.target === e.currentTarget) cancelForm(); }}>
-          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4 overflow-y-auto max-h-[85vh]">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+        <ModalShell onClose={cancelForm}>
+          <h3 className="text-sm font-semibold text-fg-primary">
             {editId !== null ? t('favorites.foods.edit_button') : t('favorites.foods.add_button')}
           </h3>
           <div>
-            <Label htmlFor="food-name" text={t('favorites.foods.name_label')} />
-            <TextInput id="food-name" value={form.templateName} onChange={v => setForm(f => ({ ...f, templateName: v }))} required maxLength={150} />
+            <ModalLabel htmlFor="food-name" text={t('favorites.foods.name_label')} />
+            <ModalTextInput id="food-name" value={form.templateName} onChange={v => setForm(f => ({ ...f, templateName: v }))} required maxLength={150} />
           </div>
           <div>
-            <Label htmlFor="food-portion" text={t('favorites.foods.portion_label')} />
-            <TextInput id="food-portion" value={form.portionDescription} onChange={v => setForm(f => ({ ...f, portionDescription: v }))} maxLength={100} />
+            <ModalLabel htmlFor="food-portion" text={t('favorites.foods.portion_label')} />
+            <ModalTextInput id="food-portion" value={form.portionDescription} onChange={v => setForm(f => ({ ...f, portionDescription: v }))} maxLength={100} />
           </div>
           <div>
-            <Label htmlFor="food-quantity" text={t('favorites.foods.quantity_label')} />
-            <NumberInput id="food-quantity" value={form.defaultQuantity} onChange={v => setForm(f => ({ ...f, defaultQuantity: v }))} min="0.001" />
+            <ModalLabel htmlFor="food-quantity" text={t('favorites.foods.quantity_label')} />
+            <ModalNumberInput id="food-quantity" value={form.defaultQuantity} onChange={v => setForm(f => ({ ...f, defaultQuantity: v }))} min="0.001" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             {numberField('caloriesKcal', t('favorites.foods.calories_label'))}
@@ -650,21 +565,14 @@ function FoodsTab({ search, onToast }: { search: string; onToast: (msg: string, 
           </div>
           {numberField('alcoholGrams', t('favorites.foods.alcohol_label'))}
           <Checkbox id="food-auto" checked={form.autoAddToNewDay} onChange={v => setForm(f => ({ ...f, autoAddToNewDay: v }))} label={t('favorites.foods.auto_add_label')} />
-          {formError && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{formError}</p>}
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending || !form.templateName.trim()}
-              className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
-            >
-              {saveMutation.isPending ? <IconSpinner className="w-4 h-4" /> : t('common.save')}
-            </button>
-            <button onClick={cancelForm} className="rounded-xl px-4 py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-              {t('common.cancel')}
-            </button>
-          </div>
-          </div>
-        </div>
+          <ModalFormActions
+            onSave={() => saveMutation.mutate()}
+            onCancel={cancelForm}
+            isPending={saveMutation.isPending}
+            saveDisabled={!form.templateName.trim()}
+            formError={formError}
+          />
+        </ModalShell>
       )}
 
       {filtered.length > 0 && (
@@ -673,7 +581,7 @@ function FoodsTab({ search, onToast }: { search: string; onToast: (msg: string, 
             <TemplateCard
               key={tmpl.foodTemplateId}
               title={tmpl.templateName}
-              subtitle={`${tmpl.defaultQuantity} × ${tmpl.portionDescription} · ${tmpl.caloriesKcal} kcal`}
+              subtitle={`${tmpl.defaultQuantity} - ${tmpl.portionDescription} · ${tmpl.caloriesKcal} kcal`}
               autoAdd={tmpl.autoAddToNewDay}
               onToggleAutoAdd={() => toggleAutoAdd(tmpl)}
               onEdit={() => startEdit(tmpl)}
@@ -686,7 +594,7 @@ function FoodsTab({ search, onToast }: { search: string; onToast: (msg: string, 
       )}
 
       {filtered.length === 0 && search && !formOpen && (
-        <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">{t('common.no_results')}</p>
+        <EmptyState message={t('common.no_results')} />
       )}
 
       <DeleteConfirmDialog
@@ -795,9 +703,9 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
 
   function itemLabel(item: CreateFavoriteRoutineItemRequest): string {
     if (item.itemType === 'activity') {
-      return activityTemplates.find(t => t.activityTemplateId === item.activityTemplateId)?.templateName ?? '–';
+      return activityTemplates.find(t => t.activityTemplateId === item.activityTemplateId)?.templateName ?? '€“';
     }
-    return foodTemplates.find(t => t.foodTemplateId === item.foodTemplateId)?.templateName ?? '–';
+    return foodTemplates.find(t => t.foodTemplateId === item.foodTemplateId)?.templateName ?? '€“';
   }
 
   function itemMeta(item: CreateFavoriteRoutineItemRequest): string | undefined {
@@ -833,7 +741,7 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
   }
 
   if (routinesLoading) {
-    return <div className="flex justify-center py-8"><IconSpinner className="w-6 h-6 text-indigo-500" /></div>;
+    return <LoadingSpinner />;
   }
 
   const activeActivities = activityTemplates.filter(t => t.isActive);
@@ -842,14 +750,13 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
   return (
     <div className="space-y-4">
       {formOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4" role="dialog" aria-modal="true" onClick={e => { if (e.target === e.currentTarget) { setFormOpen(false); setEditId(null); setRoutineName(''); setItems([]); setFormError(null); } }}>
-          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4 overflow-y-auto max-h-[85vh]">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+        <ModalShell onClose={() => { setFormOpen(false); setEditId(null); setRoutineName(''); setItems([]); setFormError(null); }}>
+          <h3 className="text-sm font-semibold text-fg-primary">
             {editId !== null ? t('common.edit') : t('favorites.routines.add_button')}
           </h3>
           <div>
-            <Label htmlFor="routine-name" text={t('favorites.routines.name_label')} />
-            <TextInput id="routine-name" value={routineName} onChange={setRoutineName} required maxLength={150} />
+            <ModalLabel htmlFor="routine-name" text={t('favorites.routines.name_label')} />
+            <ModalTextInput id="routine-name" value={routineName} onChange={setRoutineName} required maxLength={150} />
           </div>
 
           {/* Items list */}
@@ -858,7 +765,7 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
               {items.map((item, idx) => {
                 const meta = itemMeta(item);
                 return (
-                  <div key={idx} className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2.5">
+                  <div key={idx} className="flex items-center gap-3 rounded-xl border border-border bg-input-bg px-3 py-2.5">
                     <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide ${
                       item.itemType === 'activity'
                         ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300'
@@ -867,8 +774,8 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
                       {item.itemType === 'activity' ? t('favorites.routines.activities_section').slice(0, 3) : t('favorites.routines.foods_section').slice(0, 4)}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{itemLabel(item)}</p>
-                      {meta && <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{meta}</p>}
+                      <p className="text-sm font-medium text-fg-primary truncate">{itemLabel(item)}</p>
+                      {meta && <p className="text-xs text-fg-subtle truncate">{meta}</p>}
                     </div>
                     <button
                       onClick={() => removeItem(idx)}
@@ -885,12 +792,12 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
 
           {/* Add item pickers */}
           <div className="space-y-2">
-            <Label htmlFor="routine-add-activity" text={t('favorites.routines.add_items_label')} />
+            <ModalLabel htmlFor="routine-add-activity" text={t('favorites.routines.add_items_label')} />
             <div className="flex gap-2">
               {activeActivities.length > 0 && (
                 <button
                   onClick={() => setRoutinePickerType('activity')}
-                  className="flex-1 rounded-xl border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-800 px-3 py-2.5 text-sm text-indigo-700 dark:text-indigo-300 font-medium hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors text-center"
+                  className="flex-1 rounded-xl border border-indigo-300 dark:border-indigo-700 bg-input-bg px-3 py-2.5 text-sm text-indigo-700 dark:text-indigo-300 font-medium hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors text-center"
                 >
                   {t('favorites.routines.pick_activity')}
                 </button>
@@ -898,7 +805,7 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
               {activeFoods.length > 0 && (
                 <button
                   onClick={() => setRoutinePickerType('food')}
-                  className="flex-1 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-gray-800 px-3 py-2.5 text-sm text-emerald-700 dark:text-emerald-300 font-medium hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors text-center"
+                  className="flex-1 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-input-bg px-3 py-2.5 text-sm text-emerald-700 dark:text-emerald-300 font-medium hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors text-center"
                 >
                   {t('favorites.routines.pick_food')}
                 </button>
@@ -926,24 +833,15 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
             onClose={() => setRoutinePickerType(null)}
           />
 
-          {formError && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{formError}</p>}
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending || !routineName.trim()}
-              className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
-            >
-              {saveMutation.isPending ? <IconSpinner className="w-4 h-4" /> : t('common.save')}
-            </button>
-            <button
-              onClick={() => { setFormOpen(false); setEditId(null); setRoutineName(''); setItems([]); setFormError(null); }}
-              className="rounded-xl px-5 py-2.5 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-            >
-              {t('common.cancel')}
-            </button>
-          </div>
-          </div>
-        </div>
+          <ModalFormActions
+            onSave={() => saveMutation.mutate()}
+            onCancel={() => { setFormOpen(false); setEditId(null); setRoutineName(''); setItems([]); setFormError(null); }}
+            isPending={saveMutation.isPending}
+            saveDisabled={!routineName.trim()}
+            formError={formError}
+            fullWidthSave
+          />
+        </ModalShell>
       )}
 
       {!formOpen && (
@@ -957,16 +855,16 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
       )}
 
       {filtered.length === 0 && !formOpen && (
-        <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">{t('favorites.routines.empty')}</p>
+        <EmptyState message={t('favorites.routines.empty')} />
       )}
 
       {filtered.map(r => {
         const foodItems = r.items.filter(i => i.itemType === 'food');
         const activityItems = r.items.filter(i => i.itemType === 'activity');
         return (
-          <div key={r.favoriteRoutineId} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 space-y-3">
+          <div key={r.favoriteRoutineId} className="rounded-xl border border-border bg-surface p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{r.routineName}</h4>
+              <h4 className="font-semibold text-fg-primary text-sm">{r.routineName}</h4>
               <div className="flex gap-1">
                 <button onClick={() => startEdit(r)} title={t('common.edit')} className="rounded-md p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 transition-colors">
                   <IconEdit className="w-4 h-4" />
@@ -989,9 +887,9 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
                         const ft = item.foodTemplate;
                         return (
                           <li key={item.favoriteRoutineItemId} className="flex items-baseline justify-between gap-2">
-                            <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{ft?.templateName ?? '–'}</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{ft?.templateName ?? '€“'}</span>
                             {ft && (
-                              <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0 whitespace-nowrap">
+                              <span className="text-xs text-fg-subtle shrink-0 whitespace-nowrap">
                                 {ft.defaultQuantity}{ft.portionDescription ? ` ${ft.portionDescription}` : ''} · {Math.round(ft.caloriesKcal)} kcal
                               </span>
                             )}
@@ -1002,7 +900,7 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
                   </div>
                 )}
                 {foodItems.length > 0 && activityItems.length > 0 && (
-                  <hr className="border-gray-100 dark:border-gray-800" />
+                  <hr className="border-surface-subtle" />
                 )}
                 {activityItems.length > 0 && (
                   <div>
@@ -1014,9 +912,9 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
                         const at = item.activityTemplate;
                         return (
                           <li key={item.favoriteRoutineItemId} className="flex items-baseline justify-between gap-2">
-                            <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{at?.templateName ?? '–'}</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{at?.templateName ?? '€“'}</span>
                             {at?.defaultDurationMinutes != null && (
-                              <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0 whitespace-nowrap">
+                              <span className="text-xs text-fg-subtle shrink-0 whitespace-nowrap">
                                 {at.defaultDurationMinutes} min
                               </span>
                             )}
@@ -1085,13 +983,13 @@ function AiInputSection({ tab, onToast }: { tab: 'activities' | 'foods'; onToast
       const res = tab === 'foods'
         ? await foodTemplateService.parseFavoriteFood(trimmed)
         : await foodTemplateService.parseFavoriteActivity(trimmed);
-      // Dedicated endpoints only return the matching type — no client-side filter needed
+      // Dedicated endpoints only return the matching type €” no client-side filter needed
       const items = res.data.items;
       if (items.length === 0) {
         setError(t('favorites.ai_input.no_results'));
         return;
       }
-      // Auto-save all parsed items immediately — no confirmation gate (Constitution V)
+      // Auto-save all parsed items immediately €” no confirmation gate (Constitution V)
       await Promise.allSettled(
         items.map(item =>
           item.type === 'activity' && item.activity
@@ -1186,11 +1084,11 @@ function TemplateCard({
   const { t } = useTranslation();
 
   return (
-    <div className="rounded-lg border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-2.5 shadow-sm">
+    <div className="rounded-lg border border-surface-subtle bg-surface px-3 py-2.5 shadow-sm">
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{title}</p>
-          {subtitle && <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{subtitle}</p>}
+          <p className="text-sm font-medium text-fg-primary truncate">{title}</p>
+          {subtitle && <p className="text-xs text-fg-subtle truncate">{subtitle}</p>}
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
@@ -1243,34 +1141,6 @@ function TemplateCard({
 }
 
 // ============================================================
-// TAB BAR
-// ============================================================
-
-function FavoritesTabBar({ tab, tabs, onChange }: {
-  tab: Tab;
-  tabs: { key: Tab; label: string }[];
-  onChange: (tab: Tab) => void;
-}) {
-  return (
-    <div className="flex gap-1 rounded-xl bg-gray-100 dark:bg-gray-800 p-1">
-      {tabs.map(({ key, label }) => (
-        <button
-          key={key}
-          onClick={() => onChange(key)}
-          className={`flex-1 rounded-lg py-1.5 text-sm font-medium transition-colors ${
-            tab === key
-              ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ============================================================
 // MAIN PAGE
 // ============================================================
 
@@ -1306,7 +1176,12 @@ export default function FavoritesPage() {
       </div>
 
       {/* Tab bar */}
-      <FavoritesTabBar tab={tab} tabs={tabs} onChange={handleTabChange} />
+      <SegmentedTabs
+        variant="pill"
+        tabs={tabs}
+        activeTab={tab}
+        onChange={key => handleTabChange(key as Tab)}
+      />
 
       {/* Tab content */}
       {tab === 'activities' && <ActivitiesTab search={search} onToast={showToast} />}
@@ -1316,3 +1191,5 @@ export default function FavoritesPage() {
     </div>
   );
 }
+
+

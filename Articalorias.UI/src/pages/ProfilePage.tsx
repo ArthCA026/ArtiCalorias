@@ -374,9 +374,9 @@ export default function ProfilePage() {
                 "rounded-xl border p-3 transition-colors",
                 fieldErrors.biologicalSex
                   ? "border-red-300 dark:border-red-700 bg-red-50/40 dark:bg-red-900/10"
-                  : "border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/40",
+                  : "border-border bg-surface-muted",
               ].join(" ")}>
-                <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{t('profile.field_sex')}</span>
+                <span className="block text-[10px] font-semibold uppercase tracking-wide text-fg-subtle">{t('profile.field_sex')}</span>
                 <div className="relative mt-2">
                   <select
                     value={form.biologicalSex}
@@ -388,13 +388,13 @@ export default function ProfilePage() {
                     disabled={isSaving}
                     aria-label={t('profile.aria_sex')}
                     aria-required="true"
-                    className="w-full appearance-none bg-transparent border-0 p-0 pr-5 text-2xl font-bold text-gray-900 dark:text-gray-100 focus:ring-0 focus:outline-none disabled:opacity-50"
+                    className="w-full appearance-none bg-transparent border-0 p-0 pr-5 text-2xl font-bold text-fg-primary focus:ring-0 focus:outline-none disabled:opacity-50"
                   >
                     <option value="">—</option>
                     <option value="M">{t('common.male')}</option>
                     <option value="F">{t('common.female')}</option>
                   </select>
-                  <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center text-gray-400 dark:text-gray-500" aria-hidden="true">
+                  <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center text-fg-subtle" aria-hidden="true">
                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                   </span>
                 </div>

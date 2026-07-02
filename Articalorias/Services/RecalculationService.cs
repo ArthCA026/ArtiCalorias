@@ -15,15 +15,23 @@ public class RecalculationService : IRecalculationService
 {
     private readonly AppDbContext _db;
 
+    // Carries the three per-day fields needed for mixed-goal weekly context.
+    // All days in a week snapshot their own goal at creation, so summing these
+    // across the week correctly reflects mid-week goal changes.
+    private record SiblingDayData(
+        decimal NetBalanceKcal,
+        decimal SnapshotDailyBaseGoalKcal,
+        DateOnly LogDate);
+
     public RecalculationService(AppDbContext db)
     {
         _db = db;
     }
 
     public Task RecalculateFullPipelineAsync(long dailyLogId)
-        => RecalculateFullPipelineAsync(dailyLogId, cascade: true, siblingBalances: null);
+        => RecalculateFullPipelineAsync(dailyLogId, cascade: true, siblingData: null);
 
-    private async Task RecalculateFullPipelineAsync(long dailyLogId, bool cascade, IReadOnlyDictionary<long, decimal>? siblingBalances, DateOnly? referenceToday = null)
+    private async Task RecalculateFullPipelineAsync(long dailyLogId, bool cascade, IReadOnlyDictionary<long, SiblingDayData>? siblingData, DateOnly? referenceToday = null)
     {
         // ── Step 1: Load DailyLog with all children ──
         var log = await _db.DailyLogs
@@ -107,7 +115,7 @@ public class RecalculationService : IRecalculationService
         log.ProteinRemainingGrams = log.SnapshotProteinGoalGrams - log.TotalProteinGrams;
 
         // ── Step 8: Recompute weekly dynamic context ──
-        await RecalculateWeeklyContext(log, siblingBalances, biologicalSex, safeguardEnabled, referenceToday);
+        await RecalculateWeeklyContext(log, siblingData, biologicalSex, safeguardEnabled, referenceToday);
 
         log.LastRecalculatedAtUtc = DateTime.UtcNow;
         log.UpdatedAtUtc = DateTime.UtcNow;
@@ -127,20 +135,29 @@ public class RecalculationService : IRecalculationService
                 .Where(d => d.UserId == log.UserId
                     && d.WeekStartDate == log.WeekStartDate
                     && d.DailyLogId != dailyLogId)
-                .Select(d => new { d.DailyLogId, d.NetBalanceKcal })
+                .Select(d => new
+                {
+                    d.DailyLogId,
+                    d.NetBalanceKcal,
+                    d.SnapshotDailyBaseGoalKcal,
+                    d.LogDate
+                })
                 .ToListAsync();
 
-            // Build the week-balance snapshot once (primary day just saved above).
+            // Build the week snapshot once (primary day just saved above).
             // Each sibling call receives the same snapshot so it can skip the
-            // DB round-trip for sibling balances inside RecalculateWeeklyContext.
-            var siblingBalancesForCascade = siblings.ToDictionary(
+            // DB round-trip inside RecalculateWeeklyContext. The snapshot now
+            // also carries goal-snapshots and log-dates so the callee can compute
+            // mixed-goal weekly targets when the user changed their goal mid-week.
+            var siblingDataForCascade = siblings.ToDictionary(
                 s => s.DailyLogId,
-                s => s.NetBalanceKcal);
-            // Include the freshly saved primary day so siblings can see its balance.
-            siblingBalancesForCascade[dailyLogId] = log.NetBalanceKcal;
+                s => new SiblingDayData(s.NetBalanceKcal, s.SnapshotDailyBaseGoalKcal, s.LogDate));
+            // Include the freshly saved primary day so siblings see its values.
+            siblingDataForCascade[dailyLogId] = new SiblingDayData(
+                log.NetBalanceKcal, log.SnapshotDailyBaseGoalKcal, log.LogDate);
 
             foreach (var sibling in siblings)
-                await RecalculateFullPipelineAsync(sibling.DailyLogId, cascade: false, siblingBalances: siblingBalancesForCascade, referenceToday: referenceToday);
+                await RecalculateFullPipelineAsync(sibling.DailyLogId, cascade: false, siblingData: siblingDataForCascade, referenceToday: referenceToday);
         }
     }
 
@@ -177,7 +194,7 @@ public class RecalculationService : IRecalculationService
         // guard uses the user's local date instead of the server's UTC clock.
         // Without this, users in UTC-N timezones after ~(24-N):00 local time would see
         // today treated as a past day, causing the adjusted budget to be skipped.
-        await RecalculateFullPipelineAsync(log.DailyLogId, cascade: true, siblingBalances: null, referenceToday: date);
+        await RecalculateFullPipelineAsync(log.DailyLogId, cascade: true, siblingData: null, referenceToday: date);
     }
 
     public async Task RecalculateAfterDayDeletionAsync(long userId, DateOnly deletedDate, DateOnly weekStart, DateOnly weekEnd, decimal baseDailyGoal)
@@ -189,7 +206,7 @@ public class RecalculationService : IRecalculationService
             .ToListAsync();
 
         foreach (var logId in remainingWeekLogIds)
-            await RecalculateFullPipelineAsync(logId, cascade: false, siblingBalances: null);
+            await RecalculateFullPipelineAsync(logId, cascade: false, siblingData: null);
 
         // Always recalculate the monthly summary for the deleted date's month
         // (handles cross-month weeks where no remaining days fall in the same month)
@@ -200,50 +217,51 @@ public class RecalculationService : IRecalculationService
     //  Step 8 — Weekly context fields on the DailyLog itself
     // ─────────────────────────────────────────────────────
 
-    private async Task RecalculateWeeklyContext(DailyLog log, IReadOnlyDictionary<long, decimal>? siblingBalances, string? biologicalSex, bool safeguardEnabled, DateOnly? referenceToday = null)
+    private async Task RecalculateWeeklyContext(DailyLog log, IReadOnlyDictionary<long, SiblingDayData>? siblingData, string? biologicalSex, bool safeguardEnabled, DateOnly? referenceToday = null)
     {
-        // Use the pre-fetched balance snapshot when available (cascade path) to avoid
+        // Use the pre-fetched snapshot when available (cascade path) to avoid
         // an extra DB round-trip per sibling. Fall back to a fresh query otherwise.
-        List<decimal> otherBalances;
-        int otherCount;
-        if (siblingBalances is not null)
+        List<SiblingDayData> others;
+        if (siblingData is not null)
         {
             // The snapshot contains ALL week days (including the primary); exclude self.
-            var others = siblingBalances
+            others = siblingData
                 .Where(kv => kv.Key != log.DailyLogId)
                 .Select(kv => kv.Value)
                 .ToList();
-            otherBalances = others;
-            otherCount = others.Count;
         }
         else
         {
-            var rows = await _db.DailyLogs
+            others = await _db.DailyLogs
                 .Where(d => d.UserId == log.UserId
                     && d.WeekStartDate == log.WeekStartDate
                     && d.DailyLogId != log.DailyLogId)
-                .Select(d => d.NetBalanceKcal)
+                .Select(d => new SiblingDayData(d.NetBalanceKcal, d.SnapshotDailyBaseGoalKcal, d.LogDate))
                 .ToListAsync();
-            otherBalances = rows;
-            otherCount = rows.Count;
         }
 
-        var allWeekBalances = otherBalances.Sum() + log.NetBalanceKcal;
-        var dayOfWeek = log.LogDate.DayNumber - log.WeekStartDate.DayNumber + 1;
-        var daysRemaining = 7 - dayOfWeek;
+        // ── Weekly target: sum each logged day's own goal snapshot ──────────────────────
+        // When the user changes their goal mid-week, past days keep their original
+        // SnapshotDailyBaseGoalKcal, so summing across all logged days correctly weights
+        // each day by the goal that was active at the time.
+        // Unlogged future days are estimated using today's current snapshot.
+        var loggedGoalSum   = others.Sum(o => o.SnapshotDailyBaseGoalKcal) + log.SnapshotDailyBaseGoalKcal;
+        var unloggedDays    = 7 - (others.Count + 1);
+        log.WeeklyTargetKcal = loggedGoalSum + unloggedDays * log.SnapshotDailyBaseGoalKcal;
 
-        log.WeeklyTargetKcal = log.SnapshotDailyBaseGoalKcal * 7;
-        log.WeeklyExpectedToDateKcal = log.SnapshotDailyBaseGoalKcal * dayOfWeek;
-        log.WeeklyActualToDateKcal = allWeekBalances;
-        log.WeeklyDifferenceKcal = log.WeeklyActualToDateKcal - log.WeeklyExpectedToDateKcal;
+        // ── Weekly expected to date: sum of per-day goals up to and including today ──
+        var priorGoalSum             = others.Where(o => o.LogDate < log.LogDate).Sum(o => o.SnapshotDailyBaseGoalKcal);
+        log.WeeklyExpectedToDateKcal = priorGoalSum + log.SnapshotDailyBaseGoalKcal;
+
+        log.WeeklyActualToDateKcal    = others.Sum(o => o.NetBalanceKcal) + log.NetBalanceKcal;
+        log.WeeklyDifferenceKcal      = log.WeeklyActualToDateKcal - log.WeeklyExpectedToDateKcal;
         log.WeeklyRemainingTargetKcal = log.WeeklyTargetKcal - log.WeeklyActualToDateKcal;
 
         // Use only completed past days for the suggested average so that
         // today's incomplete balance doesn't distort the suggestion, and
         // today itself counts as one of the remaining days to plan for.
-        var pastDaysBalance = otherBalances.Sum();
-        var pastDaysCount = otherCount;
-        var daysRemainingIncludingToday = 7 - pastDaysCount;
+        var pastDaysBalance          = others.Sum(o => o.NetBalanceKcal);
+        var daysRemainingIncludingToday = 7 - others.Count;
 
         var rawSuggested = daysRemainingIncludingToday > 0
             ? (log.WeeklyTargetKcal - pastDaysBalance) / daysRemainingIncludingToday

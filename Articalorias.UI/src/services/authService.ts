@@ -17,4 +17,12 @@ export const authService = {
   resetPassword(data: ResetPasswordRequest) {
     return api.post('/auth/reset-password', data);
   },
+
+  refresh(refreshToken: string) {
+    return api.post<AuthResponse>('/auth/refresh', { refreshToken });
+  },
+
+  revoke(refreshToken: string) {
+    return api.post('/auth/revoke', { refreshToken });
+  },
 };

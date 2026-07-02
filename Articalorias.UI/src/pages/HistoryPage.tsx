@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router";
 import { useTranslation } from "react-i18next";
@@ -29,6 +29,7 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import ErrorMessage from "@/components/ErrorMessage";
 import EmptyState from "@/components/EmptyState";
 import DayDashboard from "@/components/DayDashboard";
+import { SectionCard } from "@/components/SectionCard";
 import { useTheme } from "@/hooks/useTheme";
 import { useCalorieMode } from "@/hooks/useCalorieMode";
 import type { CalorieMode } from "@/hooks/useCalorieMode";
@@ -104,22 +105,22 @@ function MonthlyView() {
   return (
     <div className="space-y-4">
       <div className="flex justify-center">
-        <div className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 p-1 gap-0.5">
+        <div className="inline-flex items-center rounded-full bg-surface-subtle p-1 gap-0.5">
           <button
             onClick={goPrev}
             aria-label={t('history.prev_month')}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 hover:shadow-sm transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-fg-secondary hover:bg-surface-raised hover:text-fg-primary hover:shadow-sm transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
           </button>
-          <span className="min-w-[148px] text-center text-sm font-semibold text-gray-800 dark:text-gray-200 select-none px-1">
+          <span className="min-w-[148px] text-center text-sm font-semibold text-fg-primary select-none px-1">
             {monthLabel}
           </span>
           <button
             onClick={goNext}
             disabled={isCurrentMonth}
             aria-label={t('history.next_month')}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 hover:shadow-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-fg-secondary hover:bg-surface-raised hover:text-fg-primary hover:shadow-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
           </button>
@@ -175,24 +176,24 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
   }
 
   return (
-    <Card title={t('history.logs_title')}>
+    <SectionCard title={t('history.logs_title')}>
 
       {days.length === 0 ? (
         <EmptyState message={t('history.no_logs')} />
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden sm:block overflow-x-auto rounded-lg border border-gray-100 dark:border-gray-800">
+          <div className="hidden sm:block overflow-x-auto rounded-lg border border-surface-subtle">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50/80 dark:bg-gray-900/80 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 sticky top-0 z-10">
+                <tr className="bg-surface-muted border-b border-border text-xs font-semibold uppercase tracking-wider text-fg-secondary sticky top-0 z-10">
                   <th className="py-2.5 px-3 text-left">{t('history.table_date')}</th>
                   <th className="py-2.5 px-2 text-right">{tableColumnLabel}</th>
                   <th className="py-2.5 px-2 text-right">{t('history.table_protein')}</th>
                   <th className="py-2.5 px-2 text-center w-10"><span className="sr-only">{t('history.table_actions')}</span></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              <tbody className="divide-y divide-surface-subtle">
                 {days.map((d, idx) => (
                   <tr
                     key={d.logDate}
@@ -230,7 +231,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
               <div
                 key={d.logDate}
                 onClick={() => onDayClick(d.logDate)}
-                className="cursor-pointer rounded-lg border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-3 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20 transition-colors"
+                className="cursor-pointer rounded-lg border border-surface-subtle bg-surface p-3 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20 transition-colors"
               >
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="font-medium text-indigo-600 text-sm">
@@ -249,7 +250,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
                     )}
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500 dark:text-gray-400">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-fg-secondary">
                   <span>{t('history.mobile_protein')} <span className="font-medium text-gray-700 dark:text-gray-300">{fmt(d.totalProteinGrams, 1)} g</span></span>
                   <span>{tableColumnLabel}: <FriendlyGoalDelta value={getTableDelta(d, chartMode)} /></span>
                 </div>
@@ -261,7 +262,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
 
       {/* Integrated action: add a missed day */}
       {unloggedDays.length > 0 && (
-          <div className={days.length > 0 ? "pt-3 border-t border-gray-100 dark:border-gray-800" : "mt-3"}>
+          <div className={days.length > 0 ? "pt-3 border-t border-surface-subtle" : "mt-3"}>
           {!showDatePicker ? (
             <button
               onClick={() => setShowDatePicker(true)}
@@ -272,18 +273,18 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
           ) : (
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('history.which_day')}</label>
+                <label className="block text-xs font-medium text-fg-secondary mb-1">{t('history.which_day')}</label>
                 <select
                   defaultValue=""
                   onChange={(e) => { if (e.target.value) onDayClick(e.target.value); }}
-                  className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+                  className="rounded-md border border-input-border bg-input-bg text-fg-primary px-3 py-1.5 text-sm focus:border-accent-soft focus:ring-1 focus:ring-accent-soft focus:outline-none">
                   <option value="" disabled>{t('history.choose_date')}</option>
                   {unloggedDays.map((d) => (
                     <option key={d} value={d}>{formatDayLabel(d, i18n.language)}</option>
                   ))}
                 </select>
               </div>
-              <button onClick={() => setShowDatePicker(false)} className="rounded-md px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gray-500">
+              <button onClick={() => setShowDatePicker(false)} className="rounded-md px-3 py-1.5 text-sm text-fg-secondary hover:bg-surface-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-gray-500">
                 {t('common.cancel')}
               </button>
             </div>
@@ -301,7 +302,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
         onClose={() => { setDeleteTarget(null); setDeleteError(null); }}
         isPending={deleting}
       />
-    </Card>
+    </SectionCard>
   );
 }
 
@@ -364,7 +365,7 @@ function getTrendColor(rollingAvg: number | null): string {
 
 /**
  * Picks a clean symmetric Y-axis domain around zero.
- * e.g. max abs 680 → step 300, domain [-900, +900], ticks [-900,-600,-300,0,300,600,900]
+ * e.g. max abs 680 †’ step 300, domain [-900, +900], ticks [-900,-600,-300,0,300,600,900]
  */
 function calculateSymmetricDomain(values: number[]): {
   yMin: number;
@@ -394,7 +395,7 @@ function formatYAxisTickMobile(value: number, zeroLabel = "Goal"): string {
   if (value === 0) return zeroLabel;
   const abs = Math.abs(value);
   const label = abs >= 1000 ? `${abs / 1000}k` : `${abs}`;
-  return value < 0 ? `−${label}` : `+${label}`;
+  return value < 0 ? `ˆ’${label}` : `+${label}`;
 }
 
 function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
@@ -473,7 +474,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
   const overLabel  = chartMode === "net" ? t('history.chart_surplus') : t('history.chart_over');
 
   return (
-    <Card title={t('history.chart_title')} subtitle={t(cfg.subtitleKey)} variant="muted">
+    <SectionCard title={t('history.chart_title')} subtitle={t(cfg.subtitleKey)} variant="muted">
 
       {points.length < 2 ? (
         <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4">{t('history.chart_min_data')}</p>
@@ -566,7 +567,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
           </div>
         </>
       )}
-    </Card>
+    </SectionCard>
   );
 }
 
@@ -628,27 +629,3 @@ function formatDayLabel(dateStr: string, language = "default"): string {
   return d.toLocaleDateString(language, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 }
 
-function Card({ title, subtitle, variant, headerAction, children }: { title: string; subtitle?: string; variant?: "primary" | "muted"; headerAction?: React.ReactNode; children: React.ReactNode }) {
-  const sectionClass = variant === "primary"
-    ? "rounded-xl border-2 border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-900 shadow-md ring-1 ring-indigo-100 dark:ring-indigo-900"
-    : variant === "muted"
-      ? "rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-900/40 shadow-none"
-      : "rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm";
-  const titleClass = variant === "primary"
-    ? "text-sm font-bold uppercase tracking-wide text-indigo-600"
-    : variant === "muted"
-      ? "text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-      : "text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400";
-
-  return (
-    <section className={`${sectionClass} p-4 sm:p-5`}>
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <h2 className={titleClass}>{title}</h2>
-        {headerAction && <div className="flex items-center">{headerAction}</div>}
-      </div>
-      {subtitle && <p className="mb-3 text-xs text-gray-400 dark:text-gray-500">{subtitle}</p>}
-      {!subtitle && <div className="mb-2" />}
-      {children}
-    </section>
-  );
-}

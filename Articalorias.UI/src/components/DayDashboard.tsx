@@ -1,9 +1,13 @@
-import { useState, useMemo, useRef } from "react";
+﻿import { useState, useMemo, useRef } from "react";
 import { DecimalInput } from "@/components/DecimalInput";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { Toast, useToast } from "@/components/Toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { IconEdit, IconTrash, IconCheck, IconX } from "@/components/icons";
+import { ModalShell } from "@/components/ModalShell";
+import { SectionCard } from "@/components/SectionCard";
+import { SegmentedTabs } from "@/components/SegmentedTabs";
 import { dailyLogService } from "@/services/dailyLogService";
 import { foodService } from "@/services/foodService";
 import { activityService } from "@/services/activityService";
@@ -106,41 +110,41 @@ function CompactDayProgress({ dash, isToday, chartMode }: { dash: DailyDashboard
   const protPctDisplay = Math.round(protPct * 100);
 
   return (
-    <Card title={isToday ? t('dashboard.today') : t('dashboard.day_summary')} variant="primary" compact>
+    <SectionCard title={isToday ? t('dashboard.today') : t('dashboard.day_summary')} variant="primary" compact>
       <div className="space-y-1.5">
 
         {/* Calorie row */}
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 shrink-0">{t('dashboard.calories_label')}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-fg-secondary shrink-0">{t('dashboard.calories_label')}</p>
             <span className={`text-xs font-semibold tabular-nums ${calOver ? "text-amber-600" : "text-green-700"}`}>
               {calOver ? t('dashboard.calorie_over_budget', { amount: formatEnergy(calAbs, energyUnit) }) : t('dashboard.calorie_under_budget', { amount: formatEnergy(calAbs, energyUnit) })}
             </span>
           </div>
-          <div className="h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden" role="progressbar" aria-valuenow={foodCal} aria-valuemin={0} aria-valuemax={dailyBudget} aria-label={t('dashboard.calorie_budget_aria')}>
+          <div className="h-2 rounded-full bg-surface-subtle overflow-hidden" role="progressbar" aria-valuenow={foodCal} aria-valuemin={0} aria-valuemax={dailyBudget} aria-label={t('dashboard.calorie_budget_aria')}>
             <div className={`h-full rounded-full transition-all duration-500 ${calOver ? "bg-amber-400" : "bg-green-500"}`} style={{ width: `${Math.min(calPct, 100)}%` }} />
           </div>
-          <p className="text-[11px] tabular-nums text-gray-400 dark:text-gray-500">{t('dashboard.calorie_progress', { percentage: calPct, consumed: formatEnergy(foodCal, energyUnit), budget: formatEnergy(dailyBudget, energyUnit) })}<span className="ml-1 opacity-50">{budgetNote}</span></p>
+          <p className="text-[11px] tabular-nums text-fg-subtle">{t('dashboard.calorie_progress', { percentage: calPct, consumed: formatEnergy(foodCal, energyUnit), budget: formatEnergy(dailyBudget, energyUnit) })}<span className="ml-1 opacity-50">{budgetNote}</span></p>
         </div>
 
         {/* Protein row */}
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 shrink-0">{t('dashboard.protein_label')}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-fg-secondary shrink-0">{t('dashboard.protein_label')}</p>
             <span className={`text-xs font-semibold tabular-nums ${protGoalReached ? "text-green-700" : "text-indigo-600"}`}>
               {protGoalReached
                 ? `${protAbs > 0 ? t('dashboard.protein_extra', { amount: fmt(protAbs, 1) }) : t('dashboard.protein_goal_reached')}`
                 : (isToday ? t('dashboard.protein_to_go', { amount: fmt(protAbs, 1) }) : t('dashboard.protein_short', { amount: fmt(protAbs, 1) }))}
             </span>
           </div>
-          <div className="h-2 rounded-full bg-indigo-50 dark:bg-indigo-900/40 overflow-hidden" role="progressbar" aria-valuenow={dash.totalProteinGrams} aria-valuemin={0} aria-valuemax={dash.snapshotProteinGoalGrams} aria-label={t('dashboard.protein_aria')}>
+          <div className="h-2 rounded-full bg-accent-track overflow-hidden" role="progressbar" aria-valuenow={dash.totalProteinGrams} aria-valuemin={0} aria-valuemax={dash.snapshotProteinGoalGrams} aria-label={t('dashboard.protein_aria')}>
             <div className={`h-full rounded-full transition-all duration-500 ${protGoalReached ? "bg-green-500" : "bg-indigo-500"}`} style={{ width: `${Math.min(protPctDisplay, 100)}%` }} />
           </div>
-          <p className="text-[11px] tabular-nums text-gray-400 dark:text-gray-500">{t('dashboard.protein_progress', { percentage: protPctDisplay, consumed: fmt(dash.totalProteinGrams, 1), goal: fmt(dash.snapshotProteinGoalGrams, 1) })}</p>
+          <p className="text-[11px] tabular-nums text-fg-subtle">{t('dashboard.protein_progress', { percentage: protPctDisplay, consumed: fmt(dash.totalProteinGrams, 1), goal: fmt(dash.snapshotProteinGoalGrams, 1) })}</p>
         </div>
 
       </div>
-    </Card>
+    </SectionCard>
   );
 }
 
@@ -150,38 +154,6 @@ function IconUtensils({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" /><path d="M7 2v20" /><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7" />
-    </svg>
-  );
-}
-
-function IconEdit({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-    </svg>
-  );
-}
-
-function IconTrash({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-    </svg>
-  );
-}
-
-function IconCheck({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-function IconX({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   );
 }
@@ -429,13 +401,13 @@ function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: 
 
   if (noCard) return foodBody;
   return (
-    <Card
+    <SectionCard
       title={isToday ? t('dashboard.log_food_title') : t('dashboard.add_food_title')}
       subtitle={isToday ? t('dashboard.log_food_subtitle') : t('dashboard.add_food_subtitle')}
       icon={<IconUtensils className="w-5 h-5" />}
     >
       {foodBody}
-    </Card>
+    </SectionCard>
   );
 }
 
@@ -509,9 +481,9 @@ function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSav
 
   if (noCard) return activityBody;
   return (
-    <Card title={isToday ? t('dashboard.log_activity_title') : t('dashboard.add_activity_title')} subtitle={isToday ? t('dashboard.log_activity_subtitle') : t('dashboard.add_activity_subtitle')}>
+    <SectionCard title={isToday ? t('dashboard.log_activity_title') : t('dashboard.add_activity_title')} subtitle={isToday ? t('dashboard.log_activity_subtitle') : t('dashboard.add_activity_subtitle')}>
       {activityBody}
-    </Card>
+    </SectionCard>
   );
 }
 
@@ -1048,58 +1020,51 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard, onToast
       );
 
   const foodEditModal = editId !== null && editForm !== null ? (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={e => { if (e.target === e.currentTarget) { setEditId(null); setEditForm(null); } }}
-    >
-      <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4 overflow-y-auto max-h-[85vh]">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('common.edit')}</h3>
+    <ModalShell onClose={() => { setEditId(null); setEditForm(null); }}>
+        <h3 className="text-sm font-semibold text-fg-primary">{t('common.edit')}</h3>
         <div>
-          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Food name</label>
-          <input value={editForm.foodName} onChange={(e) => setEditForm({ ...editForm, foodName: e.target.value })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Food name" />
+          <label className="text-xs font-medium text-fg-secondary mb-1 block">Food name</label>
+          <input value={editForm.foodName} onChange={(e) => setEditForm({ ...editForm, foodName: e.target.value })} className="w-full rounded-md border border-input-border bg-input-bg text-fg-primary px-2.5 py-1.5 text-sm focus:border-accent-soft focus:ring-1 focus:ring-accent-soft focus:outline-none" aria-label="Food name" />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Portion</label>
-            <input value={editForm.portionDescription ?? ""} onChange={(e) => setEditForm({ ...editForm, portionDescription: e.target.value })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Portion description" />
+            <label className="text-xs font-medium text-fg-secondary mb-1 block">Portion</label>
+            <input value={editForm.portionDescription ?? ""} onChange={(e) => setEditForm({ ...editForm, portionDescription: e.target.value })} className="w-full rounded-md border border-input-border bg-input-bg text-fg-primary px-2.5 py-1.5 text-sm focus:border-accent-soft focus:ring-1 focus:ring-accent-soft focus:outline-none" aria-label="Portion description" />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">{energyLabel(energyUnit)}</label>
-            <DecimalInput value={Math.round(kcalToDisplay(editForm.caloriesKcal, energyUnit)) as number} onChange={(n) => setEditForm({ ...editForm, caloriesKcal: displayToKcal(typeof n === 'number' ? n : 0, energyUnit) })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Calories" />
+            <label className="text-xs font-medium text-fg-secondary mb-1 block">{energyLabel(energyUnit)}</label>
+            <DecimalInput value={Math.round(kcalToDisplay(editForm.caloriesKcal, energyUnit)) as number} onChange={(n) => setEditForm({ ...editForm, caloriesKcal: displayToKcal(typeof n === 'number' ? n : 0, energyUnit) })} className="w-full rounded-md border border-input-border bg-input-bg text-fg-primary px-2.5 py-1.5 text-sm text-right focus:border-accent-soft focus:ring-1 focus:ring-accent-soft focus:outline-none" aria-label="Calories" />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Prot</label>
-            <DecimalInput value={editForm.proteinGrams} onChange={(n) => setEditForm({ ...editForm, proteinGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Protein" />
+            <label className="text-xs font-medium text-fg-secondary mb-1 block">Prot</label>
+            <DecimalInput value={editForm.proteinGrams} onChange={(n) => setEditForm({ ...editForm, proteinGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-input-border bg-input-bg text-fg-primary px-2.5 py-1.5 text-sm text-right focus:border-accent-soft focus:ring-1 focus:ring-accent-soft focus:outline-none" aria-label="Protein" />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Fat</label>
-            <DecimalInput value={editForm.fatGrams} onChange={(n) => setEditForm({ ...editForm, fatGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Fat" />
+            <label className="text-xs font-medium text-fg-secondary mb-1 block">Fat</label>
+            <DecimalInput value={editForm.fatGrams} onChange={(n) => setEditForm({ ...editForm, fatGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-input-border bg-input-bg text-fg-primary px-2.5 py-1.5 text-sm text-right focus:border-accent-soft focus:ring-1 focus:ring-accent-soft focus:outline-none" aria-label="Fat" />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Carbs</label>
-            <DecimalInput value={editForm.carbsGrams} onChange={(n) => setEditForm({ ...editForm, carbsGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Carbs" />
+            <label className="text-xs font-medium text-fg-secondary mb-1 block">Carbs</label>
+            <DecimalInput value={editForm.carbsGrams} onChange={(n) => setEditForm({ ...editForm, carbsGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-input-border bg-input-bg text-fg-primary px-2.5 py-1.5 text-sm text-right focus:border-accent-soft focus:ring-1 focus:ring-accent-soft focus:outline-none" aria-label="Carbs" />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">Alc</label>
-            <DecimalInput value={editForm.alcoholGrams} onChange={(n) => setEditForm({ ...editForm, alcoholGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm text-right focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" aria-label="Alcohol" />
+            <label className="text-xs font-medium text-fg-secondary mb-1 block">Alc</label>
+            <DecimalInput value={editForm.alcoholGrams} onChange={(n) => setEditForm({ ...editForm, alcoholGrams: typeof n === 'number' ? n : 0 })} className="w-full rounded-md border border-input-border bg-input-bg text-fg-primary px-2.5 py-1.5 text-sm text-right focus:border-accent-soft focus:ring-1 focus:ring-accent-soft focus:outline-none" aria-label="Alcohol" />
           </div>
         </div>
         <div className="flex items-center justify-between pt-2">
-          <span title={foodEditMatchesTemplate(editForm) ? t('dashboard.template_matches') : t('dashboard.template_differs')} className={`p-1 pointer-events-none ${foodEditMatchesTemplate(editForm) ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'}`}><IconStar className="w-4 h-4" filled={foodEditMatchesTemplate(editForm)} /></span>
+          <span title={foodEditMatchesTemplate(editForm) ? t('dashboard.template_matches') : t('dashboard.template_differs')} className={`p-1 pointer-events-none ${foodEditMatchesTemplate(editForm) ? 'text-amber-400' : 'text-fg-subtle'}`}><IconStar className="w-4 h-4" filled={foodEditMatchesTemplate(editForm)} /></span>
           <div className="flex gap-2">
-            <button onClick={() => { setEditId(null); setEditForm(null); }} className="rounded-xl py-2.5 px-4 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{t('common.cancel')}</button>
+            <button onClick={() => { setEditId(null); setEditForm(null); }} className="rounded-xl py-2.5 px-4 text-sm text-fg-secondary hover:bg-surface-subtle transition-colors">{t('common.cancel')}</button>
             <button onClick={saveEdit} disabled={busy} className="rounded-xl bg-indigo-600 py-2.5 px-4 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors">{t('common.save')}</button>
           </div>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   ) : null;
 
   if (noCard) return <><div>{mealsContent}</div><DeleteConfirmDialog open={deleteConfirmId !== null} message={t('dashboard.delete_food_confirm')} onConfirm={() => { if (deleteConfirmId !== null) void handleDelete(deleteConfirmId); }} onClose={() => setDeleteConfirmId(null)} isPending={busy} />{foodEditModal}</>;
   return (
-    <Card
+    <SectionCard
       title={t('dashboard.meals_title')}
       icon={
         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1110,7 +1075,7 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard, onToast
       {mealsContent}
       <DeleteConfirmDialog open={deleteConfirmId !== null} message={t('dashboard.delete_food_confirm')} onConfirm={() => { if (deleteConfirmId !== null) void handleDelete(deleteConfirmId); }} onClose={() => setDeleteConfirmId(null)} isPending={busy} />
       {foodEditModal}
-    </Card>
+    </SectionCard>
   );
 }
 
@@ -1378,19 +1343,13 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
   );
 
   const activityEditModal = editId !== null && editForm !== null ? (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
-      role="dialog"
-      aria-modal="true"
-      onClick={e => { if (e.target === e.currentTarget) { setEditId(null); setEditForm(null); setEditError(null); } }}
-    >
-      <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4 overflow-y-auto max-h-[85vh]">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{userActivities.find(a => a.activityEntryId === editId)?.activityName}</h3>
+    <ModalShell onClose={() => { setEditId(null); setEditForm(null); setEditError(null); }}>
+        <h3 className="text-sm font-semibold text-fg-primary">{userActivities.find(a => a.activityEntryId === editId)?.activityName}</h3>
         <div>
-          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 block">{t('dashboard.activity_header_dur')}</label>
+          <label className="text-xs font-medium text-fg-secondary mb-1 block">{t('dashboard.activity_header_dur')}</label>
           <div className="flex gap-2">
-            <DecimalInput value={editForm.durationMinutes != null ? (editDurationUnit === "hours" ? parseFloat((editForm.durationMinutes / 60).toFixed(2)) : editForm.durationMinutes) : ""} onChange={(n) => { const v = typeof n === 'number' ? n : null; setEditForm({ ...editForm, durationMinutes: v != null ? (editDurationUnit === "hours" ? v * 60 : v) : null }); }} aria-label="Duration" className="w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-            <select value={editDurationUnit} onChange={(e) => setEditDurationUnit(e.target.value as "minutes" | "hours")} aria-label="Duration unit" className="rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2.5 py-1.5 text-sm">
+            <DecimalInput value={editForm.durationMinutes != null ? (editDurationUnit === "hours" ? parseFloat((editForm.durationMinutes / 60).toFixed(2)) : editForm.durationMinutes) : ""} onChange={(n) => { const v = typeof n === 'number' ? n : null; setEditForm({ ...editForm, durationMinutes: v != null ? (editDurationUnit === "hours" ? v * 60 : v) : null }); }} aria-label="Duration" className="w-full rounded-md border border-input-border bg-input-bg text-fg-primary px-2.5 py-1.5 text-sm focus:border-accent-soft focus:ring-1 focus:ring-accent-soft focus:outline-none" />
+            <select value={editDurationUnit} onChange={(e) => setEditDurationUnit(e.target.value as "minutes" | "hours")} aria-label="Duration unit" className="rounded-md border border-input-border bg-input-bg text-fg-primary px-2.5 py-1.5 text-sm">
               <option value="minutes">min</option>
               <option value="hours">hr</option>
             </select>
@@ -1398,34 +1357,33 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
         </div>
         {editError && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{editError}</p>}
         {!alwaysShowAdvanced && (
-          <button type="button" onClick={() => setShowEditAdvanced(v => !v)} aria-expanded={showEditAdvanced} className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 font-medium transition-colors">
+          <button type="button" onClick={() => setShowEditAdvanced(v => !v)} aria-expanded={showEditAdvanced} className="flex items-center gap-1 text-xs text-fg-secondary hover:text-indigo-600 dark:hover:text-indigo-400 font-medium transition-colors">
             <svg className={`h-3.5 w-3.5 transition-transform ${showEditAdvanced ? "rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
             {t('dashboard.activity_advanced_options')}
           </button>
         )}
         {(alwaysShowAdvanced || showEditAdvanced) && (
-          <div className="rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/60 px-3 py-2.5">
+          <div className="rounded-md border border-border bg-surface-muted px-3 py-2.5">
             <div className="flex items-center gap-2">
-              <label className="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">MET</label>
-              <DecimalInput value={editForm.metValue ?? ""} onChange={(n) => setEditForm({ ...editForm, metValue: typeof n === 'number' ? n : null })} placeholder="Auto" aria-label="MET value" className="w-20 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-1.5 py-1 text-right text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-              <p className="text-xs text-gray-400 dark:text-gray-500">{t('dashboard.activity_met_hint')}</p>
+              <label className="text-xs font-medium text-fg-secondary whitespace-nowrap">MET</label>
+              <DecimalInput value={editForm.metValue ?? ""} onChange={(n) => setEditForm({ ...editForm, metValue: typeof n === 'number' ? n : null })} placeholder="Auto" aria-label="MET value" className="w-20 rounded border border-input-border bg-input-bg text-fg-primary px-1.5 py-1 text-right text-sm placeholder:text-fg-subtle focus:border-accent-soft focus:ring-1 focus:ring-accent-soft focus:outline-none" />
+              <p className="text-xs text-fg-subtle">{t('dashboard.activity_met_hint')}</p>
             </div>
           </div>
         )}
         <div className="flex items-center justify-between pt-2">
-          <span title={activityEditMatchesTemplate(editForm) ? t('dashboard.template_matches') : t('dashboard.template_differs')} className={`p-1 pointer-events-none ${activityEditMatchesTemplate(editForm) ? 'text-amber-400' : 'text-gray-300 dark:text-gray-600'}`}><IconStar className="w-4 h-4" filled={activityEditMatchesTemplate(editForm)} /></span>
+          <span title={activityEditMatchesTemplate(editForm) ? t('dashboard.template_matches') : t('dashboard.template_differs')} className={`p-1 pointer-events-none ${activityEditMatchesTemplate(editForm) ? 'text-amber-400' : 'text-fg-subtle'}`}><IconStar className="w-4 h-4" filled={activityEditMatchesTemplate(editForm)} /></span>
           <div className="flex gap-2">
-            <button onClick={() => { setEditId(null); setEditForm(null); setEditError(null); }} className="rounded-xl py-2.5 px-4 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">{t('common.cancel')}</button>
+            <button onClick={() => { setEditId(null); setEditForm(null); setEditError(null); }} className="rounded-xl py-2.5 px-4 text-sm text-fg-secondary hover:bg-surface-subtle transition-colors">{t('common.cancel')}</button>
             <button onClick={saveEditActivity} disabled={busy} className="rounded-xl bg-indigo-600 py-2.5 px-4 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors">{t('common.save')}</button>
           </div>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   ) : null;
 
   if (noCard) return <><div>{activitiesContent}</div><DeleteConfirmDialog open={deleteConfirmId !== null} message={t('dashboard.delete_activity_confirm')} onConfirm={() => { if (deleteConfirmId !== null) void handleDelete(deleteConfirmId); }} onClose={() => setDeleteConfirmId(null)} isPending={busy} />{activityEditModal}</>;
   return (
-    <Card
+    <SectionCard
       title={t('dashboard.activities_section')}
       subtitle={t('dashboard.activities_subtitle')}
       icon={
@@ -1437,7 +1395,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
       {activitiesContent}
       <DeleteConfirmDialog open={deleteConfirmId !== null} message={t('dashboard.delete_activity_confirm')} onConfirm={() => { if (deleteConfirmId !== null) void handleDelete(deleteConfirmId); }} onClose={() => setDeleteConfirmId(null)} isPending={busy} />
       {activityEditModal}
-    </Card>
+    </SectionCard>
   );
 }
 
@@ -1508,47 +1466,25 @@ function DailyLogWorkspace({
       {/* Card header: title + tab switch */}
       <div className="flex items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-800/60 px-3 py-2">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{t('dashboard.daily_log_title')}</h2>
-        <div className="flex items-center gap-1">
-        <button
-          onClick={() => setTab("meals")}
-          aria-pressed={tab === "meals"}
-          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 ${
-            tab === "meals"
-              ? "bg-white dark:bg-gray-800 text-indigo-700 dark:text-indigo-300 shadow-sm ring-1 ring-gray-200 dark:ring-gray-700"
-              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/60 dark:hover:bg-gray-700/60"
-          }`}
-        >
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" /><path d="M7 2v20" /><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7" />
-          </svg>
-          {t('dashboard.tab_meals')}
-          {mealCount > 0 && (
-            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${tab === "meals" ? "bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300" : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}>
-              {mealCount}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setTab("activities")}
-          aria-pressed={tab === "activities"}
-          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 ${
-            tab === "activities"
-              ? "bg-white dark:bg-gray-800 text-indigo-700 dark:text-indigo-300 shadow-sm ring-1 ring-gray-200 dark:ring-gray-700"
-              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/60 dark:hover:bg-gray-700/60"
-          }`}
-        >
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-          </svg>
-          {t('dashboard.tab_activities')}
-          {activityCount > 0 && (
-            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${tab === "activities" ? "bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300" : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}>
-              {activityCount}
-            </span>
-          )}
-        </button>
-        </div>
+        <SegmentedTabs
+          variant="icon"
+          activeTab={tab}
+          onChange={key => setTab(key as "meals" | "activities")}
+          tabs={[
+            {
+              key: "meals",
+              label: t('dashboard.tab_meals'),
+              icon: <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" /><path d="M7 2v20" /><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7" /></svg>,
+              count: mealCount,
+            },
+            {
+              key: "activities",
+              label: t('dashboard.tab_activities'),
+              icon: <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>,
+              count: activityCount,
+            },
+          ]}
+        />
       </div>
 
       {/* Tab content · both panels stay mounted to preserve typed input on tab switch */}
@@ -1590,30 +1526,3 @@ function DailyLogWorkspace({
 
 
 
-function Card({ title, subtitle, icon, compact, variant, headerAction, children }: { title: string; subtitle?: string; icon?: React.ReactNode; compact?: boolean; variant?: "primary" | "muted"; headerAction?: React.ReactNode; children: React.ReactNode }) {
-  const sectionClass = variant === "primary"
-    ? "rounded-xl border-2 border-indigo-200 dark:border-indigo-800 bg-white dark:bg-gray-900 shadow-md ring-1 ring-indigo-100 dark:ring-indigo-900"
-    : variant === "muted"
-      ? "rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-800/40 shadow-none"
-      : "rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm";
-  const titleClass = variant === "primary"
-    ? "text-sm font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-400"
-    : variant === "muted"
-      ? "text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-      : "text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400";
-
-  return (
-    <section className={`${sectionClass} ${compact ? "p-3 sm:p-3.5" : "p-4 sm:p-5"}`}>
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <div className="flex items-center gap-2">
-          {icon && <span className="text-indigo-500 flex-shrink-0">{icon}</span>}
-          <h2 className={titleClass}>{title}</h2>
-        </div>
-        {headerAction && <div className="flex items-center">{headerAction}</div>}
-      </div>
-      {subtitle && <p className="mb-3 text-xs text-gray-400 dark:text-gray-500">{subtitle}</p>}
-      {!subtitle && <div className="mb-2" />}
-      {children}
-    </section>
-  );
-}

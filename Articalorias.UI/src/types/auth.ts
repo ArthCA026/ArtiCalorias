@@ -14,6 +14,8 @@ export interface AuthResponse {
   username: string;
   token: string;
   expiresAtUtc: string;
+  refreshToken: string;
+  refreshTokenExpiresAtUtc: string;
 }
 
 export interface ForgotPasswordRequest {

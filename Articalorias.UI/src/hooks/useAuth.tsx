@@ -1,12 +1,15 @@
-﻿import { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
+﻿import { createContext, useContext, useState, useCallback, useEffect } from "react";
 import type { ReactNode } from "react";
 import type { AuthResponse } from "@/types";
+import { authService } from "@/services/authService";
 
 interface AuthState {
   token: string;
   userId: number;
   username: string;
   expiresAtUtc: string;
+  refreshToken: string;
+  refreshTokenExpiresAtUtc: string;
 }
 
 interface AuthContextValue {
@@ -28,7 +31,9 @@ function loadStoredAuth(): AuthState | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed: AuthState = JSON.parse(raw);
-    if (new Date(parsed.expiresAtUtc) <= new Date()) {
+    // Session is valid as long as the refresh token has not expired.
+    // Expired access tokens are handled transparently by the axios interceptor.
+    if (!parsed.refreshToken || new Date(parsed.refreshTokenExpiresAtUtc) <= new Date()) {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem("token");
       return null;
@@ -44,14 +49,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessionExpired, setSessionExpired] = useState(
     () => sessionStorage.getItem(SESSION_EXPIRED_KEY) === "1"
   );
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearTimer = useCallback(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
 
   const markSessionExpired = useCallback(() => {
     sessionStorage.setItem(SESSION_EXPIRED_KEY, "1");
@@ -64,6 +61,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userId: data.userId,
       username: data.username,
       expiresAtUtc: data.expiresAtUtc,
+      refreshToken: data.refreshToken,
+      refreshTokenExpiresAtUtc: data.refreshTokenExpiresAtUtc,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     localStorage.setItem("token", data.token);
@@ -73,38 +72,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    clearTimer();
+    const stored = user;
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem("token");
     setUser(null);
-  }, [clearTimer]);
+    // Fire-and-forget: revoke the refresh token on the server.
+    // We clear locally regardless of the outcome.
+    if (stored?.refreshToken) {
+      authService.revoke(stored.refreshToken).catch(() => undefined);
+    }
+  }, [user]);
 
   const clearSessionExpired = useCallback(() => {
     sessionStorage.removeItem(SESSION_EXPIRED_KEY);
     setSessionExpired(false);
   }, []);
 
-  // Proactive expiry timer: auto-logout when the token expires
-  useEffect(() => {
-    clearTimer();
-    if (!user) return;
-
-    const msUntilExpiry = new Date(user.expiresAtUtc).getTime() - Date.now();
-    if (msUntilExpiry <= 0) {
-      markSessionExpired();
-      logout();
-      return;
-    }
-
-    timerRef.current = setTimeout(() => {
-      markSessionExpired();
-      logout();
-    }, msUntilExpiry);
-
-    return clearTimer;
-  }, [user, clearTimer, logout, markSessionExpired]);
-
-  // Listen for storage changes in other tabs + 401 same-tab dispatch
+  // Listen for storage changes: cross-tab logouts and same-tab token refreshes
+  // dispatched by the axios interceptor via window.dispatchEvent(new Event('storage')).
   useEffect(() => {
     const handler = () => {
       const loaded = loadStoredAuth();

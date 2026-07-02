@@ -34,12 +34,12 @@ public class AuthService : IAuthService
         _cache = cache;
     }
 
-    public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
+    public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken ct = default)
     {
-        if (await _db.Users.AnyAsync(u => u.Username == request.Username))
+        if (await _db.Users.AnyAsync(u => u.Username == request.Username, ct))
             throw new InvalidOperationException("Username already exists.");
 
-        if (await _db.Users.AnyAsync(u => u.Email == request.Email))
+        if (await _db.Users.AnyAsync(u => u.Email == request.Email, ct))
             throw new InvalidOperationException("Email already exists.");
 
         CreatePasswordHash(request.Password, out string hash, out string salt);
@@ -54,16 +54,16 @@ public class AuthService : IAuthService
         };
 
         _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(ct);
 
-        return GenerateToken(user);
+        return await GenerateAuthResponseAsync(user, ct);
     }
 
-    public async Task<AuthResponse> LoginAsync(LoginRequest request)
+    public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken ct = default)
     {
         var identifier = request.UsernameOrEmail.Trim();
         var user = await _db.Users.FirstOrDefaultAsync(u =>
-            u.Username == identifier || u.Email == identifier);
+            u.Username == identifier || u.Email == identifier, ct);
 
         if (user is null || !user.IsActive)
             throw new UnauthorizedAccessException("Invalid credentials.");
@@ -71,10 +71,10 @@ public class AuthService : IAuthService
         if (!VerifyPasswordHash(request.Password, user.PasswordHash, user.PasswordSalt))
             throw new UnauthorizedAccessException("Invalid credentials.");
 
-        return GenerateToken(user);
+        return await GenerateAuthResponseAsync(user, ct);
     }
 
-    public async Task ForgotPasswordAsync(ForgotPasswordRequest request)
+    public async Task ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken ct = default)
     {
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
         var cooldownKey = $"resend-cooldown:{normalizedEmail}";
@@ -83,7 +83,7 @@ public class AuthService : IAuthService
         if (_cache.TryGetValue(cooldownKey, out _))
             throw new ApiException(ErrorCodes.ResendCooldown, "Please wait before requesting another code.");
 
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == request.Email, ct);
 
         // Always set the cooldown and return success to avoid leaking whether the email exists
         _cache.Set(cooldownKey, true, TimeSpan.FromSeconds(ResendCooldownSeconds));
@@ -94,7 +94,7 @@ public class AuthService : IAuthService
         var token = GenerateResetToken();
         user.PasswordResetToken = token;
         user.PasswordResetTokenExpiresAtUtc = DateTime.UtcNow.AddMinutes(ResetTokenLifetimeMinutes);
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(ct);
 
         // Clear any previous verification attempts for this email (fresh code = fresh attempts)
         _cache.Remove($"reset-attempts:{normalizedEmail}");
@@ -102,7 +102,7 @@ public class AuthService : IAuthService
         await _emailService.SendPasswordResetEmailAsync(user.Email, token);
     }
 
-    public async Task ResetPasswordAsync(ResetPasswordRequest request)
+    public async Task ResetPasswordAsync(ResetPasswordRequest request, CancellationToken ct = default)
     {
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
         var attemptsKey = $"reset-attempts:{normalizedEmail}";
@@ -117,7 +117,7 @@ public class AuthService : IAuthService
         if (attempts >= MaxVerificationAttempts)
             throw new ApiException(ErrorCodes.TooManyAttempts, "Too many failed attempts. Please request a new code.");
 
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == request.Email, ct);
 
         // Use the same generic message for user-not-found to avoid email enumeration
         if (user is null)
@@ -154,15 +154,51 @@ public class AuthService : IAuthService
         user.PasswordResetToken = null;
         user.PasswordResetTokenExpiresAtUtc = null;
 
-        await _db.SaveChangesAsync();
+        await _db.SaveChangesAsync(ct);
 
         // Clear attempt counter
         _cache.Remove(attemptsKey);
     }
 
-    private AuthResponse GenerateToken(User user)
+    public async Task<AuthResponse> RefreshTokenAsync(string refreshToken, CancellationToken ct = default)
     {
-        var expires = DateTime.UtcNow.AddMinutes(_jwt.ExpirationMinutes);
+        var tokenHash = HashRefreshToken(refreshToken);
+
+        var stored = await _db.RefreshTokens
+            .Include(r => r.User)
+            .FirstOrDefaultAsync(r => r.TokenHash == tokenHash, ct);
+
+        if (stored is null || stored.RevokedAtUtc is not null || stored.ExpiresAtUtc <= DateTime.UtcNow)
+            throw new UnauthorizedAccessException("Invalid or expired refresh token.");
+
+        if (!stored.User.IsActive)
+            throw new UnauthorizedAccessException("Invalid or expired refresh token.");
+
+        // Revoke the used token (rotation — one-time use)
+        stored.RevokedAtUtc = DateTime.UtcNow;
+
+        // Generate new access + refresh tokens (saves changes internally)
+        return await GenerateAuthResponseAsync(stored.User, ct);
+    }
+
+    public async Task RevokeRefreshTokenAsync(string refreshToken, CancellationToken ct = default)
+    {
+        var tokenHash = HashRefreshToken(refreshToken);
+
+        var stored = await _db.RefreshTokens
+            .FirstOrDefaultAsync(r => r.TokenHash == tokenHash && r.RevokedAtUtc == null, ct);
+
+        if (stored is not null)
+        {
+            stored.RevokedAtUtc = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+        }
+    }
+
+    private async Task<AuthResponse> GenerateAuthResponseAsync(User user, CancellationToken ct)
+    {
+        // --- Access token ---
+        var accessExpires = DateTime.UtcNow.AddMinutes(_jwt.ExpirationMinutes);
 
         var claims = new[]
         {
@@ -174,20 +210,50 @@ public class AuthService : IAuthService
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwt.SecretKey));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var token = new JwtSecurityToken(
+        var jwtToken = new JwtSecurityToken(
             issuer: _jwt.Issuer,
             audience: _jwt.Audience,
             claims: claims,
-            expires: expires,
+            expires: accessExpires,
             signingCredentials: creds);
+
+        var accessToken = new JwtSecurityTokenHandler().WriteToken(jwtToken);
+
+        // --- Refresh token ---
+        var rawRefreshToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        var refreshExpires = DateTime.UtcNow.AddDays(_jwt.RefreshTokenExpirationDays);
+
+        _db.RefreshTokens.Add(new RefreshToken
+        {
+            UserId = user.UserId,
+            TokenHash = HashRefreshToken(rawRefreshToken),
+            ExpiresAtUtc = refreshExpires
+        });
+
+        // Lazy cleanup: remove expired/revoked tokens for this user
+        var stale = await _db.RefreshTokens
+            .Where(r => r.UserId == user.UserId &&
+                        (r.ExpiresAtUtc <= DateTime.UtcNow || r.RevokedAtUtc != null))
+            .ToListAsync(ct);
+        _db.RefreshTokens.RemoveRange(stale);
+
+        await _db.SaveChangesAsync(ct);
 
         return new AuthResponse
         {
             UserId = user.UserId,
             Username = user.Username,
-            Token = new JwtSecurityTokenHandler().WriteToken(token),
-            ExpiresAtUtc = expires
+            Token = accessToken,
+            ExpiresAtUtc = accessExpires,
+            RefreshToken = rawRefreshToken,
+            RefreshTokenExpiresAtUtc = refreshExpires
         };
+    }
+
+    private static string HashRefreshToken(string rawToken)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(rawToken));
+        return Convert.ToBase64String(bytes);
     }
 
     private static void CreatePasswordHash(string password, out string hash, out string salt)

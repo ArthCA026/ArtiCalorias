@@ -51,7 +51,7 @@ export function Toast({
       } ${
         type === 'success'
           ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
-          : 'bg-red-600 text-white'
+          : 'bg-danger text-danger-fg'
       }`}
     >
       {type === 'success' ? (

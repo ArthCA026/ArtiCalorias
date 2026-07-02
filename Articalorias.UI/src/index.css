@@ -3,6 +3,86 @@
 /* Enable class-based dark mode — .dark on <html> activates all dark: variants */
 @variant dark (&:where(.dark, .dark *));
 
+/* ============================================================
+ * SEMANTIC COLOR TOKENS
+ *
+ * @theme inline generates CSS-var-backed utility classes so every
+ * token responds to the .dark override block below.
+ * To re-theme the app, change values here — components update
+ * automatically because utilities reference var(--color-X).
+ *
+ * Groups: surface · fg (text) · border · accent (brand) · danger · warning
+ * ============================================================ */
+
+@theme {
+  /* ── Surfaces ── */
+  --color-surface:  #ffffff;           /* modal panels, section cards      */
+  --color-overlay:  rgb(0 0 0 / .5);   /* dialog backdrops                 */
+
+  /* ── Foreground (text) ── */
+  --color-fg-primary:   #111827;       /* gray-900 – body text             */
+  --color-fg-secondary: #6b7280;       /* gray-500 – labels, cancel text   */
+  --color-fg-subtle:    #9ca3af;       /* gray-400 – placeholders, captions*/
+
+  /* ── Borders ── */
+  --color-border:   #e5e7eb;           /* gray-200 – card / ring borders   */
+
+  /* ── Accent (brand = indigo) ── */
+  --color-accent:         #4f46e5;     /* indigo-600 – primary button bg   */
+  --color-accent-soft:    #6366f1;     /* indigo-500 – hover, focus, icons */
+  --color-accent-fg:      #ffffff;     /* text ON accent background        */
+  --color-accent-text:    #4f46e5;     /* indigo-600 – accent-colored text */
+  --color-accent-active:  #4338ca;     /* indigo-700 – active-state text   */
+  --color-accent-muted:   #e0e7ff;     /* indigo-100 – badge / chip bg     */
+  --color-accent-border:  #c7d2fe;     /* indigo-200 – primary card border */
+  --color-accent-ring:    #e0e7ff;     /* indigo-100 – primary card ring   */
+
+  /* ── Input fields ── */
+  --color-input-bg:       #ffffff;               /* input/select background          */
+  --color-input-border:   #e5e7eb;               /* gray-200 – input border           */
+
+  /* ── Surface tones ── */
+  --color-surface-subtle: #f3f4f6;               /* gray-100 – tab containers, progress tracks, inner borders, hover bg */
+  --color-surface-raised: #ffffff;               /* white – active pill tab, nav hover */
+  --color-surface-muted:  rgba(249, 250, 251, 0.6); /* gray-50/60% – profile fields, advanced sections, table headers */
+
+  /* ── Accent track ── */
+  --color-accent-track:   #eef2ff;               /* indigo-50 – protein progress bar track */
+
+  /* ── Danger (destructive = red) ── */
+  --color-danger:         #dc2626;     /* red-600 – danger button bg       */
+  --color-danger-soft:    #ef4444;     /* red-500 – danger hover           */
+  --color-danger-fg:      #ffffff;     /* text ON danger background        */
+  --color-danger-text:    #dc2626;     /* red-600 – error / danger text    */
+  --color-danger-surface: #fee2e2;     /* red-100 – error icon circles     */
+
+  /* ── Warning ── */
+  --color-warning-text: #d97706;       /* amber-600 – cautionary text      */
+}
+
+/* Dark-mode overrides — all descendants inherit via CSS variable cascade */
+.dark {
+  --color-surface:         #111827;    /* gray-900  */
+  --color-fg-primary:      #f3f4f6;   /* gray-100  */
+  --color-fg-secondary:    #9ca3af;   /* gray-400  */
+  --color-fg-subtle:       #6b7280;   /* gray-500  */
+  --color-border:          #374151;   /* gray-700  */
+  --color-accent-text:     #818cf8;   /* indigo-400 */
+  --color-accent-active:   #f1f2f3;   /* indigo-300 */
+  --color-accent-muted:    #312e81;   /* indigo-900 */
+  --color-accent-border:   #3730a3;   /* indigo-800 */
+  --color-accent-ring:     #312e81;   /* indigo-900 */
+  --color-danger-text:     #f87171;   /* red-400   */
+  --color-danger-surface:  rgba(127, 29, 29, 0.3);
+  --color-warning-text:    #fbbf24;   /* amber-400 */
+  --color-input-bg:        #1f2937;   /* gray-800  */
+  --color-input-border:    #4b5563;   /* gray-600  */
+  --color-surface-subtle:  #1f2937;   /* gray-800  */
+  --color-surface-raised:  #374151;   /* gray-700  */
+  --color-surface-muted:   rgba(31, 41, 55, 0.4); /* gray-800/40% */
+  --color-accent-track:    rgba(49, 46, 129, 0.4); /* indigo-900/40 */
+}
+
 /*
  * Prevent horizontal overflow at the page level.
  * Ensure body and root elements never exceed viewport width.
@@ -24,7 +104,7 @@ body {
  * Uses :focus-visible so mouse clicks don't show the ring.
  */
 :focus-visible {
-  outline: 2px solid #6366f1;
+  outline: 2px solid var(--color-accent-soft);
   outline-offset: 2px;
 }
 
