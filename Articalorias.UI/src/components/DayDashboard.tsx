@@ -31,6 +31,8 @@ import { queryKeys } from "@/lib/queryKeys";
 import { compressImage } from "@/utils/compressImage";
 import { useCalorieMode } from "@/hooks/useCalorieMode";
 import type { CalorieMode } from "@/hooks/useCalorieMode";
+import StreakBadge from "@/components/StreakIndicator";
+import { useGetStreak } from "@/hooks/useStreak";
 
 interface DayDashboardProps {
   date: string;
@@ -60,9 +62,13 @@ export default function DayDashboard({ date }: DayDashboardProps) {
 
   const { toast, exiting, showToast } = useToast();
 
+  const { data: streak } = useGetStreak();
+  const streakCount = isToday && streak?.streakEnabled ? (streak.currentStreak ?? 0) : 0;
+
   function handleChanged() {
     queryClientInstance.invalidateQueries({ queryKey: queryKeys.dashboard(date) });
     queryClientInstance.invalidateQueries({ queryKey: queryKeys.historyAll() });
+    queryClientInstance.invalidateQueries({ queryKey: queryKeys.streak() });
   }
 
   if (dashQuery.isPending) return <LoadingSpinner message={t('dashboard.loading_day')} />;
@@ -70,7 +76,7 @@ export default function DayDashboard({ date }: DayDashboardProps) {
 
   return (
     <div className="space-y-2">
-      <CompactDayProgress dash={dash} isToday={isToday} chartMode={chartMode} />
+      <CompactDayProgress dash={dash} isToday={isToday} chartMode={chartMode} streakCount={streakCount} />
       <DailyLogWorkspace date={date} dash={dash} onChanged={handleChanged} isToday={isToday} activeTab={activeTab} onTabChange={setActiveTab} onToast={showToast} />
       {toast && <Toast message={toast.message} type={toast.type} exiting={exiting} />}
     </div>
@@ -78,7 +84,7 @@ export default function DayDashboard({ date }: DayDashboardProps) {
 }
 
 /* --- Compact Day Progress --- */
-function CompactDayProgress({ dash, isToday, chartMode }: { dash: DailyDashboardResponse | null; isToday: boolean; chartMode: CalorieMode }) {
+function CompactDayProgress({ dash, isToday, chartMode, streakCount }: { dash: DailyDashboardResponse | null; isToday: boolean; chartMode: CalorieMode; streakCount: number }) {
   if (!dash) return null;
   const { t } = useTranslation();
   const { energyUnit } = useUnits();
@@ -110,7 +116,12 @@ function CompactDayProgress({ dash, isToday, chartMode }: { dash: DailyDashboard
   const protPctDisplay = Math.round(protPct * 100);
 
   return (
-    <SectionCard title={isToday ? t('dashboard.today') : t('dashboard.day_summary')} variant="primary" compact>
+    <SectionCard
+      title={isToday ? t('dashboard.today') : t('dashboard.day_summary')}
+      variant="primary"
+      compact
+      headerAction={isToday ? <StreakBadge streakCount={streakCount} /> : undefined}
+    >
       <div className="space-y-1.5">
 
         {/* Calorie row */}

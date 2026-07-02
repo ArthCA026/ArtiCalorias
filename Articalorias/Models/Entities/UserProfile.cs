@@ -33,6 +33,10 @@ public class UserProfile
     public decimal NeatHours { get; set; } = 3.0m;
 
     public bool IsOnboardingCompleted { get; set; }
+
+    /// <summary>IANA timezone ID (e.g. "America/New_York"). Null → UTC.</summary>
+    public string? TimeZoneId { get; set; }
+
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
     public byte[] RowVersion { get; set; } = [];

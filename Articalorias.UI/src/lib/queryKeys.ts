@@ -7,4 +7,5 @@ export const queryKeys = {
   routines: () => ['favorite-routines'] as const,
   profile: () => ['profile'] as const,
   notificationSchedules: () => ['notification-schedules'] as const,
+  streak: () => ['streak'] as const,
 };

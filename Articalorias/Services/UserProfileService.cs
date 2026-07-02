@@ -45,6 +45,13 @@ public class UserProfileService : IUserProfileService
             existing.ProteinGoalGrams = profile.ProteinGoalGrams;
             existing.AutoCalculateProteinGoal = profile.AutoCalculateProteinGoal;
             existing.Country = profile.Country;
+            if (profile.TimeZoneId is not null)
+            {
+                // Validate IANA / Windows timezone ID before persisting
+                existing.TimeZoneId = TimeZoneInfo.TryFindSystemTimeZoneById(profile.TimeZoneId, out _)
+                    ? profile.TimeZoneId
+                    : existing.TimeZoneId; // silently keep the previous valid value
+            }
             existing.SleepHours = profile.SleepHours;
             existing.NeatHours = profile.NeatHours;
             existing.CalorieDisplayMode = profile.CalorieDisplayMode;

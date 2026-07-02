@@ -662,5 +662,28 @@
   "not_found": {
     "title": "Página no encontrada",
     "go_dashboard": "Ir al panel"
+  },
+  "streak": {
+    "indicator_aria": "Racha de registros",
+    "indicator_active": "Racha de {{count}} días",
+    "indicator_active_one": "Racha de 1 día",
+    "indicator_active_other": "Racha de {{count}} días",
+    "indicator_zero": "¡Registra hoy para empezar tu racha!",
+    "settings_label": "Racha de registros",
+    "settings_description": "Lleva el conteo de cuántos días seguidos has registrado alimentos",
+    "reset_label": "Reiniciar racha",
+    "reset_description": "Borra tu racha actual y empieza de nuevo",
+    "reset_button": "Reiniciar",
+    "reset_resetting": "Reiniciando…",
+    "reset_confirm_title": "¿Reiniciar tu racha?",
+    "reset_confirm_body": "Tu racha actual se borrará. Tu récord de racha más larga se conservará.",
+    "reset_confirm_action": "Sí, reiniciar",
+    "detail_title": "Racha de registros",
+    "detail_empty": "¡Registra alimentos hoy para comenzar tu racha!",
+    "detail_current": "racha actual (días)",
+    "detail_longest": "mejor marca (días)",
+    "detail_note": "Sigue registrando para construir tu racha — cada día cuenta.",
+    "badge_one": "{{count}} día racha",
+    "badge_other": "{{count}} día racha"
   }
 }

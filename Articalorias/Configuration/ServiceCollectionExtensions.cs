@@ -44,6 +44,9 @@ public static class ServiceCollectionExtensions
         // Recalculation pipeline — the heart of the system
         services.AddScoped<IRecalculationService, RecalculationService>();
 
+        // Logging streak
+        services.AddScoped<IStreakService, StreakService>();
+
         // OpenAI food parsing
         services.AddScoped<IFoodParsingService, FoodParsingService>();
 

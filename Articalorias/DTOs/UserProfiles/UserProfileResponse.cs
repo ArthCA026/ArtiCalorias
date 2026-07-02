@@ -16,6 +16,7 @@ public class UserProfileResponse
     public bool AutoCalculateProteinGoal { get; set; }
     public string? Country { get; set; }
     public bool IsOnboardingCompleted { get; set; }
+    public string? TimeZoneId { get; set; }
 
     // Display preferences
     public string CalorieDisplayMode { get; set; } = "adjusted";

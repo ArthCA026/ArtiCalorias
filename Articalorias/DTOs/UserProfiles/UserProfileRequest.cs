@@ -36,6 +36,9 @@ public class UserProfileRequest
     [StringLength(100)]
     public string? Country { get; set; }
 
+    [StringLength(50)]
+    public string? TimeZoneId { get; set; }
+
     // Display preferences
     [StringLength(20)]
     public string CalorieDisplayMode { get; set; } = "adjusted";

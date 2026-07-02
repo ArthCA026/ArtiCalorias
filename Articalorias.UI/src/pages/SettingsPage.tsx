@@ -12,6 +12,7 @@ import { formatLocalTime } from "@/utils/notifications";
 import { useCalorieMode } from "@/hooks/useCalorieMode";
 import { useSafeguardToggle } from "@/hooks/useSafeguardToggle";
 import { useAuth } from "@/hooks/useAuth";
+import { useGetStreak, useUpdateStreakSettings, useResetStreak } from "@/hooks/useStreak";
 import { userService } from "@/services/userService";
 
 /* ─── tiny helpers ─────────────────────────────────────────── */
@@ -224,6 +225,12 @@ export default function SettingsPage() {
   const { enabled: minCalSafeguard, setEnabled: setSafeguardEnabled, isSaving: safeguardSaving } = useSafeguardToggle();
   const [showSafeguardWarning, setShowSafeguardWarning] = useState(false);
 
+  /* Streak */
+  const { data: streak } = useGetStreak();
+  const updateStreakSettings = useUpdateStreakSettings();
+  const resetStreakMutation = useResetStreak();
+  const [showResetStreakModal, setShowResetStreakModal] = useState(false);
+
   /* Danger zone */
   const [showClearHistoryModal, setShowClearHistoryModal] = useState(false);
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
@@ -247,6 +254,43 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-xl mx-auto">
+
+      {showResetStreakModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reset-streak-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl p-6 flex flex-col gap-4">
+            <div className="text-center">
+              <h2 id="reset-streak-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {t('streak.reset_confirm_title')}
+              </h2>
+              <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400">
+                {t('streak.reset_confirm_body')}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowResetStreakModal(false);
+                resetStreakMutation.mutate();
+              }}
+              className="w-full rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 active:bg-indigo-800 transition-colors"
+            >
+              {t('streak.reset_confirm_action')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowResetStreakModal(false)}
+              className="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-center transition-colors"
+            >
+              {t('common.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
 
       {showPermissionModal && (
         <NotificationPermissionModal
@@ -626,6 +670,33 @@ export default function SettingsPage() {
               }}
             />
           </SettingRow>
+
+          <SettingRow
+            label={t('streak.settings_label')}
+            description={t('streak.settings_description')}
+          >
+            <Toggle
+              checked={streak?.streakEnabled ?? true}
+              disabled={updateStreakSettings.isPending}
+              onChange={(on) => updateStreakSettings.mutate({ streakEnabled: on })}
+            />
+          </SettingRow>
+
+          {streak?.streakEnabled && (
+            <SettingRow
+              label={t('streak.reset_label')}
+              description={t('streak.reset_description')}
+            >
+              <button
+                type="button"
+                disabled={resetStreakMutation.isPending}
+                onClick={() => setShowResetStreakModal(true)}
+                className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {resetStreakMutation.isPending ? t('streak.reset_resetting') : t('streak.reset_button')}
+              </button>
+            </SettingRow>
+          )}
         </SectionBlock>
 
         {/* ── About ── */}

@@ -664,5 +664,28 @@
   "not_found": {
     "title": "Page not found",
     "go_dashboard": "Go to Dashboard"
+  },
+  "streak": {
+    "indicator_aria": "Logging streak",
+    "indicator_active": "{{count}} day streak",
+    "indicator_active_one": "1 day streak",
+    "indicator_active_other": "{{count}} day streak",
+    "indicator_zero": "Start your streak today",
+    "settings_label": "Logging streak",
+    "settings_description": "Track how many days in a row you've logged food",
+    "reset_label": "Reset streak",
+    "reset_description": "Clear your current streak and start over",
+    "reset_button": "Reset",
+    "reset_resetting": "Resetting…",
+    "reset_confirm_title": "Reset your streak?",
+    "reset_confirm_body": "Your current streak will be cleared. Your longest streak record will be kept.",
+    "reset_confirm_action": "Yes, reset",
+    "detail_title": "Logging streak",
+    "detail_empty": "Log food today to start building your streak!",
+    "detail_current": "current streak (days)",
+    "detail_longest": "personal best (days)",
+    "detail_note": "Keep logging to build your streak — every day counts.",
+    "badge_one": "{{count}} day streak",
+    "badge_other": "{{count}} day streak"
   }
 }

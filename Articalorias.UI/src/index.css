@@ -58,6 +58,11 @@
 
   /* ── Warning ── */
   --color-warning-text: #d97706;       /* amber-600 – cautionary text      */
+
+  /* ── Streak badge ── */
+  --color-streak-bg:     #F3F0FF;  /* light violet – streak badge background */
+  --color-streak-border: #DED6FF;  /* soft violet  – streak badge border     */
+  --color-streak-text:   #4A35FF;  /* violet-indigo – streak badge text      */
 }
 
 /* Dark-mode overrides — all descendants inherit via CSS variable cascade */
@@ -81,6 +86,9 @@
   --color-surface-raised:  #374151;   /* gray-700  */
   --color-surface-muted:   rgba(31, 41, 55, 0.4); /* gray-800/40% */
   --color-accent-track:    rgba(49, 46, 129, 0.4); /* indigo-900/40 */
+  --color-streak-bg:     rgba(79, 70, 229, 0.15);
+  --color-streak-border: rgba(79, 70, 229, 0.40);
+  --color-streak-text:   #818cf8;  /* indigo-400 */
 }
 
 /*

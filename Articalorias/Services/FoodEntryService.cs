@@ -10,11 +10,13 @@ public class FoodEntryService : IFoodEntryService
 {
     private readonly AppDbContext _db;
     private readonly IRecalculationService _recalculation;
+    private readonly IStreakService _streak;
 
-    public FoodEntryService(AppDbContext db, IRecalculationService recalculation)
+    public FoodEntryService(AppDbContext db, IRecalculationService recalculation, IStreakService streak)
     {
         _db = db;
         _recalculation = recalculation;
+        _streak = streak;
     }
 
     public async Task<IReadOnlyList<FoodEntry>> GetByDailyLogAsync(long dailyLogId)
@@ -37,6 +39,10 @@ public class FoodEntryService : IFoodEntryService
         await _db.SaveChangesAsync();
 
         await _recalculation.RecalculateFullPipelineAsync(entry.DailyLogId);
+
+        var userId = await GetUserIdForLogAsync(entry.DailyLogId);
+        await _streak.RecalculateForUserAsync(userId);
+
         return entry;
     }
 
@@ -61,6 +67,9 @@ public class FoodEntryService : IFoodEntryService
         // Single recalculation for the entire batch
         await _recalculation.RecalculateFullPipelineAsync(dailyLogId);
 
+        var userId = await GetUserIdForLogAsync(dailyLogId);
+        await _streak.RecalculateForUserAsync(userId);
+
         return entries;
     }
 
@@ -69,6 +78,7 @@ public class FoodEntryService : IFoodEntryService
         var existing = await _db.FoodEntries.FindAsync(entry.FoodEntryId)
             ?? throw new InvalidOperationException("FoodEntry not found.");
 
+        var oldDailyLogId = existing.DailyLogId;
         var oldQuantity = existing.Quantity;
 
         existing.FoodName = entry.FoodName;
@@ -102,6 +112,15 @@ public class FoodEntryService : IFoodEntryService
         await _db.SaveChangesAsync();
 
         await _recalculation.RecalculateFullPipelineAsync(existing.DailyLogId);
+
+        // Recalculate streak when the entry was moved to a different date (DailyLogId changed).
+        var dateChanged = existing.DailyLogId != oldDailyLogId;
+        if (dateChanged)
+        {
+            var userId = await GetUserIdForLogAsync(existing.DailyLogId);
+            await _streak.RecalculateForUserAsync(userId);
+        }
+
         return existing;
     }
 
@@ -115,7 +134,17 @@ public class FoodEntryService : IFoodEntryService
         await _db.SaveChangesAsync();
 
         await _recalculation.RecalculateFullPipelineAsync(dailyLogId);
+
+        var userId = await GetUserIdForLogAsync(dailyLogId);
+        await _streak.RecalculateForUserAsync(userId);
     }
+
+    private async Task<long> GetUserIdForLogAsync(long dailyLogId) =>
+        await _db.DailyLogs
+            .AsNoTracking()
+            .Where(dl => dl.DailyLogId == dailyLogId)
+            .Select(dl => dl.UserId)
+            .FirstAsync();
 
     private static readonly Regex LeadingOnePattern = new(@"^1\s+", RegexOptions.Compiled);
 

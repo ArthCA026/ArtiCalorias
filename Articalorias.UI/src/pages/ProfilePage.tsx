@@ -16,6 +16,7 @@ import ProteinPresetSelector from "@/components/protein/ProteinPresetSelector";
 import type { ProteinPresetId } from "@/config/proteinPresets";
 import { queryKeys } from "@/lib/queryKeys";
 import { toDateString } from "@/utils/format";
+import StreakDetail from "@/components/StreakDetail";
 
 type FormState = {
   currentWeightKg: string;
@@ -652,6 +653,8 @@ export default function ProfilePage() {
           {/* plan section removed */}
         </section>
       </div>
+
+      <StreakDetail />
     </div>
   );
 }
