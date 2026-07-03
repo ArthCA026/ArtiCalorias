@@ -90,29 +90,23 @@ export default function OnboardingPage() {
     const weight = parseFloat(form.currentWeightKg);
     const height = parseFloat(form.heightCm);
 
-    if (!form.currentWeightKg || !weight || weight <= 0) {
+    if (form.currentWeightKg && (isNaN(weight) || weight <= 0)) {
       errors.currentWeightKg = t('profile.validation_weight_empty');
-    } else if (weight > 500) {
+    } else if (form.currentWeightKg && weight > 500) {
       errors.currentWeightKg = t('profile.validation_weight_high');
     }
 
-    if (!form.heightCm || !height || height <= 0) {
+    if (form.heightCm && (isNaN(height) || height <= 0)) {
       errors.heightCm = t('profile.validation_height_empty');
-    } else if (height > 300) {
+    } else if (form.heightCm && height > 300) {
       errors.heightCm = t('profile.validation_height_high');
     }
 
-    if (!form.age) {
-      errors.age = t('profile.validation_age_empty');
-    } else {
+    if (form.age) {
       const age = parseInt(form.age);
-      if (age < 1) errors.age = t('onboarding.age_low');
+      if (isNaN(age) || age < 1) errors.age = t('onboarding.age_low');
       else if (age > 150) errors.age = t('onboarding.age_high');
     }
-    if (!form.biologicalSex) {
-      errors.biologicalSex = t('profile.validation_sex_empty');
-    }
-
     if (!form.autoCalculateBMR) {
       const bmr = parseFloat(form.bmrKcal);
       if (!form.bmrKcal || !bmr || bmr <= 0) {
@@ -142,8 +136,8 @@ export default function OnboardingPage() {
     }
 
     const data: UserProfileRequest = {
-      currentWeightKg: weight,
-      heightCm: height,
+      currentWeightKg: form.currentWeightKg ? weight : null,
+      heightCm: form.heightCm ? height : null,
       age: form.age ? parseInt(form.age) : null,
       biologicalSex: form.biologicalSex || null,
       bmrKcal: form.bmrKcal ? parseFloat(form.bmrKcal) : null,
@@ -207,8 +201,9 @@ export default function OnboardingPage() {
                 type="text"
                 inputMode="decimal"
                 pattern="[0-9]*[.,]?[0-9]*"
-                value={weightUnit === "lbs" ? String(Math.round(kgToDisplay(parseFloat(form.currentWeightKg) || 0, "lbs") * 10) / 10) : form.currentWeightKg}
-                onChange={(e) => set("currentWeightKg", weightUnit === "lbs" ? String(displayToKg(parseFloat(e.target.value.replace(",", ".")) || 0, "lbs")) : e.target.value)}
+                value={weightUnit === "lbs" ? (form.currentWeightKg ? String(Math.round(kgToDisplay(parseFloat(form.currentWeightKg), "lbs") * 10) / 10) : "") : form.currentWeightKg}
+                onChange={(e) => { const raw = e.target.value.replace(",", "."); set("currentWeightKg", weightUnit === "lbs" ? (raw ? String(displayToKg(parseFloat(raw), "lbs")) : "") : e.target.value); }}
+                placeholder={t('onboarding.weight_placeholder')}
                 className={`mt-1 block w-full rounded-md border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm shadow-sm focus:ring-1 focus:outline-none ${fieldErrors.currentWeightKg ? "border-red-300 dark:border-red-600 focus:border-red-500 focus:ring-red-500" : "border-gray-300 dark:border-gray-600 focus:border-indigo-500 focus:ring-indigo-500"}`}
               />
               {fieldErrors.currentWeightKg && <p className="mt-1 text-xs text-red-600">{fieldErrors.currentWeightKg}</p>}
@@ -221,6 +216,7 @@ export default function OnboardingPage() {
                 pattern="[0-9]*[.,]?[0-9]*"
                 value={form.heightCm}
                 onChange={(e) => set("heightCm", e.target.value)}
+                placeholder={t('onboarding.height_placeholder')}
                 className={`mt-1 block w-full rounded-md border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm shadow-sm focus:ring-1 focus:outline-none ${fieldErrors.heightCm ? "border-red-300 dark:border-red-600 focus:border-red-500 focus:ring-red-500" : "border-gray-300 dark:border-gray-600 focus:border-indigo-500 focus:ring-indigo-500"}`}
               />
               {fieldErrors.heightCm && <p className="mt-1 text-xs text-red-600">{fieldErrors.heightCm}</p>}
@@ -247,7 +243,7 @@ export default function OnboardingPage() {
                 onChange={(e) => set("biologicalSex", e.target.value)}
                 className={`mt-1 block w-full rounded-md border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm shadow-sm focus:ring-1 focus:outline-none ${fieldErrors.biologicalSex ? "border-red-300 dark:border-red-600 focus:border-red-500 focus:ring-red-500" : "border-gray-300 dark:border-gray-600 focus:border-indigo-500 focus:ring-indigo-500"}`}
               >
-                <option value="">—</option>
+                <option value="">{t('common.prefer_not_to_say')}</option>
                 <option value="M">{t('common.male')}</option>
                 <option value="F">{t('common.female')}</option>
               </select>

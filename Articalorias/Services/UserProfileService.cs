@@ -40,7 +40,9 @@ public class UserProfileService : IUserProfileService
             existing.AutoCalculateBMR = profile.AutoCalculateBMR;
             existing.AutoCalculateBodyFat = profile.AutoCalculateBodyFat;
             existing.BMRKcal = profile.BMRKcal;
-            existing.BodyFatPercent = profile.BodyFatPercent;
+            existing.BodyFatPercent = profile.AutoCalculateBodyFat
+                ? null   // let ApplyAutoCalculations compute a fresh, validated value
+                : profile.BodyFatPercent;
             existing.DailyBaseGoalKcal = profile.DailyBaseGoalKcal;
             existing.ProteinGoalGrams = profile.ProteinGoalGrams;
             existing.AutoCalculateProteinGoal = profile.AutoCalculateProteinGoal;
@@ -85,24 +87,38 @@ public class UserProfileService : IUserProfileService
     /// </summary>
     private static void ApplyAutoCalculations(UserProfile p)
     {
+        var hasBodyMetrics = p.CurrentWeightKg.HasValue && p.HeightCm.HasValue;
+
         // BMR — Mifflin–St Jeor: Men  = 10W + 6.25H − 5A + 5
         //                        Women = 10W + 6.25H − 5A − 161
-        if (p.AutoCalculateBMR && p.Age.HasValue && !string.IsNullOrEmpty(p.BiologicalSex))
+        //                        Neutral (sex unknown) uses the average offset −78
+        // Requires weight and height; skipped when either is null.
+        if (p.AutoCalculateBMR && hasBodyMetrics)
         {
-            var sexOffset = p.BiologicalSex == "M" ? 5m : -161m;
+            var effectiveAge = p.Age ?? 30;
+            var sexOffset = p.BiologicalSex == "M" ? 5m : p.BiologicalSex == "F" ? -161m : -78m;
             p.BMRKcal = Math.Round(
-                10m * p.CurrentWeightKg + 6.25m * p.HeightCm - 5m * p.Age.Value + sexOffset, 2);
+                10m * p.CurrentWeightKg!.Value + 6.25m * p.HeightCm!.Value - 5m * effectiveAge + sexOffset, 2);
         }
 
         // Body Fat % — Deurenberg: BF% = 1.20 × BMI + 0.23 × Age − 10.8 × Sex − 5.4
         //   Sex = 1 for men, 0 for women
-        if (p.AutoCalculateBodyFat && p.Age.HasValue && !string.IsNullOrEmpty(p.BiologicalSex))
+        // The formula is only reliable for BMI 14–60; outside that range
+        // (e.g. height entered as 17.3 cm instead of 173) it produces
+        // unphysically large values that overflow decimal(5,2). Guard both
+        // the BMI range and the final percentage before persisting.
+        if (p.AutoCalculateBodyFat && hasBodyMetrics && p.Age.HasValue && !string.IsNullOrEmpty(p.BiologicalSex))
         {
-            var heightM = p.HeightCm / 100m;
-            var bmi = p.CurrentWeightKg / (heightM * heightM);
-            var sexFactor = p.BiologicalSex == "M" ? 1m : 0m;
-            p.BodyFatPercent = Math.Round(
-                1.20m * bmi + 0.23m * p.Age.Value - 10.8m * sexFactor - 5.4m, 2);
+            var heightM = p.HeightCm!.Value / 100m;
+            if (heightM > 0m)
+            {
+                var bmi = p.CurrentWeightKg!.Value / (heightM * heightM);
+                var sexFactor = p.BiologicalSex == "M" ? 1m : 0m;
+                var bf = Math.Round(
+                    1.20m * bmi + 0.23m * p.Age.Value - 10.8m * sexFactor - 5.4m, 2);
+                // Only persist physically plausible body-fat percentages.
+                p.BodyFatPercent = (bf >= 0m && bf <= 100m) ? bf : null;
+            }
         }
     }
 }

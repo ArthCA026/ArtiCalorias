@@ -31,6 +31,15 @@ export const dailyLogService = {
     return api.post<DailyLogResponse | null>(`/dailylog/${date}/refresh-snapshot`);
   },
 
+  /**
+   * Refreshes profile snapshots + recalculates every DailyLog where weight or
+   * height snapshot was null (i.e. created before the user completed their profile).
+   * Returns the number of logs that were fixed.
+   */
+  refreshStaleSnapshots() {
+    return api.post<{ count: number }>('/dailylog/refresh-stale-snapshots');
+  },
+
   parseFood(date: string, data: ParseFoodRequest) {
     return api.post<ParsedFoodItem[]>(`/dailylog/${date}/parse-food`, data);
   },

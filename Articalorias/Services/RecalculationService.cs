@@ -15,13 +15,17 @@ public class RecalculationService : IRecalculationService
 {
     private readonly AppDbContext _db;
 
-    // Carries the three per-day fields needed for mixed-goal weekly context.
-    // All days in a week snapshot their own goal at creation, so summing these
-    // across the week correctly reflects mid-week goal changes.
+    // Carries the per-day fields needed for mixed-goal weekly context and
+    // budget-eligibility filtering (requires both weight and height).
     private record SiblingDayData(
         decimal NetBalanceKcal,
         decimal SnapshotDailyBaseGoalKcal,
-        DateOnly LogDate);
+        DateOnly LogDate,
+        decimal? SnapshotWeightKg,
+        decimal? SnapshotHeightCm)
+    {
+        public bool HasCalorieBudgetEstimate => SnapshotWeightKg.HasValue && SnapshotHeightCm.HasValue;
+    }
 
     public RecalculationService(AppDbContext db)
     {
@@ -69,15 +73,16 @@ public class RecalculationService : IRecalculationService
         var totalKnownHours = totalActivityHours + sleepH + neatH;
         log.HoursRemainingInDay = Math.Max(0m, 24m - totalKnownHours);
         // Idle MET 1.2 minus 1 MET (resting component already in BMR) = 0.2 net
-        log.IdleTimeCaloriesKcal = (1.2m - 1m) * log.SnapshotWeightKg * log.HoursRemainingInDay;
+        // Weight ?? 0m: when weight is absent all MET-based calorie burns are 0.
+        log.IdleTimeCaloriesKcal = (1.2m - 1m) * (log.SnapshotWeightKg ?? 0m) * log.HoursRemainingInDay;
         // Sleep & NEAT calories: (MET - 1) × weight × hours  (same formula as ActivityEntry)
         // MET constants: Sleep = 0.9, NEAT = 3.0 (not user-configurable)
         // Skipped when snapshots are NULL so old daily logs are never retroactively changed.
         log.SleepCaloriesKcal = log.SnapshotSleepHours.HasValue
-            ? (0.9m - 1m) * log.SnapshotWeightKg * sleepH
+            ? (0.9m - 1m) * (log.SnapshotWeightKg ?? 0m) * sleepH
             : 0m;
         log.NeatCaloriesKcal = log.SnapshotNeatHours.HasValue
-            ? (3.0m - 1m) * log.SnapshotWeightKg * neatH
+            ? (3.0m - 1m) * (log.SnapshotWeightKg ?? 0m) * neatH
             : 0m;
 
         // ── Step 4: Recompute TEF (per-macro business logic) ──
@@ -114,6 +119,18 @@ public class RecalculationService : IRecalculationService
 
         log.ProteinRemainingGrams = log.SnapshotProteinGoalGrams - log.TotalProteinGrams;
 
+        // ── Availability guard — zero budget fields when body metrics are incomplete ──
+        // Weight + height are both required for TDEE / BMR auto-calc.
+        // Zeroing prevents the UI from displaying misleading "0 of 0 kcal" progress bars.
+        // The HasCalorieBudgetEstimate flag (derived in the DTO) tells the frontend
+        // to show an informational banner instead of calorie progress data.
+        if (!log.SnapshotWeightKg.HasValue || !log.SnapshotHeightCm.HasValue)
+        {
+            log.NetBalanceKcal = 0m;
+            log.DailyGoalDeltaKcal = 0m;
+            log.CaloriesRemainingToDailyTargetKcal = 0m;
+        }
+
         // ── Step 8: Recompute weekly dynamic context ──
         await RecalculateWeeklyContext(log, siblingData, biologicalSex, safeguardEnabled, referenceToday);
 
@@ -140,7 +157,9 @@ public class RecalculationService : IRecalculationService
                     d.DailyLogId,
                     d.NetBalanceKcal,
                     d.SnapshotDailyBaseGoalKcal,
-                    d.LogDate
+                    d.LogDate,
+                    d.SnapshotWeightKg,
+                    d.SnapshotHeightCm
                 })
                 .ToListAsync();
 
@@ -151,10 +170,10 @@ public class RecalculationService : IRecalculationService
             // mixed-goal weekly targets when the user changed their goal mid-week.
             var siblingDataForCascade = siblings.ToDictionary(
                 s => s.DailyLogId,
-                s => new SiblingDayData(s.NetBalanceKcal, s.SnapshotDailyBaseGoalKcal, s.LogDate));
+                s => new SiblingDayData(s.NetBalanceKcal, s.SnapshotDailyBaseGoalKcal, s.LogDate, s.SnapshotWeightKg, s.SnapshotHeightCm));
             // Include the freshly saved primary day so siblings see its values.
             siblingDataForCascade[dailyLogId] = new SiblingDayData(
-                log.NetBalanceKcal, log.SnapshotDailyBaseGoalKcal, log.LogDate);
+                log.NetBalanceKcal, log.SnapshotDailyBaseGoalKcal, log.LogDate, log.SnapshotWeightKg, log.SnapshotHeightCm);
 
             foreach (var sibling in siblings)
                 await RecalculateFullPipelineAsync(sibling.DailyLogId, cascade: false, siblingData: siblingDataForCascade, referenceToday: referenceToday);
@@ -177,7 +196,7 @@ public class RecalculationService : IRecalculationService
 
         // Mirror the snapshot logic used in DailyLogService.GetOrCreateAsync.
         var proteinGoal = profile.ProteinGoalGrams
-            ?? (profile.AutoCalculateProteinGoal ? profile.CurrentWeightKg * 2.0m : 0m);
+            ?? (profile.AutoCalculateProteinGoal && profile.CurrentWeightKg.HasValue ? profile.CurrentWeightKg.Value * 2.0m : 0m);
 
         log.SnapshotWeightKg          = profile.CurrentWeightKg;
         log.SnapshotHeightCm          = profile.HeightCm;
@@ -195,6 +214,32 @@ public class RecalculationService : IRecalculationService
         // Without this, users in UTC-N timezones after ~(24-N):00 local time would see
         // today treated as a past day, causing the adjusted budget to be skipped.
         await RecalculateFullPipelineAsync(log.DailyLogId, cascade: true, siblingData: null, referenceToday: date);
+    }
+
+    public async Task<int> RefreshStaleSnapshotsAsync(long userId, CancellationToken ct = default)
+    {
+        // Only meaningful when the profile already has both weight and height.
+        var profile = await _db.UserProfiles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.UserId == userId, ct);
+
+        if (profile is null || !profile.CurrentWeightKg.HasValue || !profile.HeightCm.HasValue)
+            return 0;
+
+        // Collect all dates where either snapshot column is still null.
+        // This set is naturally small (only logs created before the profile
+        // was complete) so no explicit date-window cap is needed.
+        var staleDates = await _db.DailyLogs
+            .AsNoTracking()
+            .Where(d => d.UserId == userId
+                     && (d.SnapshotWeightKg == null || d.SnapshotHeightCm == null))
+            .Select(d => d.LogDate)
+            .ToListAsync(ct);
+
+        foreach (var date in staleDates)
+            await RefreshSnapshotAndRecalculateAsync(userId, date);
+
+        return staleDates.Count;
     }
 
     public async Task RecalculateAfterDayDeletionAsync(long userId, DateOnly deletedDate, DateOnly weekStart, DateOnly weekEnd, decimal baseDailyGoal)
@@ -236,7 +281,7 @@ public class RecalculationService : IRecalculationService
                 .Where(d => d.UserId == log.UserId
                     && d.WeekStartDate == log.WeekStartDate
                     && d.DailyLogId != log.DailyLogId)
-                .Select(d => new SiblingDayData(d.NetBalanceKcal, d.SnapshotDailyBaseGoalKcal, d.LogDate))
+                .Select(d => new SiblingDayData(d.NetBalanceKcal, d.SnapshotDailyBaseGoalKcal, d.LogDate, d.SnapshotWeightKg, d.SnapshotHeightCm))
                 .ToListAsync();
         }
 
@@ -257,10 +302,15 @@ public class RecalculationService : IRecalculationService
         log.WeeklyDifferenceKcal      = log.WeeklyActualToDateKcal - log.WeeklyExpectedToDateKcal;
         log.WeeklyRemainingTargetKcal = log.WeeklyTargetKcal - log.WeeklyActualToDateKcal;
 
-        // Use only completed past days for the suggested average so that
-        // today's incomplete balance doesn't distort the suggestion, and
-        // today itself counts as one of the remaining days to plan for.
-        var pastDaysBalance          = others.Sum(o => o.NetBalanceKcal);
+        // Use only completed past days that have a full calorie budget estimate for the
+        // suggested average, so days without body metrics don't distort the suggestion.
+        // Today itself counts as one of the remaining days to plan for.
+        var selfHasBudget   = log.SnapshotWeightKg.HasValue && log.SnapshotHeightCm.HasValue;
+        var eligiblePastDays = others
+            .Where(o => o.LogDate < log.LogDate && o.HasCalorieBudgetEstimate)
+            .ToList();
+        var pastDaysBalance = eligiblePastDays.Sum(o => o.NetBalanceKcal)
+            + (selfHasBudget ? 0m : 0m); // self already excluded — kept for readability
         var daysRemainingIncludingToday = 7 - others.Count;
 
         var rawSuggested = daysRemainingIncludingToday > 0
@@ -323,14 +373,14 @@ public class RecalculationService : IRecalculationService
 
         // 3. Energy-availability floor (requires body-fat % to compute FFM)
         decimal eaFloor;
-        if (log.SnapshotBodyFatPercent is > 0)
+        if (log.SnapshotBodyFatPercent is > 0 && log.SnapshotWeightKg.HasValue)
         {
-            var ffmKg = log.SnapshotWeightKg * (1m - log.SnapshotBodyFatPercent.Value / 100m);
+            var ffmKg = log.SnapshotWeightKg.Value * (1m - log.SnapshotBodyFatPercent.Value / 100m);
             eaFloor = 30m * ffmKg + log.TotalActivityCaloriesKcal;
         }
         else
         {
-            // Body fat unknown — fall back to full BMR so we still protect against
+            // Body fat or weight unknown — fall back to full BMR so we still protect against
             // dangerously low suggestions even without body-composition data.
             eaFloor = log.SnapshotBMRKcal;
         }

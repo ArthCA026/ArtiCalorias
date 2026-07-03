@@ -164,6 +164,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
     setDeleteError(null);
   }
 
+
   function handleDeleteConfirm() {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -201,11 +202,13 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
                     className={`cursor-pointer group transition-colors hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20 ${idx % 2 === 1 ? "bg-gray-50/40 dark:bg-gray-900/30" : "dark:bg-transparent"}`}
                   >
                     <td className="py-2.5 px-3 font-medium text-indigo-600">
-                      <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${getTableDelta(d, chartMode) <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
+                      <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${getTableDelta(d, chartMode) == null ? "bg-gray-300" : getTableDelta(d, chartMode)! <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
                       {formatDayLabel(d.logDate, i18n.language)}
                     </td>
                     <td className="py-2.5 px-2 text-right">
-                      <FriendlyGoalDelta value={getTableDelta(d, chartMode)} />
+                      {getTableDelta(d, chartMode) == null
+                        ? <span className="text-gray-400 text-xs">{t('history.no_budget_estimate')}</span>
+                        : <FriendlyGoalDelta value={getTableDelta(d, chartMode)!} />}
                     </td>
                     <td className="py-2.5 px-2 text-right tabular-nums font-medium text-gray-700 dark:text-gray-300">{fmt(d.totalProteinGrams, 1)} g</td>
                     <td className="py-2.5 px-2 text-center">
@@ -235,7 +238,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
               >
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="font-medium text-indigo-600 text-sm">
-                    <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${getTableDelta(d, chartMode) <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${getTableDelta(d, chartMode) == null ? "bg-gray-300" : getTableDelta(d, chartMode)! <= 0 ? "bg-green-400" : "bg-amber-400"}`} aria-hidden="true" />
                     {formatDayLabel(d.logDate, i18n.language)}
                   </span>
                   <div className="flex items-center gap-2">
@@ -252,7 +255,7 @@ function DailyLogsCard({ days, unloggedDays, onDayClick, onDayDeleted }: { days:
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-fg-secondary">
                   <span>{t('history.mobile_protein')} <span className="font-medium text-gray-700 dark:text-gray-300">{fmt(d.totalProteinGrams, 1)} g</span></span>
-                  <span>{tableColumnLabel}: <FriendlyGoalDelta value={getTableDelta(d, chartMode)} /></span>
+                  <span>{tableColumnLabel}: {getTableDelta(d, chartMode) == null ? <span className="text-gray-400">{t('history.no_budget_estimate')}</span> : <FriendlyGoalDelta value={getTableDelta(d, chartMode)!} />}</span>
                 </div>
               </div>
             ))}
@@ -347,14 +350,15 @@ const CHART_MODE_CONFIG: Record<ChartMode, {
 interface TrendPoint {
   date: string;
   label: string;
-  /** Deviation from zero for the active chart mode. Negative = below target. */
-  value: number;
+  /** Deviation from zero for the active chart mode. Null = day had no profile data (bar omitted). */
+  value: number | null;
   rollingAvg: number | null;
 }
 
-function calculateRollingAverage(values: number[], index: number, window = 7): number {
+function calculateRollingAverage(values: (number | null)[], index: number, window = 7): number | null {
   const start = Math.max(0, index - window + 1);
-  const slice = values.slice(start, index + 1);
+  const slice = values.slice(start, index + 1).filter((v): v is number => v !== null);
+  if (slice.length === 0) return null;
   return slice.reduce((s, v) => s + v, 0) / slice.length;
 }
 
@@ -428,20 +432,26 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
   }
 
   const sorted = [...days].sort((a, b) => a.logDate.localeCompare(b.logDate));
-  const values = sorted.map(getChartValue);
+  // Stale days (null weight/height snapshot) get null: no bar rendered, rolling avg unaffected.
+  const values = sorted.map(d => d.hasCalorieBudgetEstimate ? getChartValue(d) : null);
   const hasEnoughForFullWindow = days.length >= 7;
 
   const points: TrendPoint[] = sorted.map((d, i) => ({
     date: d.logDate,
     label: new Date(d.logDate + "T00:00:00").toLocaleDateString(i18n.language, { month: "short", day: "numeric" }),
-    value: getChartValue(d),
+    value: d.hasCalorieBudgetEstimate ? getChartValue(d) : null,
     rollingAvg: calculateRollingAverage(values, i, 7),
   }));
+
+  const validCount = points.filter(p => p.value !== null).length;
 
   const lastRolling = points[points.length - 1]?.rollingAvg ?? null;
   const lineColor = getTrendColor(lastRolling);
 
-  const allValues = points.flatMap((p) => [p.value, p.rollingAvg ?? p.value]);
+  const allValues = points.flatMap(p => [
+    ...(p.value != null ? [p.value] : []),
+    ...(p.rollingAvg != null ? [p.rollingAvg] : []),
+  ]);
   const domain = calculateSymmetricDomain(allValues);
 
   const tickStep = points.length <= 10 ? 1 : points.length <= 20 ? 2 : Math.ceil(points.length / 10);
@@ -452,6 +462,7 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
     const point = payload[0]?.payload;
     if (!point) return null;
     const daily = point.value;
+    if (daily === null) return null; // stale day — no tooltip
     const abs = Math.abs(daily);
     const text =
       abs < 5    ? t(cfg.tooltipZeroKey)
@@ -478,6 +489,8 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
 
       {points.length < 2 ? (
         <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4">{t('history.chart_min_data')}</p>
+      ) : validCount < 2 ? (
+        <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4">{t('history.chart_needs_profile')}</p>
       ) : (
         <>
           {!hasEnoughForFullWindow && (
@@ -530,8 +543,8 @@ function BalanceTrend({ days }: { days: DailyLogResponse[] }) {
                   {points.map((p) => (
                     <Cell
                       key={p.date}
-                      fill={p.value <= 0 ? "#86efac" : "#fdba74"}
-                      fillOpacity={0.85}
+                      fill={p.value == null ? "transparent" : p.value <= 0 ? "#86efac" : "#fdba74"}
+                      fillOpacity={p.value == null ? 0 : 0.85}
                     />
                   ))}
                 </Bar>
@@ -606,7 +619,8 @@ function getAdjustedDelta(d: DailyLogResponse): number {
   return (d.totalFoodCaloriesKcal - d.totalDailyExpenditureKcal) - d.suggestedDailyAverageRemainingKcal;
 }
 
-function getTableDelta(d: DailyLogResponse, mode: ChartMode): number {
+function getTableDelta(d: DailyLogResponse, mode: ChartMode): number | null {
+  if (!d.hasCalorieBudgetEstimate) return null;
   if (mode === "net")  return d.totalFoodCaloriesKcal - d.totalDailyExpenditureKcal;
   if (mode === "goal") return d.dailyGoalDeltaKcal;
   return getAdjustedDelta(d);

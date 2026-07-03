@@ -15,6 +15,7 @@
     "over": "por encima",
     "male": "Masculino",
     "female": "Femenino",
+    "prefer_not_to_say": "Prefiero no decir",
     "optional": "opcional",
     "required": "Requerido",
     "password_show": "Mostrar contraseña",
@@ -224,11 +225,15 @@
     "title": "Configura tu plan",
     "subtitle": "Cuéntanos un poco sobre ti para estimar tus objetivos diarios de calorías y proteína. Puedes cambiarlos después.",
     "section1_title": "Datos básicos",
-    "section1_subtitle": "Los usamos para estimar cuántas calorías quema tu cuerpo cada día.",
-    "weight_label": "Tu peso (kg) *",
-    "height_label": "Tu altura (cm) *",
-    "age_label": "Edad *",
-    "sex_label": "Sexo *",
+    "section1_subtitle": "Estos nos ayudan a personalizar tus objetivos de calorías y proteína.",
+    "weight_label": "Tu peso (kg)",
+    "height_label": "Tu altura (cm)",
+    "weight_placeholder": "Déjalo en blanco si no sabes",
+    "height_placeholder": "Déjalo en blanco si no sabes",
+    "optional_helper_title": "¿No los sabes aún?",
+    "optional_helper_body": "Deja peso y altura en blanco por ahora. Igual puedes registrar comidas y agregarlos después.",
+    "age_label": "Edad (opcional)",
+    "sex_label": "Sexo (opcional)",
     "section2_title": "Tu objetivo",
     "section2_subtitle": "¿Qué te gustaría lograr? Esto afecta cuántas calorías deberías comer cada día. Puedes cambiarlo después.",
     "protein_label": "Objetivo diario de proteína",
@@ -285,6 +290,7 @@
     "load_error": "No se pudo cargar tu historial — por favor intenta de nuevo.",
     "chart_title": "¿Estás cumpliendo tu plan?",
     "chart_min_data": "Registra al menos 2 días para ver la tendencia.",
+    "chart_needs_profile": "Completa tu perfil con peso y altura para desbloquear el gráfico de tendencia de balance.",
     "building_trend_one": "Construyendo tendencia — {{count}} día registrado",
     "building_trend_other": "Construyendo tendencia — {{count}} días registrados",
     "chart_mode_weekly": "Plan semanal",
@@ -339,7 +345,8 @@
     "day_detail_subtitle": "Revisa y edita las comidas y actividades de este día.",
     "table_net": "Balance neto",
     "table_goal": "vs. Meta diaria",
-    "table_adjusted": "Por encima / debajo"
+    "table_adjusted": "Por encima / debajo",
+    "no_budget_estimate": "Datos de perfil faltantes"
   },
   "activities": {
     "quick_title": "Creación rápida",
@@ -537,7 +544,20 @@
     "toast_activity_template_saved": "{{name}} guardado en favoritos",
     "toast_activity_template_error": "No se pudo guardar en favoritos",
     "toast_food_added": "{{name}} añadido",
-    "toast_activity_added": "{{name}} añadido"
+    "toast_activity_added": "{{name}} añadido",
+    "personalized_goals_setup_title": "Configura tus metas personalizadas",
+    "personalized_goals_setup_body": "Agrega tu peso y altura para desbloquear tu presupuesto cal\u00f3rico y meta de prote\u00edna.",
+    "unlock_calorie_estimates_title": "Desbloquea tu presupuesto cal\u00f3rico",
+    "unlock_calorie_estimates_body": "Agrega tu peso y altura para ver tu presupuesto diario personalizado.",
+    "unlock_protein_goal_title": "Desbloquea tu meta de prote\u00edna",
+    "unlock_protein_goal_body": "Agrega tu peso para calcular una meta de prote\u00edna personalizada.",
+    "complete_profile_cta": "Completar perfil",
+    "historical_personalized_goals_unavailable_title": "Las metas personalizadas no estaban disponibles",
+    "historical_personalized_goals_unavailable_body": "Este d\u00eda fue registrado antes de agregar los datos de perfil necesarios.",
+    "historical_calorie_budget_unavailable_title": "El presupuesto cal\u00f3rico no estaba disponible",
+    "historical_calorie_budget_unavailable_body": "Este d\u00eda fue registrado sin los datos de perfil necesarios para un presupuesto cal\u00f3rico personalizado.",
+    "historical_protein_goal_unavailable_title": "La meta de prote\u00edna no estaba disponible",
+    "historical_protein_goal_unavailable_body": "Este d\u00eda fue registrado sin los datos de perfil necesarios para una meta de prote\u00edna personalizada."
   },
   "settings": {
     "wip_title": "Los ajustes están en desarrollo",
@@ -608,7 +628,10 @@
       "user_section_title": "Mis actividades favoritas",
       "quick_add_aria": "Agregar rápido {{name}} a hoy",
       "quick_add_success": "Se agregó {{name}} a hoy",
-      "quick_add_error": "No se pudo agregar {{name}}"
+      "quick_add_error": "No se pudo agregar {{name}}",
+      "toast_auto_add_on": "Agregado al auto-registro diario",
+      "toast_auto_add_off": "Eliminado del auto-registro diario",
+      "toast_auto_add_error": "No se pudo actualizar la configuración de auto-registro"
     },
     "foods": {
       "tab_label": "Comidas",
@@ -628,7 +651,10 @@
       "auto_add_label": "Agregar automáticamente al nuevo día",
       "quick_add_aria": "Agregar rápido {{name}} a hoy",
       "quick_add_success": "Se agregó {{name}} a hoy",
-      "quick_add_error": "No se pudo agregar {{name}}"
+      "quick_add_error": "No se pudo agregar {{name}}",
+      "toast_auto_add_on": "Agregado al auto-registro diario",
+      "toast_auto_add_off": "Eliminado del auto-registro diario",
+      "toast_auto_add_error": "No se pudo actualizar la configuración de auto-registro"
     },
     "ai_input": {
       "placeholder": "Describe un alimento o actividad para guardar como favorito…",

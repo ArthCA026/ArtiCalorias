@@ -33,7 +33,7 @@ public class ActivityService : IActivityService
         var dailyLog = await _db.DailyLogs.FindAsync(entry.DailyLogId)
             ?? throw new InvalidOperationException("DailyLog not found.");
 
-        CalculateActivityCalories(entry, dailyLog.SnapshotWeightKg);
+        CalculateActivityCalories(entry, dailyLog.SnapshotWeightKg ?? 0m);
 
         // Validate available-time cap: 24h minus reserved sleep & NEAT hours
         var reservedMinutes = ((dailyLog.SnapshotSleepHours ?? 0m) + (dailyLog.SnapshotNeatHours ?? 0m)) * 60m;
@@ -75,7 +75,7 @@ public class ActivityService : IActivityService
         existing.METValue = entry.METValue;
 
         existing.UpdatedAtUtc = DateTime.UtcNow;
-        CalculateActivityCalories(existing, dailyLog.SnapshotWeightKg);
+        CalculateActivityCalories(existing, dailyLog.SnapshotWeightKg ?? 0m);
 
         // Validate available-time cap: 24h minus reserved sleep & NEAT hours
         var reservedMinutes = ((dailyLog.SnapshotSleepHours ?? 0m) + (dailyLog.SnapshotNeatHours ?? 0m)) * 60m;

@@ -3,8 +3,8 @@ namespace Articalorias.DTOs.UserProfiles;
 public class UserProfileResponse
 {
     public long UserProfileId { get; set; }
-    public decimal CurrentWeightKg { get; set; }
-    public decimal HeightCm { get; set; }
+    public decimal? CurrentWeightKg { get; set; }
+    public decimal? HeightCm { get; set; }
     public int? Age { get; set; }
     public string? BiologicalSex { get; set; }
     public decimal BMRKcal { get; set; }

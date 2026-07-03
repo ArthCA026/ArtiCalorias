@@ -1,4 +1,5 @@
 ﻿import { useState, useMemo, useRef } from "react";
+import { useNavigate } from "react-router";
 import { DecimalInput } from "@/components/DecimalInput";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { Toast, useToast } from "@/components/Toast";
@@ -33,6 +34,7 @@ import { useCalorieMode } from "@/hooks/useCalorieMode";
 import type { CalorieMode } from "@/hooks/useCalorieMode";
 import StreakBadge from "@/components/StreakIndicator";
 import { useGetStreak } from "@/hooks/useStreak";
+import { ProfileCompletionBanner } from "@/components/ProfileCompletionBanner";
 
 interface DayDashboardProps {
   date: string;
@@ -88,6 +90,7 @@ function CompactDayProgress({ dash, isToday, chartMode, streakCount }: { dash: D
   if (!dash) return null;
   const { t } = useTranslation();
   const { energyUnit } = useUnits();
+  const navigate = useNavigate();
 
   const effectiveMode = chartMode;
 
@@ -124,35 +127,73 @@ function CompactDayProgress({ dash, isToday, chartMode, streakCount }: { dash: D
     >
       <div className="space-y-1.5">
 
-        {/* Calorie row */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-fg-secondary shrink-0">{t('dashboard.calories_label')}</p>
-            <span className={`text-xs font-semibold tabular-nums ${calOver ? "text-amber-600" : "text-green-700"}`}>
-              {calOver ? t('dashboard.calorie_over_budget', { amount: formatEnergy(calAbs, energyUnit) }) : t('dashboard.calorie_under_budget', { amount: formatEnergy(calAbs, energyUnit) })}
-            </span>
-          </div>
-          <div className="h-2 rounded-full bg-surface-subtle overflow-hidden" role="progressbar" aria-valuenow={foodCal} aria-valuemin={0} aria-valuemax={dailyBudget} aria-label={t('dashboard.calorie_budget_aria')}>
-            <div className={`h-full rounded-full transition-all duration-500 ${calOver ? "bg-amber-400" : "bg-green-500"}`} style={{ width: `${Math.min(calPct, 100)}%` }} />
-          </div>
-          <p className="text-[11px] tabular-nums text-fg-subtle">{t('dashboard.calorie_progress', { percentage: calPct, consumed: formatEnergy(foodCal, energyUnit), budget: formatEnergy(dailyBudget, energyUnit) })}<span className="ml-1 opacity-50">{budgetNote}</span></p>
-        </div>
+        {/* Calorie + Protein — combined banner when both estimates are unavailable */}
+        {(() => {
+          const showCaloriePrompt = !dash.hasCalorieBudgetEstimate;
+          const showProteinPrompt = !dash.hasProteinGoal;
+          const showCombined = showCaloriePrompt && showProteinPrompt;
+          return (
+            <>
+              {/* Calorie section */}
+              {showCombined ? (
+                <ProfileCompletionBanner
+                  icon="🎯"
+                  title={isToday ? t('dashboard.personalized_goals_setup_title') : t('dashboard.historical_personalized_goals_unavailable_title')}
+                  body={isToday ? t('dashboard.personalized_goals_setup_body') : t('dashboard.historical_personalized_goals_unavailable_body')}
+                  ctaLabel={isToday ? t('dashboard.complete_profile_cta') : undefined}
+                  onCta={isToday ? () => navigate("/profile") : undefined}
+                />
+              ) : showCaloriePrompt ? (
+                <ProfileCompletionBanner
+                  title={isToday ? t('dashboard.unlock_calorie_estimates_title') : t('dashboard.historical_calorie_budget_unavailable_title')}
+                  body={isToday ? t('dashboard.unlock_calorie_estimates_body') : t('dashboard.historical_calorie_budget_unavailable_body')}
+                  ctaLabel={isToday ? t('dashboard.complete_profile_cta') : undefined}
+                  onCta={isToday ? () => navigate("/profile") : undefined}
+                />
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-fg-secondary shrink-0">{t('dashboard.calories_label')}</p>
+                    <span className={`text-xs font-semibold tabular-nums ${calOver ? "text-amber-600" : "text-green-700"}`}>
+                      {calOver ? t('dashboard.calorie_over_budget', { amount: formatEnergy(calAbs, energyUnit) }) : t('dashboard.calorie_under_budget', { amount: formatEnergy(calAbs, energyUnit) })}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-surface-subtle overflow-hidden" role="progressbar" aria-valuenow={foodCal} aria-valuemin={0} aria-valuemax={dailyBudget} aria-label={t('dashboard.calorie_budget_aria')}>
+                    <div className={`h-full rounded-full transition-all duration-500 ${calOver ? "bg-amber-400" : "bg-green-500"}`} style={{ width: `${Math.min(calPct, 100)}%` }} />
+                  </div>
+                  <p className="text-[11px] tabular-nums text-fg-subtle">{t('dashboard.calorie_progress', { percentage: calPct, consumed: formatEnergy(foodCal, energyUnit), budget: formatEnergy(dailyBudget, energyUnit) })}<span className="ml-1 opacity-50">{budgetNote}</span></p>
+                </div>
+              )}
 
-        {/* Protein row */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-fg-secondary shrink-0">{t('dashboard.protein_label')}</p>
-            <span className={`text-xs font-semibold tabular-nums ${protGoalReached ? "text-green-700" : "text-indigo-600"}`}>
-              {protGoalReached
-                ? `${protAbs > 0 ? t('dashboard.protein_extra', { amount: fmt(protAbs, 1) }) : t('dashboard.protein_goal_reached')}`
-                : (isToday ? t('dashboard.protein_to_go', { amount: fmt(protAbs, 1) }) : t('dashboard.protein_short', { amount: fmt(protAbs, 1) }))}
-            </span>
-          </div>
-          <div className="h-2 rounded-full bg-accent-track overflow-hidden" role="progressbar" aria-valuenow={dash.totalProteinGrams} aria-valuemin={0} aria-valuemax={dash.snapshotProteinGoalGrams} aria-label={t('dashboard.protein_aria')}>
-            <div className={`h-full rounded-full transition-all duration-500 ${protGoalReached ? "bg-green-500" : "bg-indigo-500"}`} style={{ width: `${Math.min(protPctDisplay, 100)}%` }} />
-          </div>
-          <p className="text-[11px] tabular-nums text-fg-subtle">{t('dashboard.protein_progress', { percentage: protPctDisplay, consumed: fmt(dash.totalProteinGrams, 1), goal: fmt(dash.snapshotProteinGoalGrams, 1) })}</p>
-        </div>
+              {/* Protein section — hidden when combined banner already handles both */}
+              {!showCombined && (
+                showProteinPrompt ? (
+                  <ProfileCompletionBanner
+                    title={isToday ? t('dashboard.unlock_protein_goal_title') : t('dashboard.historical_protein_goal_unavailable_title')}
+                    body={isToday ? t('dashboard.unlock_protein_goal_body') : t('dashboard.historical_protein_goal_unavailable_body')}
+                    ctaLabel={isToday ? t('dashboard.complete_profile_cta') : undefined}
+                    onCta={isToday ? () => navigate("/profile") : undefined}
+                  />
+                ) : (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-fg-secondary shrink-0">{t('dashboard.protein_label')}</p>
+                      <span className={`text-xs font-semibold tabular-nums ${protGoalReached ? "text-green-700" : "text-indigo-600"}`}>
+                        {protGoalReached
+                          ? `${protAbs > 0 ? t('dashboard.protein_extra', { amount: fmt(protAbs, 1) }) : t('dashboard.protein_goal_reached')}`
+                          : (isToday ? t('dashboard.protein_to_go', { amount: fmt(protAbs, 1) }) : t('dashboard.protein_short', { amount: fmt(protAbs, 1) }))}
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-accent-track overflow-hidden" role="progressbar" aria-valuenow={dash.totalProteinGrams} aria-valuemin={0} aria-valuemax={dash.snapshotProteinGoalGrams} aria-label={t('dashboard.protein_aria')}>
+                      <div className={`h-full rounded-full transition-all duration-500 ${protGoalReached ? "bg-green-500" : "bg-indigo-500"}`} style={{ width: `${Math.min(protPctDisplay, 100)}%` }} />
+                    </div>
+                    <p className="text-[11px] tabular-nums text-fg-subtle">{t('dashboard.protein_progress', { percentage: protPctDisplay, consumed: fmt(dash.totalProteinGrams, 1), goal: fmt(dash.snapshotProteinGoalGrams, 1) })}</p>
+                  </div>
+                )
+              )}
+            </>
+          );
+        })()}
 
       </div>
     </SectionCard>
@@ -509,6 +550,7 @@ function ActivityMobileCard({
   onToggleFavorite,
   favState,
   isFavorite,
+  hasCalorieEstimate = true,
 }: {
   a: ActivityEntryResponse;
   onEdit: () => void;
@@ -517,6 +559,7 @@ function ActivityMobileCard({
   onToggleFavorite: () => void;
   favState: 'idle' | 'saving' | 'saved' | 'error';
   isFavorite: boolean;
+  hasCalorieEstimate?: boolean;
 }) {
   const { t } = useTranslation();
   const { energyUnit } = useUnits();
@@ -537,7 +580,7 @@ function ActivityMobileCard({
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-50 dark:border-gray-800">
-        <MobileStat label={a.calculatedCaloriesKcal < 0 ? t('dashboard.activity_below_resting') : t('dashboard.activity_burned')} value={formatEnergy(a.calculatedCaloriesKcal, energyUnit)} accent />
+        <MobileStat label={a.calculatedCaloriesKcal < 0 ? t('dashboard.activity_below_resting') : t('dashboard.activity_burned')} value={hasCalorieEstimate ? formatEnergy(a.calculatedCaloriesKcal, energyUnit) : '\u2013'} accent />
         <MobileStat label={t('dashboard.activity_duration')} value={a.durationMinutes != null ? (a.durationMinutes >= 60 ? `${+(a.durationMinutes / 60).toFixed(1)}h` : `${fmt(a.durationMinutes)} min`) : "\u2013"} />
       </div>
     </div>
@@ -1091,7 +1134,7 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard, onToast
 }
 
 /* --- Activity Section --- */
-function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCard, onToast }: { date: string; activities: ActivityEntryResponse[]; onChanged: () => void; isToday: boolean; noCard?: boolean; onToast: (msg: string, type: 'success' | 'error') => void }) {
+function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCard, onToast, hasCalorieEstimate = true }: { date: string; activities: ActivityEntryResponse[]; onChanged: () => void; isToday: boolean; noCard?: boolean; onToast: (msg: string, type: 'success' | 'error') => void; hasCalorieEstimate?: boolean }) {
   const { t } = useTranslation();
   const { energyUnit } = useUnits();
   const queryClientInstance = useQueryClient();
@@ -1286,7 +1329,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
                                 <span className="line-clamp-2">{a.activityName}</span>
                               </td>
                               <td className="py-1.5 px-2 text-right tabular-nums text-gray-700">{a.durationMinutes != null ? (a.durationMinutes >= 60 ? `${+(a.durationMinutes / 60).toFixed(1)}h` : `${fmt(a.durationMinutes)} min`) : "\u2013"}</td>
-                              <td className={`py-1.5 px-2 text-right tabular-nums font-semibold ${a.calculatedCaloriesKcal < 0 ? "text-blue-600" : "text-gray-900"}`} title={a.calculatedCaloriesKcal < 0 ? "Below resting rate · burns less than your baseline" : undefined}>{Math.round(kcalToDisplay(a.calculatedCaloriesKcal, energyUnit)).toLocaleString()}</td>
+                              <td className={`py-1.5 px-2 text-right tabular-nums font-semibold ${hasCalorieEstimate && a.calculatedCaloriesKcal < 0 ? "text-blue-600" : "text-gray-900"}`} title={hasCalorieEstimate && a.calculatedCaloriesKcal < 0 ? "Below resting rate · burns less than your baseline" : undefined}>{hasCalorieEstimate ? Math.round(kcalToDisplay(a.calculatedCaloriesKcal, energyUnit)).toLocaleString() : "\u2013"}</td>
                               <td className="py-1.5 px-2">
                                 <div className="flex gap-1 justify-end">
                                   <button onClick={() => { const isMatch = activityEntryMatchesTemplate(a); const state = favStates[a.activityEntryId] ?? 'idle'; if (isMatch && state === 'idle') removeActivityTemplate(a); else if (!isMatch && !['saving','saved'].includes(state)) saveActivityTemplate(a); }} disabled={favStates[a.activityEntryId] === 'saving'} title={(activityEntryMatchesTemplate(a) || favStates[a.activityEntryId] === 'saved') ? t('dashboard.remove_from_favorites') : t('dashboard.save_as_favorite')} aria-label={(activityEntryMatchesTemplate(a) || favStates[a.activityEntryId] === 'saved') ? t('dashboard.remove_from_favorites') : t('dashboard.save_as_favorite')} className={`rounded-md p-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500 ${(activityEntryMatchesTemplate(a) || favStates[a.activityEntryId] === 'saved') ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/20 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20' : favStates[a.activityEntryId] === 'error' ? 'text-red-500 disabled:opacity-50' : 'text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50'}`}>{favStates[a.activityEntryId] === 'saving' ? <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> : <IconStar className="w-4 h-4" filled={activityEntryMatchesTemplate(a) || favStates[a.activityEntryId] === 'saved'} />}</button>
@@ -1318,6 +1361,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
                           }}
                           favState={favStates[a.activityEntryId] ?? 'idle'}
                           isFavorite={activityEntryMatchesTemplate(a)}
+                          hasCalorieEstimate={hasCalorieEstimate}
                         />
                     ))}
                   </div>
@@ -1434,6 +1478,7 @@ function DailyLogWorkspace({
   const setTab = onTabChange;
   const foods = dash?.foodEntries ?? [];
   const activities = dash?.activityEntries ?? [];
+  const hasCalorieEstimate = dash?.hasCalorieEstimate ?? true;
   const mealCount = foods.length;
   const activityCount = activities.length;
 
@@ -1528,7 +1573,7 @@ function DailyLogWorkspace({
         </div>
         <div className={`space-y-4${tab !== "activities" ? " hidden" : ""}`}>
           <ActivityInput date={date} onSaved={onChanged} isToday={isToday} noCard />
-          <ActivitySection date={date} activities={activities} onChanged={onChanged} isToday={isToday} noCard onToast={onToast} />
+          <ActivitySection date={date} activities={activities} onChanged={onChanged} isToday={isToday} noCard onToast={onToast} hasCalorieEstimate={hasCalorieEstimate} />
         </div>
       </div>
     </div>

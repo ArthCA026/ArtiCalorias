@@ -123,6 +123,26 @@ textarea:focus-visible {
   outline: none;
 }
 
+/* ── Neutralize Chrome autofill styling ────────────────────────────────── */
+/* Chrome's :-webkit-autofill overrides text color when the user selects a  */
+/* browser form-history suggestion. Force our semantic foreground token so   */
+/* text stays dark/light correctly in both themes. The box-shadow inset      */
+/* replaces the yellow/blue autofill background flash with the app surface.  */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--color-fg-primary) !important;
+  -webkit-box-shadow: 0 0 0 1000px #f9fafb inset !important;
+  caret-color: var(--color-fg-primary);
+}
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover,
+.dark input:-webkit-autofill:focus,
+.dark input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #1f2937 inset !important;
+}
+
 /* Suppress browser focus rings on Recharts SVG internals.
    SVG <rect> elements receive focus on click across some browsers and show
    a black rectangular UA outline. Recharts wraps every chart in

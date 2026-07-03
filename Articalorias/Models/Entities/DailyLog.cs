@@ -7,8 +7,8 @@ public class DailyLog
     public DateOnly LogDate { get; set; }
 
     // Snapshot del perfil usado ese día
-    public decimal SnapshotWeightKg { get; set; }
-    public decimal SnapshotHeightCm { get; set; }
+    public decimal? SnapshotWeightKg { get; set; }
+    public decimal? SnapshotHeightCm { get; set; }
     public decimal SnapshotBMRKcal { get; set; }
     public decimal? SnapshotBodyFatPercent { get; set; }
     public decimal SnapshotDailyBaseGoalKcal { get; set; }

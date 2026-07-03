@@ -53,9 +53,14 @@ public class DailyDashboardResponse
     public bool IsFinalized { get; set; }
 
     // Snapshot usado
-    public decimal SnapshotWeightKg { get; set; }
-    public decimal SnapshotHeightCm { get; set; }
+    public decimal? SnapshotWeightKg { get; set; }
+    public decimal? SnapshotHeightCm { get; set; }
     public decimal SnapshotBMRKcal { get; set; }
+
+    // Availability flags — derived from snapshot fields
+    public bool HasCalorieBudgetEstimate => SnapshotWeightKg.HasValue && SnapshotHeightCm.HasValue;
+    public bool HasCalorieEstimate => SnapshotWeightKg.HasValue;
+    public bool HasProteinGoal => SnapshotProteinGoalGrams > 0m;
     public decimal? SnapshotBodyFatPercent { get; set; }
     public decimal SnapshotDailyBaseGoalKcal { get; set; }
     public decimal SnapshotProteinGoalGrams { get; set; }

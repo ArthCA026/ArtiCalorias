@@ -15,6 +15,7 @@
     "over": "over",
     "male": "Male",
     "female": "Female",
+    "prefer_not_to_say": "Prefer not to say",
     "optional": "optional",
     "required": "Required",
     "password_show": "Show password",
@@ -224,11 +225,15 @@
     "title": "Set up your plan",
     "subtitle": "Tell us a bit about yourself so we can estimate your daily calorie and protein targets. You can always change these later.",
     "section1_title": "Basic details",
-    "section1_subtitle": "We use these to estimate how many calories your body burns each day.",
-    "weight_label": "Your weight (kg) *",
-    "height_label": "Your height (cm) *",
-    "age_label": "Age *",
-    "sex_label": "Sex *",
+    "section1_subtitle": "These help us personalize your calorie and protein targets.",
+    "weight_label": "Your weight (kg)",
+    "height_label": "Your height (cm)",
+    "weight_placeholder": "Leave blank if unsure",
+    "height_placeholder": "Leave blank if unsure",
+    "optional_helper_title": "Don't know these yet?",
+    "optional_helper_body": "Leave weight and height blank for now. You can still log meals and add them later.",
+    "age_label": "Age (optional)",
+    "sex_label": "Sex (optional)",
     "section2_title": "Your goal",
     "section2_subtitle": "What would you like to do? This affects how many calories you should eat each day. You can change this later.",
     "protein_label": "Daily protein target",
@@ -285,6 +290,7 @@
     "load_error": "Couldn't load your history — please try again.",
     "chart_title": "Are you staying on track?",
     "chart_min_data": "Log at least 2 days to see the trend.",
+    "chart_needs_profile": "Complete your profile with weight and height to unlock the balance trend chart.",
     "building_trend_one": "Building trend — {{count}} day logged",
     "building_trend_other": "Building trend — {{count}} days logged",
     "chart_mode_weekly": "Weekly Plan",
@@ -339,7 +345,8 @@
     "day_detail_subtitle": "Review and edit this day's meals and activities.",
     "table_net": "Net Balance",
     "table_goal": "vs. Daily Goal",
-    "table_adjusted": "Over / Under"
+    "table_adjusted": "Over / Under",
+    "no_budget_estimate": "Missing profile details"
   },
   "activities": {
     "quick_title": "Quick create",
@@ -539,7 +546,20 @@
     "toast_activity_template_saved": "{{name}} saved to favorites",
     "toast_activity_template_error": "Couldn't save to favorites",
     "toast_food_added": "{{name}} added",
-    "toast_activity_added": "{{name}} added"
+    "toast_activity_added": "{{name}} added",
+    "personalized_goals_setup_title": "Set up personalized goals",
+    "personalized_goals_setup_body": "Add your weight and height to unlock your calorie budget and protein goal.",
+    "unlock_calorie_estimates_title": "Unlock calorie estimates",
+    "unlock_calorie_estimates_body": "Add your weight and height to see your personalized daily budget.",
+    "unlock_protein_goal_title": "Unlock your protein goal",
+    "unlock_protein_goal_body": "Add your weight to calculate a personalized protein target.",
+    "complete_profile_cta": "Complete profile",
+    "historical_personalized_goals_unavailable_title": "Personalized goals were unavailable",
+    "historical_personalized_goals_unavailable_body": "This day was logged before the needed profile details were added.",
+    "historical_calorie_budget_unavailable_title": "Calorie budget was unavailable",
+    "historical_calorie_budget_unavailable_body": "This day was logged without the profile details needed for a personalized calorie budget.",
+    "historical_protein_goal_unavailable_title": "Protein goal was unavailable",
+    "historical_protein_goal_unavailable_body": "This day was logged without the profile details needed for a personalized protein goal."
   },
   "settings": {
     "wip_title": "Settings is a work in progress",
@@ -610,7 +630,10 @@
       "user_section_title": "My activity favorites",
       "quick_add_aria": "Quick-add {{name}} to today",
       "quick_add_success": "Added {{name}} to today",
-      "quick_add_error": "Couldn't add {{name}}"
+      "quick_add_error": "Couldn't add {{name}}",
+      "toast_auto_add_on": "Added to daily auto-add",
+      "toast_auto_add_off": "Removed from daily auto-add",
+      "toast_auto_add_error": "Couldn't update auto-add setting"
     },
     "foods": {
       "tab_label": "Foods",
@@ -630,7 +653,10 @@
       "auto_add_label": "Auto-add to new day",
       "quick_add_aria": "Quick-add {{name}} to today",
       "quick_add_success": "Added {{name}} to today",
-      "quick_add_error": "Couldn't add {{name}}"
+      "quick_add_error": "Couldn't add {{name}}",
+      "toast_auto_add_on": "Added to daily auto-add",
+      "toast_auto_add_off": "Removed from daily auto-add",
+      "toast_auto_add_error": "Couldn't update auto-add setting"
     },
     "ai_input": {
       "placeholder": "Describe a food or activity to save as a favorite…",

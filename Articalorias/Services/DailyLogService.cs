@@ -49,7 +49,7 @@ public class DailyLogService : IDailyLogService
             ?? throw new InvalidOperationException("User profile not found. Complete onboarding first.");
 
         var proteinGoal = profile.ProteinGoalGrams
-            ?? (profile.AutoCalculateProteinGoal ? profile.CurrentWeightKg * 2.0m : 0m);
+            ?? (profile.AutoCalculateProteinGoal && profile.CurrentWeightKg.HasValue ? profile.CurrentWeightKg.Value * 2.0m : 0m);
 
         var (weekStart, weekEnd) = GetWeekRange(date);
 
@@ -95,7 +95,7 @@ public class DailyLogService : IDailyLogService
                     SortOrder = sortOrder++,
                 };
 
-                CalculateActivityCalories(entry, dailyLog.SnapshotWeightKg);
+                CalculateActivityCalories(entry, dailyLog.SnapshotWeightKg ?? 0m);
                 _db.ActivityEntries.Add(entry);
             }
         }

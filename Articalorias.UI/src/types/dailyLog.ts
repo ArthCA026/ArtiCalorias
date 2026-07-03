@@ -16,6 +16,7 @@ export interface DailyLogResponse {
   suggestedDailyAverageRemainingKcal: number;
 
   snapshotProteinGoalGrams: number;
+  hasCalorieBudgetEstimate: boolean;
 }
 
 export interface DailyDashboardResponse extends DailyLogResponse {
@@ -25,4 +26,9 @@ export interface DailyDashboardResponse extends DailyLogResponse {
   neatCaloriesKcal: number;
   snapshotSleepHours: number | null;
   snapshotNeatHours: number | null;
+  snapshotWeightKg: number | null;
+  snapshotHeightCm: number | null;
+  hasCalorieBudgetEstimate: boolean;
+  hasCalorieEstimate: boolean;
+  hasProteinGoal: boolean;
 }

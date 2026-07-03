@@ -89,6 +89,19 @@ public class DailyLogController : ControllerBase
         return Ok(MapToResponse(log));
     }
 
+    /// <summary>
+    /// Refreshes profile snapshots on every DailyLog that was created when the
+    /// user's weight or height was missing.  Called after a profile save so that
+    /// historical entries stop showing "Missing profile details".
+    /// </summary>
+    [HttpPost("refresh-stale-snapshots")]
+    public async Task<IActionResult> RefreshStaleSnapshots(CancellationToken ct)
+    {
+        var userId = GetUserId();
+        var count = await _recalculation.RefreshStaleSnapshotsAsync(userId, ct);
+        return Ok(new { count });
+    }
+
     // ── AI food parsing (proposes entries, does NOT save) ──
 
     [HttpPost("{date}/parse-food")]
@@ -287,7 +300,8 @@ public class DailyLogController : ControllerBase
         CaloriesRemainingToDailyTargetKcal = d.CaloriesRemainingToDailyTargetKcal,
         ProteinRemainingGrams = d.ProteinRemainingGrams,
         SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
-        SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams
+        SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams,
+        HasCalorieBudgetEstimate = d.SnapshotWeightKg.HasValue && d.SnapshotHeightCm.HasValue
     };
 
     private static FoodEntryResponse MapFoodToResponse(FoodEntry f) => new()
@@ -337,5 +351,7 @@ public class DailyLogController : ControllerBase
         NeatCaloriesKcal = d.NeatCaloriesKcal,
         SnapshotSleepHours = d.SnapshotSleepHours,
         SnapshotNeatHours = d.SnapshotNeatHours,
+        SnapshotWeightKg = d.SnapshotWeightKg,
+        SnapshotHeightCm = d.SnapshotHeightCm,
     };
 }

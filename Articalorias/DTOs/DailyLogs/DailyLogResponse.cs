@@ -21,4 +21,7 @@ public class DailyLogResponse
 
     // Snapshot usado
     public decimal SnapshotProteinGoalGrams { get; set; }
+
+    // Availability flags — false when body metrics were absent at log creation
+    public bool HasCalorieBudgetEstimate { get; set; }
 }

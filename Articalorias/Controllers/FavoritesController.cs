@@ -21,6 +21,7 @@ public class FavoritesController : ControllerBase
     private readonly IActivityParsingService _activityParsing;
     private readonly IFoodParsingService _foodParsing;
     private readonly IDailyLogService _dailyLogService;
+    private readonly IUserProfileService _userProfileService;
     private readonly ILogger<FavoritesController> _logger;
 
     public FavoritesController(
@@ -29,6 +30,7 @@ public class FavoritesController : ControllerBase
         IActivityParsingService activityParsing,
         IFoodParsingService foodParsing,
         IDailyLogService dailyLogService,
+        IUserProfileService userProfileService,
         ILogger<FavoritesController> logger)
     {
         _foodTemplateService = foodTemplateService;
@@ -36,6 +38,7 @@ public class FavoritesController : ControllerBase
         _activityParsing = activityParsing;
         _foodParsing = foodParsing;
         _dailyLogService = dailyLogService;
+        _userProfileService = userProfileService;
         _logger = logger;
     }
 
@@ -307,7 +310,18 @@ public class FavoritesController : ControllerBase
     public async Task<IActionResult> AddRoutineToToday(long id, CancellationToken ct)
     {
         var userId = GetUserId();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        // Resolve the user's local date using their stored timezone so that users
+        // in UTC− timezones don't have entries assigned to the wrong calendar day
+        // (e.g. Costa Rica UTC-6: after 18:00 UTC, UtcNow would yield tomorrow).
+        // Falls back to UTC if TimeZoneId is null or unrecognised.
+        var profile = await _userProfileService.GetByUserIdAsync(userId);
+        TimeZoneInfo tz;
+        try   { tz = TimeZoneInfo.FindSystemTimeZoneById(profile?.TimeZoneId ?? "UTC"); }
+        catch (TimeZoneNotFoundException) { tz = TimeZoneInfo.Utc; }
+        catch (InvalidTimeZoneException)  { tz = TimeZoneInfo.Utc; }
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
+
         try
         {
             var result = await _routineService.AddRoutineToTodayAsync(id, userId, today, ct);

@@ -207,12 +207,18 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
   }
 
   function toggleAutoAdd(tmpl: ActivityTemplateResponse) {
+    const newValue = !tmpl.autoAddToNewDay;
     activityService.updateTemplate(tmpl.activityTemplateId, {
       templateName: tmpl.templateName,
-      autoAddToNewDay: !tmpl.autoAddToNewDay,
+      autoAddToNewDay: newValue,
       defaultDurationMinutes: tmpl.defaultDurationMinutes,
       defaultMET: tmpl.defaultMET,
-    }).then(() => qc.invalidateQueries({ queryKey: queryKeys.activityTemplates() }));
+    }).then(() => {
+      qc.invalidateQueries({ queryKey: queryKeys.activityTemplates() });
+      onToast(t(newValue ? 'favorites.activities.toast_auto_add_on' : 'favorites.activities.toast_auto_add_off'), 'success');
+    }).catch(() => {
+      onToast(t('favorites.activities.toast_auto_add_error'), 'error');
+    });
   }
 
   async function handleDeleteClick(templateId: number) {
@@ -489,6 +495,7 @@ function FoodsTab({ search, onToast }: { search: string; onToast: (msg: string, 
   }
 
   function toggleAutoAdd(tmpl: FoodTemplateResponse) {
+    const newValue = !tmpl.autoAddToNewDay;
     foodTemplateService.update(tmpl.foodTemplateId, {
       templateName: tmpl.templateName,
       portionDescription: tmpl.portionDescription,
@@ -498,8 +505,13 @@ function FoodsTab({ search, onToast }: { search: string; onToast: (msg: string, 
       fatGrams: tmpl.fatGrams,
       carbsGrams: tmpl.carbsGrams,
       alcoholGrams: tmpl.alcoholGrams,
-      autoAddToNewDay: !tmpl.autoAddToNewDay,
-    }).then(() => qc.invalidateQueries({ queryKey: queryKeys.foodTemplates() }));
+      autoAddToNewDay: newValue,
+    }).then(() => {
+      qc.invalidateQueries({ queryKey: queryKeys.foodTemplates() });
+      onToast(t(newValue ? 'favorites.foods.toast_auto_add_on' : 'favorites.foods.toast_auto_add_off'), 'success');
+    }).catch(() => {
+      onToast(t('favorites.foods.toast_auto_add_error'), 'error');
+    });
   }
 
   async function handleDeleteClick(templateId: number) {

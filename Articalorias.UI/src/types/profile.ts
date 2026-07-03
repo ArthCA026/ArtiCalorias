@@ -1,7 +1,7 @@
 export interface UserProfileResponse {
   userProfileId: number;
-  currentWeightKg: number;
-  heightCm: number;
+  currentWeightKg: number | null;
+  heightCm: number | null;
   age: number | null;
   biologicalSex: string | null;
   bmrKcal: number;
@@ -21,8 +21,8 @@ export interface UserProfileResponse {
 }
 
 export interface UserProfileRequest {
-  currentWeightKg: number;
-  heightCm: number;
+  currentWeightKg: number | null;
+  heightCm: number | null;
   age?: number | null;
   biologicalSex?: string | null;
   bmrKcal?: number | null;

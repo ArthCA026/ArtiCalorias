@@ -59,6 +59,7 @@ const emptyForm: FormState = {
 function detectProteinPresetId(data: UserProfileResponse): string {
   if (data.autoCalculateProteinGoal) return "muscle-gain";
   if (data.proteinGoalGrams == null) return "";
+  if (data.currentWeightKg == null) return "";
   const weight = Number(data.currentWeightKg);
   if (weight <= 0) return "";
   const storedGrams = Math.round(Number(data.proteinGoalGrams));
@@ -72,8 +73,8 @@ function detectProteinPresetId(data: UserProfileResponse): string {
 function toFormState(data: UserProfileResponse): FormState {
   const goalKcalStr = String(data.dailyBaseGoalKcal);
   return {
-    currentWeightKg: String(data.currentWeightKg),
-    heightCm: String(data.heightCm),
+    currentWeightKg: data.currentWeightKg != null ? String(data.currentWeightKg) : "",
+    heightCm: data.heightCm != null ? String(data.heightCm) : "",
     age: data.age != null ? String(data.age) : "",
     biologicalSex: data.biologicalSex ?? "",
     bmrKcal: String(data.bmrKcal),
@@ -94,8 +95,8 @@ function toFormState(data: UserProfileResponse): FormState {
 
 function buildRequest(f: FormState): UserProfileRequest {
   return {
-    currentWeightKg: parseFloat(f.currentWeightKg),
-    heightCm: parseFloat(f.heightCm),
+    currentWeightKg: f.currentWeightKg ? parseFloat(f.currentWeightKg) : null,
+    heightCm: f.heightCm ? parseFloat(f.heightCm) : null,
     age: f.age ? parseInt(f.age) : null,
     biologicalSex: f.biologicalSex || null,
     bmrKcal: f.bmrKcal ? parseFloat(f.bmrKcal) : null,
@@ -117,13 +118,11 @@ function validateAll(f: FormState, t: (key: string) => string): Record<string, s
   const errors: Record<string, string> = {};
   const weight = parseFloat(f.currentWeightKg);
   const height = parseFloat(f.heightCm);
-  if (!f.currentWeightKg || isNaN(weight) || weight <= 0) errors.currentWeightKg = t('profile.validation_weight_empty');
-  else if (weight > 500) errors.currentWeightKg = t('profile.validation_weight_high');
-  if (!f.heightCm || isNaN(height) || height <= 0) errors.heightCm = t('profile.validation_height_empty');
-  else if (height > 300) errors.heightCm = t('profile.validation_height_high');
-  if (!f.age) errors.age = t('profile.validation_age_empty');
-  else { const age = parseInt(f.age); if (age < 1) errors.age = t('profile.validation_age_low'); else if (age > 150) errors.age = t('profile.validation_age_high'); }
-  if (!f.biologicalSex) errors.biologicalSex = t('profile.validation_sex_empty');
+  if (f.currentWeightKg && (isNaN(weight) || weight <= 0)) errors.currentWeightKg = t('profile.validation_weight_empty');
+  else if (f.currentWeightKg && weight > 500) errors.currentWeightKg = t('profile.validation_weight_high');
+  if (f.heightCm && (isNaN(height) || height <= 0)) errors.heightCm = t('profile.validation_height_empty');
+  else if (f.heightCm && height > 300) errors.heightCm = t('profile.validation_height_high');
+  if (f.age) { const age = parseInt(f.age); if (age < 1) errors.age = t('profile.validation_age_low'); else if (age > 150) errors.age = t('profile.validation_age_high'); }
   if (!f.autoCalculateBMR) {
     const bmr = parseFloat(f.bmrKcal);
     if (!f.bmrKcal || isNaN(bmr) || bmr <= 0) errors.bmrKcal = t('profile.validation_bmr_empty');
@@ -204,9 +203,20 @@ export default function ProfilePage() {
     setFieldErrors((prev) => { const next = { ...prev }; delete next[field]; return next; });
   }
 
-  /** Awaits the backend snapshot refresh for today, then invalidates the dashboard
-   * cache so the Today page immediately reflects any profile change. Uses the local
-   * date (not UTC) to match the query key that DashboardPage uses. */
+  /**
+   * Refreshes today's DailyLog snapshot fields from the current profile, then
+   * invalidates the dashboard and history caches so the Today page immediately
+   * reflects the new calorie goal (or any other profile change).
+   *
+   * Also fires a background call to fix any historical DailyLogs whose weight /
+   * height snapshots were null (i.e. created before the user completed their
+   * profile). This heals the "Missing profile details" banner in History without
+   * any extra user action. The call is fire-and-forget; history is re-invalidated
+   * when it completes so rows update automatically.
+   *
+   * Error policy: all sub-calls are swallowed on failure — they are non-critical
+   * and self-correct on the next food/activity mutation (Constitution X).
+   */
   async function refreshTodaySnapshot() {
     const today = toDateString(); // local YYYY-MM-DD — must match queryKeys.dashboard(today)
     try {
@@ -216,6 +226,11 @@ export default function ProfilePage() {
     }
     queryClientInstance.invalidateQueries({ queryKey: queryKeys.dashboard(today) });
     queryClientInstance.invalidateQueries({ queryKey: queryKeys.historyAll() });
+
+    // Silently heal historical logs that were created before weight/height were set.
+    dailyLogService.refreshStaleSnapshots()
+      .then(() => queryClientInstance.invalidateQueries({ queryKey: queryKeys.historyAll() }))
+      .catch(() => {});
   }
 
   async function confirmField(field: keyof FormState) {
@@ -270,17 +285,21 @@ export default function ProfilePage() {
     const height = parseFloat(form.heightCm);
     const age = parseInt(form.age);
     const sex = form.biologicalSex;
-    if (!weight || !height || !age || !sex) return null;
-    const sexOffset = sex === "M" ? 5 : -161;
+    if (!weight || !height || !age) return null;
+    // Neutral offset (-78) is the midpoint of male (+5) and female (-161),
+    // matching the backend's ApplyAutoCalculations fallback.
+    const sexOffset = sex === "M" ? 5 : sex === "F" ? -161 : -78;
     const bmr = Math.round(10 * weight + 6.25 * height - 5 * age + sexOffset);
     const maintenance = Math.round(bmr + 4.8 * weight);
     const goalKcal = parseFloat(form.dailyBaseGoalKcal) || 0;
     const dailyTarget = Math.round(maintenance + goalKcal);
+    // Body-fat (Deurenberg) requires a known sex; skip it for "Prefer not to say".
+    if (!sex) return { maintenance, dailyTarget, bmr, bodyFat: null };
     const heightM = height / 100;
     const bmi = weight / (heightM * heightM);
     const sexFactor = sex === "M" ? 1 : 0;
     const bodyFat = Math.round((1.20 * bmi + 0.23 * age - 10.8 * sexFactor - 5.4) * 10) / 10;
-    return { maintenance, dailyTarget, bmr, bodyFat };
+    return { maintenance, dailyTarget, bmr, bodyFat: bodyFat >= 0 && bodyFat <= 100 ? bodyFat : null };
   }, [form.currentWeightKg, form.heightCm, form.age, form.biologicalSex, form.dailyBaseGoalKcal]);
 
   if (profileQuery.isPending) return <LoadingSpinner />;
@@ -318,14 +337,14 @@ export default function ProfilePage() {
                 step="0.1"
                 inputMode="decimal"
                 pattern="[0-9]*[.,]?[0-9]*"
-                value={weightUnit === "lbs" ? String(Math.round(kgToDisplay(parseFloat(form.currentWeightKg) || 0, "lbs") * 10) / 10) : form.currentWeightKg}
+                value={weightUnit === "lbs" ? (form.currentWeightKg ? String(Math.round(kgToDisplay(parseFloat(form.currentWeightKg), "lbs") * 10) / 10) : "") : form.currentWeightKg}
                 unit={weightLabel(weightUnit)}
                 dirty={dirtyFields.has("currentWeightKg")}
                 saving={savingField === "currentWeightKg"}
                 error={fieldErrors.currentWeightKg}
                 disabled={isSaving}
                 ariaLabel={t('profile.aria_weight')}
-                onChange={(v) => setField("currentWeightKg", weightUnit === "lbs" ? String(displayToKg(parseFloat(v) || 0, "lbs")) : v)}
+                onChange={(v) => setField("currentWeightKg", weightUnit === "lbs" ? (v ? String(displayToKg(parseFloat(v), "lbs")) : "") : v)}
                 onConfirm={() => confirmField("currentWeightKg")}
                 onRevert={() => revertField("currentWeightKg")}
               />
@@ -365,6 +384,7 @@ export default function ProfilePage() {
                 error={fieldErrors.age}
                 disabled={isSaving}
                 ariaLabel={t('profile.aria_age')}
+                required={false}
                 onChange={(v) => setField("age", v)}
                 onConfirm={() => confirmField("age")}
                 onRevert={() => revertField("age")}
@@ -388,10 +408,10 @@ export default function ProfilePage() {
                     }}
                     disabled={isSaving}
                     aria-label={t('profile.aria_sex')}
-                    aria-required="true"
+                    aria-required="false"
                     className="w-full appearance-none bg-transparent border-0 p-0 pr-5 text-2xl font-bold text-fg-primary focus:ring-0 focus:outline-none disabled:opacity-50"
                   >
-                    <option value="">—</option>
+                    <option value="">{t('common.prefer_not_to_say')}</option>
                     <option value="M">{t('common.male')}</option>
                     <option value="F">{t('common.female')}</option>
                   </select>
@@ -591,11 +611,7 @@ export default function ProfilePage() {
                   }
                   isCustom={!form.autoCalculateBMR}
                   disabled={isSaving}
-                  onSwitchToCustom={() => {
-                    const newForm = { ...form, autoCalculateBMR: false };
-                    setForm(newForm);
-                    saveImmediate(newForm);
-                  }}
+                  onSwitchToCustom={() => setField("autoCalculateBMR", false)}
                   onRevertToAuto={() => {
                     const newForm = { ...form, autoCalculateBMR: true };
                     setForm(newForm);
@@ -611,7 +627,7 @@ export default function ProfilePage() {
                   isSaving={savingField === "bmrKcal"}
                   error={fieldErrors.bmrKcal}
                   onConfirm={() => confirmField("bmrKcal")}
-                  onRevert={() => revertField("bmrKcal")}
+                  onRevert={() => { revertField("bmrKcal"); revertField("autoCalculateBMR"); }}
                 />
 
                 <CalculatedEstimateRow
@@ -620,15 +636,11 @@ export default function ProfilePage() {
                   value={
                     !form.autoCalculateBodyFat
                       ? (form.bodyFatPercent ? `${parseFloat(form.bodyFatPercent).toFixed(1)}%` : null)
-                      : (estimate ? `${estimate.bodyFat.toFixed(1)}%` : null)
+                      : (estimate?.bodyFat != null ? `${estimate.bodyFat.toFixed(1)}%` : null)
                   }
                   isCustom={!form.autoCalculateBodyFat}
                   disabled={isSaving}
-                  onSwitchToCustom={() => {
-                    const newForm = { ...form, autoCalculateBodyFat: false };
-                    setForm(newForm);
-                    saveImmediate(newForm);
-                  }}
+                  onSwitchToCustom={() => setField("autoCalculateBodyFat", false)}
                   onRevertToAuto={() => {
                     const newForm = { ...form, autoCalculateBodyFat: true };
                     setForm(newForm);
@@ -644,7 +656,7 @@ export default function ProfilePage() {
                   isSaving={savingField === "bodyFatPercent"}
                   error={fieldErrors.bodyFatPercent}
                   onConfirm={() => confirmField("bodyFatPercent")}
-                  onRevert={() => revertField("bodyFatPercent")}
+                  onRevert={() => { revertField("bodyFatPercent"); revertField("autoCalculateBodyFat"); }}
                 />
               </div>
             )}
@@ -933,6 +945,7 @@ interface MetricTileProps {
   error?: string;
   disabled: boolean;
   ariaLabel: string;
+  required?: boolean;
   onChange: (v: string) => void;
   onConfirm: () => void;
   onRevert: () => void;
@@ -940,7 +953,7 @@ interface MetricTileProps {
 
 function MetricTile({
   label, inputId, type, step, inputMode, pattern, value, unit,
-  dirty, saving, error, disabled, ariaLabel,
+  dirty, saving, error, disabled, ariaLabel, required = true,
   onChange, onConfirm, onRevert,
 }: MetricTileProps) {
   const { t } = useTranslation();
@@ -966,7 +979,7 @@ function MetricTile({
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
           aria-label={ariaLabel}
-          aria-required="true"
+          aria-required={required}
           placeholder="—"
           className="min-w-0 flex-1 bg-transparent border-0 p-0 text-2xl font-bold text-gray-900 dark:text-gray-100 focus:ring-0 focus:outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />

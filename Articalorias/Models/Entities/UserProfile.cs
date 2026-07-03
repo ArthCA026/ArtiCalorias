@@ -6,8 +6,8 @@ public class UserProfile
     public long UserId { get; set; }
 
     // Datos fisiológicos vigentes
-    public decimal CurrentWeightKg { get; set; }
-    public decimal HeightCm { get; set; }
+    public decimal? CurrentWeightKg { get; set; }
+    public decimal? HeightCm { get; set; }
     public int? Age { get; set; }
     public string? BiologicalSex { get; set; }  // "M" or "F"
     public decimal BMRKcal { get; set; }

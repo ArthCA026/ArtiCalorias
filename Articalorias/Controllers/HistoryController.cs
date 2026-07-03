@@ -75,7 +75,8 @@ public class HistoryController : ControllerBase
         CaloriesRemainingToDailyTargetKcal = d.CaloriesRemainingToDailyTargetKcal,
         ProteinRemainingGrams = d.ProteinRemainingGrams,
         SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
-        SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams
+        SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams,
+        HasCalorieBudgetEstimate = d.SnapshotWeightKg.HasValue && d.SnapshotHeightCm.HasValue
     };
 
     private static MonthlySummaryResponse MapMonthlyToResponse(MonthlySummary m) => new()

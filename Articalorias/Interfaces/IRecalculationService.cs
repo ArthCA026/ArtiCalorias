@@ -31,6 +31,17 @@ public interface IRecalculationService
     Task RefreshSnapshotAndRecalculateAsync(long userId, DateOnly date);
 
     /// <summary>
+    /// Refreshes profile snapshots and recalculates every DailyLog whose
+    /// <c>SnapshotWeightKg</c> or <c>SnapshotHeightCm</c> is null, provided the
+    /// user's current profile now has both values.
+    /// Typical use: called after a profile save that fills in previously-missing
+    /// weight or height so that historical entries stop showing "Missing profile
+    /// details".
+    /// </summary>
+    /// <returns>Number of daily logs that were refreshed.</returns>
+    Task<int> RefreshStaleSnapshotsAsync(long userId, CancellationToken ct = default);
+
+    /// <summary>
     /// Recalculates weekly and monthly summaries after a day has been deleted.
     /// Updates weekly context on remaining sibling days, then refreshes
     /// the WeeklySummary and MonthlySummary aggregates.
