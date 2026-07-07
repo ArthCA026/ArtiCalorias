@@ -253,8 +253,17 @@ function IconPhoto({ className = "w-4 h-4" }: { className?: string }) {
 function IconBarcode({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14" strokeWidth="1.5" />
-      <path d="M3 3h4M3 21h4M17 3h4M17 21h4" />
+      {/* Viewfinder corner brackets */}
+      <path d="M3 9V5a2 2 0 0 1 2-2h4" />
+      <path d="M15 3h4a2 2 0 0 1 2 2v4" />
+      <path d="M21 15v4a2 2 0 0 1-2 2h-4" />
+      <path d="M9 21H5a2 2 0 0 1-2-2v-4" />
+      {/* Barcode lines */}
+      <line x1="7"    y1="9.5" x2="7"    y2="14.5" />
+      <line x1="9.5"  y1="9.5" x2="9.5"  y2="14.5" strokeWidth="1.5" />
+      <line x1="12"   y1="9.5" x2="12"   y2="14.5" />
+      <line x1="14.5" y1="9.5" x2="14.5" y2="14.5" strokeWidth="1.5" />
+      <line x1="17"   y1="9.5" x2="17"   y2="14.5" />
     </svg>
   );
 }
