@@ -67,6 +67,19 @@ public static class ServiceCollectionExtensions
         services.Configure<MealReminderSettings>(configuration.GetSection(MealReminderSettings.SectionName));
         services.AddHostedService<MealReminderService>();
 
+        // Open Food Facts barcode lookup
+        services.Configure<OpenFoodFactsSettings>(
+            configuration.GetSection(OpenFoodFactsSettings.SectionName));
+
+        services.AddHttpClient<IOpenFoodFactsService, OpenFoodFactsService>((sp, client) =>
+        {
+            var settings = configuration
+                .GetSection(OpenFoodFactsSettings.SectionName)
+                .Get<OpenFoodFactsSettings>() ?? new OpenFoodFactsSettings();
+            client.BaseAddress = new Uri(settings.BaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
+        });
+
         return services;
     }
 

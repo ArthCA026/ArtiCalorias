@@ -10,7 +10,9 @@ import { foodTemplateService } from '@/services/foodTemplateService';
 import { toDateString } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 import TemplatePickerDialog from '@/components/TemplatePickerDialog';
-import LoadingSpinner from '@/components/LoadingSpinner';
+import FavoritesTabSkeleton from '@/components/FavoritesTabSkeleton';
+import AiProcessingCard from '@/components/AiProcessingCard';
+import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import EmptyState from '@/components/EmptyState';
 import { IconEdit, IconTrash, IconCheck, IconX, IconSpinner } from '@/components/icons';
 import { ModalShell } from '@/components/ModalShell';
@@ -234,11 +236,13 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
     setDeleteConfirmId(templateId);
   }
 
-  if (isLoading) {
+  const showActivitySkeleton = useDelayedBoolean(isLoading, 300);
+
+  if (showActivitySkeleton && isLoading) {
     return (
       <>
         <AiInputSection tab="activities" onToast={onToast} />
-        <LoadingSpinner />
+        <FavoritesTabSkeleton />
       </>
     );
   }
@@ -527,11 +531,13 @@ function FoodsTab({ search, onToast }: { search: string; onToast: (msg: string, 
     setDeleteConfirmId(templateId);
   }
 
-  if (isLoading) {
+  const showFoodSkeleton = useDelayedBoolean(isLoading, 300);
+
+  if (showFoodSkeleton && isLoading) {
     return (
       <>
         <AiInputSection tab="foods" onToast={onToast} />
-        <LoadingSpinner />
+        <FavoritesTabSkeleton />
       </>
     );
   }
@@ -752,8 +758,10 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
     }
   }
 
-  if (routinesLoading) {
-    return <LoadingSpinner />;
+  const showRoutinesSkeleton = useDelayedBoolean(routinesLoading, 300);
+
+  if (showRoutinesSkeleton && routinesLoading) {
+    return <FavoritesTabSkeleton />;
   }
 
   const activeActivities = activityTemplates.filter(t => t.isActive);
@@ -1065,6 +1073,7 @@ function AiInputSection({ tab, onToast }: { tab: 'activities' | 'foods'; onToast
         </button>
       </div>
       {error && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
+      {loading && <AiProcessingCard context={tab === 'activities' ? 'activity' : 'food'} className="mt-2" />}
     </div>
   );
 }

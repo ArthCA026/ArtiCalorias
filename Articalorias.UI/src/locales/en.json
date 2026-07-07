@@ -26,7 +26,8 @@
     "confirm": "Confirm",
     "no_results": "No results found.",
     "no_templates": "No templates yet.",
-    "search_placeholder": "Search…"
+    "search_placeholder": "Search…",
+    "refreshing": "Refreshing…"
   },
   "units": {
     "kg": "kg",
@@ -287,6 +288,7 @@
     "prev_month": "Previous month",
     "next_month": "Next month",
     "loading": "Loading your month...",
+    "loading_skeleton": "Loading your history…",
     "load_error": "Couldn't load your history — please try again.",
     "chart_title": "Are you staying on track?",
     "chart_min_data": "Log at least 2 days to see the trend.",
@@ -430,6 +432,13 @@
     "photo_title": "Take a photo",
     "gallery_aria": "Choose a photo from gallery",
     "gallery_title": "Choose from gallery",
+    "barcode_aria": "Scan barcode",
+    "barcode_title": "Scan barcode",
+    "barcode_scanning": "Scanning…",
+    "barcode_not_found": "Product not found. Try searching by text.",
+    "barcode_error": "Barcode scan failed. Please try again.",
+    "barcode_scanning_hint": "Point camera at a barcode",
+    "barcode_camera_denied": "Camera access is required to scan barcodes.",
     "photo_processing": "Processing…",
     "photo_remove_aria": "Remove photo",
     "photo_alt": "Selected meal photo",
@@ -559,7 +568,14 @@
     "historical_calorie_budget_unavailable_title": "Calorie budget was unavailable",
     "historical_calorie_budget_unavailable_body": "This day was logged without the profile details needed for a personalized calorie budget.",
     "historical_protein_goal_unavailable_title": "Protein goal was unavailable",
-    "historical_protein_goal_unavailable_body": "This day was logged without the profile details needed for a personalized protein goal."
+    "historical_protein_goal_unavailable_body": "This day was logged without the profile details needed for a personalized protein goal.",
+    "ai_processing": {
+      "analyzing": "Analyzing your entry…",
+      "analyzing_activity": "Analyzing your activity…",
+      "subtitle": "Looking for foods, portions, and nutrition.",
+      "subtitle_activity": "Looking for activities, duration, and calories.",
+      "preparing": "Preparing results…"
+    }
   },
   "settings": {
     "wip_title": "Settings is a work in progress",
@@ -667,6 +683,9 @@
       "parse_error": "Couldn't parse your input. Please try again.",
       "no_results": "No favorites detected. Try a different description.",
       "saved_count": "{{count}} favorites saved"
+    },
+    "ai_processing": {
+      "analyzing": "Analyzing your entry…"
     },
     "routines": {
       "tab_label": "Routines",

@@ -25,7 +25,8 @@ import { useUnits } from "@/hooks/useUnits";
 import { formatEnergy, kcalToDisplay } from "@/utils/units";
 import { extractApiError } from "@/utils/apiError";
 import { queryKeys } from "@/lib/queryKeys";
-import LoadingSpinner from "@/components/LoadingSpinner";
+import HistoryListSkeleton from "@/components/HistoryListSkeleton";
+import { useDelayedBoolean } from "@/hooks/useDelayedBoolean";
 import ErrorMessage from "@/components/ErrorMessage";
 import EmptyState from "@/components/EmptyState";
 import DayDashboard from "@/components/DayDashboard";
@@ -67,6 +68,7 @@ function MonthlyView() {
   });
   const days = historyQuery.data ?? [];
   const loading = historyQuery.isPending;
+  const showSkeleton = useDelayedBoolean(historyQuery.isPending, 300);
   const error = historyQuery.isError ? "history.load_error" : null;
 
   const monthLabel = new Date(year, month - 1).toLocaleString(i18n.language, {
@@ -127,7 +129,8 @@ function MonthlyView() {
         </div>
       </div>
 
-      {loading && <LoadingSpinner message={t('history.loading')} />}
+      {showSkeleton && loading && <HistoryListSkeleton />}
+      {!showSkeleton && loading && null}
       {error && <ErrorMessage message={t(error)} onRetry={() => historyQuery.refetch()} />}
 
       {!loading && !error && (

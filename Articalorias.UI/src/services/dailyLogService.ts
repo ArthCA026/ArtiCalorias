@@ -63,4 +63,8 @@ export const dailyLogService = {
   deleteDay(date: string) {
     return api.delete(`/dailylog/${date}`);
   },
+
+  lookupBarcode(barcode: string) {
+    return api.post<ParsedFoodItem[]>('/foods/by-barcode', { barcode });
+  },
 };

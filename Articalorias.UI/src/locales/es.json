@@ -26,7 +26,8 @@
     "confirm": "Confirmar",
     "no_results": "Sin resultados.",
     "no_templates": "Aún no hay plantillas.",
-    "search_placeholder": "Buscar…"
+    "search_placeholder": "Buscar…",
+    "refreshing": "Actualizando…"
   },
   "units": {
     "kg": "kg",
@@ -287,6 +288,7 @@
     "prev_month": "Mes anterior",
     "next_month": "Mes siguiente",
     "loading": "Cargando tu mes...",
+    "loading_skeleton": "Cargando tu historial…",
     "load_error": "No se pudo cargar tu historial — por favor intenta de nuevo.",
     "chart_title": "¿Estás cumpliendo tu plan?",
     "chart_min_data": "Registra al menos 2 días para ver la tendencia.",
@@ -428,6 +430,13 @@
     "photo_title": "Tomar foto",
     "gallery_aria": "Elegir una foto de la galería",
     "gallery_title": "Elegir de galería",
+    "barcode_aria": "Escanear código de barras",
+    "barcode_title": "Escanear código de barras",
+    "barcode_scanning": "Escaneando…",
+    "barcode_not_found": "Producto no encontrado. Intenta buscar por texto.",
+    "barcode_error": "Error al escanear. Por favor intenta de nuevo.",
+    "barcode_scanning_hint": "Apunta la cámara al código de barras",
+    "barcode_camera_denied": "Se requiere acceso a la cámara para escanear códigos.",
     "photo_processing": "Procesando…",
     "photo_remove_aria": "Eliminar foto",
     "photo_alt": "Foto de comida seleccionada",
@@ -557,7 +566,14 @@
     "historical_calorie_budget_unavailable_title": "El presupuesto cal\u00f3rico no estaba disponible",
     "historical_calorie_budget_unavailable_body": "Este d\u00eda fue registrado sin los datos de perfil necesarios para un presupuesto cal\u00f3rico personalizado.",
     "historical_protein_goal_unavailable_title": "La meta de prote\u00edna no estaba disponible",
-    "historical_protein_goal_unavailable_body": "Este d\u00eda fue registrado sin los datos de perfil necesarios para una meta de prote\u00edna personalizada."
+    "historical_protein_goal_unavailable_body": "Este día fue registrado sin los datos de perfil necesarios para una meta de proteína personalizada.",
+    "ai_processing": {
+      "analyzing": "Analizando tu entrada…",
+      "analyzing_activity": "Analizando tu actividad…",
+      "subtitle": "Buscando alimentos, porciones y nutrición.",
+      "subtitle_activity": "Buscando actividades, duración y calorías.",
+      "preparing": "Preparando resultados…"
+    }
   },
   "settings": {
     "wip_title": "Los ajustes están en desarrollo",
@@ -665,6 +681,9 @@
       "parse_error": "No se pudo analizar tu entrada. Por favor intenta de nuevo.",
       "no_results": "No se detectaron favoritos. Intenta una descripción diferente.",
       "saved_count": "{{count}} favoritos guardados"
+    },
+    "ai_processing": {
+      "analyzing": "Analizando tu entrada…"
     },
     "routines": {
       "tab_label": "Rutinas",
