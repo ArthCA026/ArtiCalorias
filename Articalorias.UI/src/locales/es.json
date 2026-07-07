@@ -575,6 +575,22 @@
       "preparing": "Preparando resultados…"
     }
   },
+  "dailyLog": {
+    "composer": {
+      "placeholder": "ej. \"2 huevos, tostada\"",
+      "placeholderActivity": "ej. \"30 min corriendo\"",
+      "placeholderImage": "ej. \"con salsa extra\"",
+      "send": "Enviar",
+      "addPhoto": "Agregar foto",
+      "scanBarcode": "Escanear código",
+      "uploadImage": "Subir imagen",
+      "moreActions": "Más acciones",
+      "addFromTemplates": "Agregar desde plantillas",
+      "addActivityFromTemplates": "Agregar actividad desde plantillas",
+      "submitting": "Agregando...",
+      "error": "No se pudo agregar el registro. Inténtalo de nuevo."
+    }
+  },
   "settings": {
     "wip_title": "Los ajustes están en desarrollo",
     "wip_text": "la mayoría de las opciones aquí aún no son funcionales.",
@@ -680,7 +696,8 @@
       "loading": "Analizando…",
       "parse_error": "No se pudo analizar tu entrada. Por favor intenta de nuevo.",
       "no_results": "No se detectaron favoritos. Intenta una descripción diferente.",
-      "saved_count": "{{count}} favoritos guardados"
+      "saved_count": "{{count}} favoritos guardados",
+      "saved": "Favoritos guardados"
     },
     "ai_processing": {
       "analyzing": "Analizando tu entrada…"

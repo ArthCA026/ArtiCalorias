@@ -46,7 +46,8 @@ export function Toast({
   return (
     <div
       role={type === 'success' ? 'status' : 'alert'}
-      className={`fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl text-sm font-medium pointer-events-none max-w-xs w-[calc(100%-2rem)] transition-all duration-300 ${
+      style={{ bottom: 'max(80px, calc(var(--dock-height, 0px) + 12px))' }}
+      className={`fixed left-1/2 -translate-x-1/2 z-51 flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl text-sm font-medium pointer-events-none max-w-xs w-[calc(100%-2rem)] transition-all duration-300 ${
         visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
       } ${
         type === 'success'

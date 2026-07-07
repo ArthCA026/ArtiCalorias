@@ -1,11 +1,11 @@
-﻿import { useState, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { DecimalInput } from "@/components/DecimalInput";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { Toast, useToast } from "@/components/Toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { IconEdit, IconTrash, IconCheck, IconX, IconSpinner } from "@/components/icons";
+import { IconEdit, IconTrash, IconCheck, IconX } from "@/components/icons";
 import { ModalShell } from "@/components/ModalShell";
 import { SectionCard } from "@/components/SectionCard";
 import { SegmentedTabs } from "@/components/SegmentedTabs";
@@ -20,19 +20,16 @@ import type {
   UpdateFoodEntryRequest,
   ActivityEntryResponse,
   UpdateActivityEntryRequest,
-  ParsedFoodItem,
 } from "@/types";
 import { fmt, toDateString } from "@/utils/format";
 import { useUnits } from "@/hooks/useUnits";
 import { formatEnergy, energyLabel, kcalToDisplay, displayToKcal } from "@/utils/units";
 import ErrorMessage from "@/components/ErrorMessage";
 import DayDashboardSkeleton from "@/components/DayDashboardSkeleton";
-import AiProcessingCard from "@/components/AiProcessingCard";
-import BarcodeScannerOverlay from "@/components/BarcodeScannerOverlay";
+import LogComposer from "@/components/LogComposer";
 import { useDelayedBoolean } from "@/hooks/useDelayedBoolean";
 import { extractApiError, isNotFound } from "@/utils/apiError";
 import { queryKeys } from "@/lib/queryKeys";
-import { compressImage } from "@/utils/compressImage";
 import { useCalorieMode } from "@/hooks/useCalorieMode";
 import type { CalorieMode } from "@/hooks/useCalorieMode";
 import StreakBadge from "@/components/StreakIndicator";
@@ -89,6 +86,8 @@ export default function DayDashboard({ date }: DayDashboardProps) {
     <div className="space-y-2">
       <CompactDayProgress dash={dash} isToday={isToday} chartMode={chartMode} streakCount={streakCount} isRefreshing={isBackgroundRefreshing} />
       <DailyLogWorkspace date={date} dash={dash} onChanged={handleChanged} isToday={isToday} activeTab={activeTab} onTabChange={setActiveTab} onToast={showToast} />
+      {/* Bottom spacer so content clears the fixed LogComposer + BottomTabBar on mobile */}
+      <div className="md:hidden" style={{ height: "calc(var(--composer-height, 72px) + 56px + env(safe-area-inset-bottom) + 12px)" }} />
       {toast && <Toast message={toast.message} type={toast.type} exiting={exiting} />}
     </div>
   );
@@ -223,51 +222,6 @@ function CompactDayProgress({ dash, isToday, chartMode, streakCount, isRefreshin
 
 /* --- Next Action Hint --- */
 /* --- SVG Icon Helpers --- */
-function IconUtensils({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" /><path d="M7 2v20" /><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7" />
-    </svg>
-  );
-}
-
-function IconCamera({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-      <circle cx="12" cy="13" r="4" />
-    </svg>
-  );
-}
-
-function IconPhoto({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-      <circle cx="8.5" cy="8.5" r="1.5" />
-      <polyline points="21 15 16 10 5 21" />
-    </svg>
-  );
-}
-
-function IconBarcode({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      {/* Viewfinder corner brackets */}
-      <path d="M3 9V5a2 2 0 0 1 2-2h4" />
-      <path d="M15 3h4a2 2 0 0 1 2 2v4" />
-      <path d="M21 15v4a2 2 0 0 1-2 2h-4" />
-      <path d="M9 21H5a2 2 0 0 1-2-2v-4" />
-      {/* Barcode lines */}
-      <line x1="7"    y1="9.5" x2="7"    y2="14.5" />
-      <line x1="9.5"  y1="9.5" x2="9.5"  y2="14.5" strokeWidth="1.5" />
-      <line x1="12"   y1="9.5" x2="12"   y2="14.5" />
-      <line x1="14.5" y1="9.5" x2="14.5" y2="14.5" strokeWidth="1.5" />
-      <line x1="17"   y1="9.5" x2="17"   y2="14.5" />
-    </svg>
-  );
-}
-
 const barcodeSupported =
   typeof window !== 'undefined' &&
   'BarcodeDetector' in window &&
@@ -283,381 +237,9 @@ function IconStar({ className = "w-4 h-4", filled = false }: { className?: strin
   );
 }
 
-/* --- Food Input (parse free text or image) --- */
-function FoodInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: () => void; isToday: boolean; noCard?: boolean }) {
-  const { t } = useTranslation();
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [showScanner, setShowScanner] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+/* --- Removed: FoodInput replaced by LogComposer --- */
 
-  // Image state
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageData, setImageData] = useState<{ base64: string; mimeType: string } | null>(null);
-
-  function autoResize(el: HTMLTextAreaElement) {
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }
-
-  function clearImage() {
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
-    setImagePreview(null);
-    setImageData(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    if (galleryInputRef.current) galleryInputRef.current.value = "";
-  }
-
-  async function handleImageSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setError(null);
-    setImagePreview(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(file); });
-    try {
-      const compressed = await compressImage(file);
-      setImageData(compressed);
-    } catch {
-    setError("Failed to process the image. Please try a different file.");
-      clearImage();
-    }
-  }
-
-  async function handleAdd() {
-    if (!imageData && !text.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      let parsed: ParsedFoodItem[];
-
-      if (imageData) {
-        const { data } = await dailyLogService.parseFoodWithImage(date, {
-          imageBase64: imageData.base64,
-          mimeType: imageData.mimeType,
-          freeText: text.trim() || null,
-        });
-        if (!data.length) {
-          setError(t('dashboard.food_error_image'));
-          return;
-        }
-        parsed = data;
-      } else {
-        const { data } = await dailyLogService.parseFood(date, { freeText: text });
-        if (!data.length) {
-          setError(t('dashboard.food_error_text'));
-          return;
-        }
-        parsed = data;
-      }
-
-      await dailyLogService.confirmParsedFoods(date, {
-        items: parsed.map((p) => ({
-          foodName: p.foodName,
-          portionDescription: p.portionDescription,
-          quantity: p.quantity,
-          caloriesKcal: p.caloriesKcal,
-          proteinGrams: p.proteinGrams,
-          fatGrams: p.fatGrams,
-          carbsGrams: p.carbsGrams,
-          alcoholGrams: p.alcoholGrams,
-        })),
-      });
-      setText("");
-      if (textareaRef.current) textareaRef.current.style.height = "auto";
-      clearImage();
-      onSaved();
-    } catch (err) {
-      setError(extractApiError(err, "Something went wrong adding your food. Please try again."));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleBarcodeDetected(rawValue: string) {
-    setShowScanner(false);
-    setBusy(true);
-    setError(null);
-    try {
-      const { data: parsed } = await dailyLogService.lookupBarcode(rawValue);
-      if (!parsed.length) {
-        setError(t('dashboard.barcode_not_found'));
-        return;
-      }
-      await dailyLogService.confirmParsedFoods(date, {
-        items: parsed.map(p => ({
-          foodName: p.foodName,
-          portionDescription: p.portionDescription,
-          quantity: p.quantity,
-          caloriesKcal: p.caloriesKcal,
-          proteinGrams: p.proteinGrams,
-          fatGrams: p.fatGrams,
-          carbsGrams: p.carbsGrams,
-          alcoholGrams: p.alcoholGrams,
-        })),
-      });
-      onSaved();
-    } catch (err: unknown) {
-      const apiStatus = (err as { response?: { status?: number } })?.response?.status;
-      if (apiStatus === 404) {
-        setError(t('dashboard.barcode_not_found'));
-      } else {
-        setError(extractApiError(err, t('dashboard.barcode_error')));
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleAdd();
-    }
-  }
-
-  const hasImage = imageData !== null;
-  const canSubmit = hasImage || text.trim().length > 0;
-
-  const foodBody = (
-    <>
-      {/* Hidden file input · triggers native camera on mobile via capture="environment" */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        aria-label={t('dashboard.photo_aria')}
-        className="sr-only"
-        onChange={handleImageSelected}
-      />
-      {/* Hidden file input · opens gallery/file picker (no capture attribute) */}
-      <input
-        ref={galleryInputRef}
-        type="file"
-        accept="image/*"
-        aria-label={t('dashboard.gallery_aria')}
-        className="sr-only"
-        onChange={handleImageSelected}
-      />
-
-      <div className="flex gap-2 items-center">
-        {/* Camera button */}
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={busy || showScanner}
-          aria-label={t('dashboard.photo_aria')}
-          title={t('dashboard.photo_title')}
-          className={`inline-flex items-center justify-center shrink-0 w-9 h-9 rounded-full border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed ${
-            hasImage
-              ? "border-indigo-300 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-900"
-              : "border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300"
-          }`}
-        >
-          <IconCamera className="w-4 h-4" />
-        </button>
-
-        {/* Gallery button */}
-        <button
-          type="button"
-          onClick={() => galleryInputRef.current?.click()}
-          disabled={busy || showScanner}
-          aria-label={t('dashboard.gallery_aria')}
-          title={t('dashboard.gallery_title')}
-          className={`inline-flex items-center justify-center shrink-0 w-9 h-9 rounded-full border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed ${
-            hasImage
-              ? "border-indigo-300 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-900"
-              : "border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300"
-          }`}
-        >
-          <IconPhoto className="w-4 h-4" />
-        </button>
-
-        {/* Barcode scan button — rendered only when BarcodeDetector is supported (US2) */}
-        {barcodeSupported && (
-          <div className="relative shrink-0">
-            <button
-              type="button"
-              onClick={() => { setError(null); setShowScanner(true); }}
-              disabled={busy || showScanner}
-              aria-label={t('dashboard.barcode_aria')}
-              title={t('dashboard.barcode_title')}
-              className="inline-flex items-center justify-center w-9 h-9 rounded-full border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300"
-            >
-              {busy && !showScanner
-                ? <IconSpinner className="w-4 h-4" />
-                : <IconBarcode className="w-4 h-4" />
-              }
-            </button>
-            {/* BETA badge */}
-            <span
-              aria-hidden="true"
-              className="absolute -top-1.5 -right-2 px-1 py-px rounded-full text-[8px] font-bold leading-tight tracking-wide bg-amber-400 text-amber-900 pointer-events-none select-none"
-            >
-              BETA
-            </span>
-          </div>
-        )}
-
-        {/* Auto-growing textarea */}
-        <textarea
-          ref={textareaRef}
-          rows={1}
-          value={text}
-          onChange={(e) => { setText(e.target.value); autoResize(e.target); }}
-          onKeyDown={handleKeyDown}
-          placeholder={hasImage ? t('dashboard.food_placeholder_image') : t('dashboard.food_placeholder_text')}
-          className="flex-1 min-w-0 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/50 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:bg-white dark:focus:bg-gray-800 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors resize-none overflow-hidden leading-normal"
-          aria-label={isToday ? t('dashboard.food_aria_today') : t('dashboard.food_aria_past')}
-        />
-
-        {/* Log button */}
-        <button
-          onClick={handleAdd}
-          disabled={busy || showScanner || !canSubmit}
-          className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-indigo-600 text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
-        >
-          {busy
-            ? <IconSpinner className="w-4 h-4" />
-            : <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          }
-        </button>
-      </div>
-
-      {/* Image thumbnail preview */}
-      {imagePreview && (
-        <div className="mt-2 flex items-center gap-2">
-          <div className="relative shrink-0">
-            <img
-              src={imagePreview}
-              alt={t('dashboard.photo_alt')}
-              className="h-12 w-12 rounded-lg object-cover border border-gray-200"
-            />
-            <button
-              type="button"
-              onClick={clearImage}
-              disabled={busy}
-              aria-label={t('dashboard.photo_remove_aria')}
-              className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-700 text-white shadow hover:bg-gray-900 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-gray-700 disabled:opacity-50"
-            >
-              <IconX className="w-2.5 h-2.5" />
-            </button>
-          </div>
-          {!imageData && (
-            <p className="text-xs text-gray-400 dark:text-gray-500">
-              <svg className="inline animate-spin h-3 w-3 mr-1" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-              {t('dashboard.photo_processing')}
-            </p>
-          )}
-        </div>
-      )}
-
-      {error && <p className="mt-1.5 text-sm text-red-600" role="alert">{error}</p>}
-      {busy && <AiProcessingCard className="mt-2" />}
-    </>
-  );
-
-  return (
-    <>
-      {showScanner && (
-        <BarcodeScannerOverlay
-          onDetected={handleBarcodeDetected}
-          onClose={(cameraError) => {
-            setShowScanner(false);
-            if (cameraError) setError(t('dashboard.barcode_camera_denied'));
-          }}
-        />
-      )}
-      {noCard ? foodBody : (
-        <SectionCard
-          title={isToday ? t('dashboard.log_food_title') : t('dashboard.add_food_title')}
-          subtitle={isToday ? t('dashboard.log_food_subtitle') : t('dashboard.add_food_subtitle')}
-          icon={<IconUtensils className="w-5 h-5" />}
-        >
-          {foodBody}
-        </SectionCard>
-      )}
-    </>
-  );
-}
-
-/* --- Activity Input (parse free text) --- */
-function ActivityInput({ date, onSaved, isToday, noCard }: { date: string; onSaved: () => void; isToday: boolean; noCard?: boolean }) {
-  const { t } = useTranslation();
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  function autoResize(el: HTMLTextAreaElement) {
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }
-
-  async function handleAdd() {
-    if (!text.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const { data } = await dailyLogService.parseActivity(date, { freeText: text });
-      if (!data.length) {
-        setError(t('dashboard.activity_no_result'));
-        return;
-      }
-      const items = data.map((p) => ({
-        activityName: p.activityName,
-        durationMinutes: p.durationMinutes,
-        metValue: p.metValue,
-      }));
-      await dailyLogService.confirmParsedActivities(date, { items });
-      setText("");
-      if (textareaRef.current) textareaRef.current.style.height = "auto";
-      onSaved();
-    } catch (err) {
-      setError(extractApiError(err, t('dashboard.activity_error')));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const activityBody = (
-    <>
-      <div className="flex gap-2 items-center">
-        <textarea
-          ref={textareaRef}
-          rows={1}
-          value={text}
-          onChange={(e) => { setText(e.target.value); autoResize(e.target); }}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAdd(); } }}
-          placeholder={t('dashboard.activity_placeholder')}
-          aria-label={t('dashboard.activity_aria')}
-          className="flex-1 min-w-0 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/50 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:bg-white dark:focus:bg-gray-800 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors resize-none overflow-hidden leading-normal"
-        />
-        <button
-          onClick={handleAdd}
-          disabled={busy || !text.trim()}
-          className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-        >
-          {busy
-            ? <IconSpinner className="w-4 h-4" />
-            : <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          }
-        </button>
-      </div>
-      {error && <p className="mt-1.5 text-sm text-red-600" role="alert">{error}</p>}
-      {busy && <AiProcessingCard context="activity" className="mt-2" />}
-    </>
-  );
-
-  if (noCard) return activityBody;
-  return (
-    <SectionCard title={isToday ? t('dashboard.log_activity_title') : t('dashboard.add_activity_title')} subtitle={isToday ? t('dashboard.log_activity_subtitle') : t('dashboard.add_activity_subtitle')}>
-      {activityBody}
-    </SectionCard>
-  );
-}
+/* --- Removed: ActivityInput replaced by LogComposer --- */
 
 /* --- Nutrition Summary Chips --- */
 /* --- Activity Summary Chips --- */
@@ -1255,7 +837,7 @@ function MealsTable({ date, foods, onChanged, isToday: _isToday, noCard, onToast
 }
 
 /* --- Activity Section --- */
-function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCard, onToast, hasCalorieEstimate = true }: { date: string; activities: ActivityEntryResponse[]; onChanged: () => void; isToday: boolean; noCard?: boolean; onToast: (msg: string, type: 'success' | 'error') => void; hasCalorieEstimate?: boolean }) {
+function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCard, onToast, hasCalorieEstimate = true, showTemplatePicker = false, onShowTemplatePickerChange }: { date: string; activities: ActivityEntryResponse[]; onChanged: () => void; isToday: boolean; noCard?: boolean; onToast: (msg: string, type: 'success' | 'error') => void; hasCalorieEstimate?: boolean; showTemplatePicker?: boolean; onShowTemplatePickerChange?: (open: boolean) => void }) {
   const { t } = useTranslation();
   const { energyUnit } = useUnits();
   const queryClientInstance = useQueryClient();
@@ -1264,10 +846,8 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
     queryFn: () => activityService.getTemplates().then(r => r.data),
     staleTime: 10 * 60 * 1000,
   });
-  const [addError, setAddError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [addingFromTemplate, setAddingFromTemplate] = useState(false);
-  const [showActivityPicker, setShowActivityPicker] = useState(false);
   const [alwaysShowAdvanced] = useState(() => {
     try { return localStorage.getItem("articalorias:showAdvancedActivity") === "true"; } catch { return false; }
   });
@@ -1345,7 +925,6 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
     if (!tpl) return;
     setBusy(true);
     setAddingFromTemplate(true);
-    setAddError(null);
     try {
       await activityService.create(date, {
         activityTemplateId: tpl.activityTemplateId,
@@ -1356,7 +935,7 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
       onChanged();
       onToast(t('dashboard.toast_activity_added', { name: tpl.templateName }), 'success');
     } catch (err) {
-      setAddError(extractApiError(err, t('dashboard.activity_error')));
+      onToast(extractApiError(err, t('dashboard.activity_error')), 'error');
     }
     setBusy(false);
     setAddingFromTemplate(false);
@@ -1494,32 +1073,18 @@ function ActivitySection({ date, activities, onChanged, isToday: _isToday, noCar
         </>
       )}
 
-      <div className="mt-3">
-        <button
-          onClick={() => setShowActivityPicker(true)}
-          disabled={busy}
-          className="rounded-md border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-sm text-indigo-700 dark:text-indigo-300 font-medium w-full hover:bg-indigo-50 dark:hover:bg-indigo-900/30 disabled:opacity-50 transition-colors text-left inline-flex items-center gap-1.5"
-        >
-          {addingFromTemplate
-            ? <IconSpinner className="w-3.5 h-3.5 shrink-0" />
-            : <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          }
-          {addingFromTemplate ? t('common.adding') : t('dashboard.add_from_templates')}
-        </button>
-        {addError && <p className="mt-1 text-xs text-red-600" role="alert">{addError}</p>}
-        <TemplatePickerDialog
-          open={showActivityPicker}
-          title={t('dashboard.add_from_templates')}
-          items={templates.filter(t => t.isActive).map(t => ({
-            id: t.activityTemplateId,
-            label: t.templateName,
-            meta: t.defaultDurationMinutes ? `${t.defaultDurationMinutes} min` : undefined,
-          }))}
-          onSelect={id => addFromTemplate(id.toString())}
-          onClose={() => setShowActivityPicker(false)}
-          busy={addingFromTemplate}
-        />
-      </div>
+      <TemplatePickerDialog
+        open={showTemplatePicker}
+        title={t('dashboard.add_from_templates')}
+        items={templates.filter(t => t.isActive).map(t => ({
+          id: t.activityTemplateId,
+          label: t.templateName,
+          meta: t.defaultDurationMinutes ? `${t.defaultDurationMinutes} min` : undefined,
+        }))}
+        onSelect={id => addFromTemplate(id.toString())}
+        onClose={() => onShowTemplatePickerChange?.(false)}
+        busy={addingFromTemplate}
+      />
     </>
   );
 
@@ -1616,13 +1181,12 @@ function DailyLogWorkspace({
   const activeFoodTemplates = foodTemplates.filter(ft => ft.isActive);
   const [showFoodPicker, setShowFoodPicker] = useState(false);
   const [addingFromFoodTemplate, setAddingFromFoodTemplate] = useState(false);
-  const [foodAddError, setFoodAddError] = useState<string | null>(null);
+  const [showActivityPicker, setShowActivityPicker] = useState(false);
 
   async function addFromFoodTemplate(id: number) {
     const tpl = activeFoodTemplates.find(ft => ft.foodTemplateId === id);
     if (!tpl) return;
     setAddingFromFoodTemplate(true);
-    setFoodAddError(null);
     try {
       await foodService.create(date, {
         foodName: tpl.templateName,
@@ -1637,8 +1201,8 @@ function DailyLogWorkspace({
       });
       onChanged();
       onToast(t('dashboard.toast_food_added', { name: tpl.templateName }), 'success');
-    } catch (err) {
-      setFoodAddError(extractApiError(err, t('dashboard.confirm_food_error')));
+    } catch {
+      // errors surfaced via toast
     }
     setAddingFromFoodTemplate(false);
   }
@@ -1672,38 +1236,40 @@ function DailyLogWorkspace({
       {/* Tab content · both panels stay mounted to preserve typed input on tab switch */}
       <div className="p-3">
         <div className={`space-y-4${tab !== "meals" ? " hidden" : ""}`}>
-          <FoodInput date={date} onSaved={onChanged} isToday={isToday} noCard />
+          <LogComposer
+            date={date}
+            mode="meals"
+            onSaved={onChanged}
+            isToday={isToday}
+            barcodeSupported={barcodeSupported}
+            isActive={tab === "meals"}
+            onAddFromTemplates={() => setShowFoodPicker(true)}
+          />
           <MealsTable date={date} foods={foods} onChanged={onChanged} isToday={isToday} noCard onToast={onToast} />
-          <div className="mt-1">
-            <button
-              onClick={() => setShowFoodPicker(true)}
-              disabled={addingFromFoodTemplate}
-              className="rounded-md border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-sm text-indigo-700 dark:text-indigo-300 font-medium w-full hover:bg-indigo-50 dark:hover:bg-indigo-900/30 disabled:opacity-50 transition-colors text-left inline-flex items-center gap-1.5"
-            >
-              {addingFromFoodTemplate
-                ? <IconSpinner className="w-3.5 h-3.5 shrink-0" />
-                : <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-              }
-              {addingFromFoodTemplate ? t('common.adding') : t('dashboard.add_food_from_templates')}
-            </button>
-            {foodAddError && <p className="mt-1 text-xs text-red-600" role="alert">{foodAddError}</p>}
-            <TemplatePickerDialog
-              open={showFoodPicker}
-              title={t('dashboard.add_food_from_templates')}
-              items={activeFoodTemplates.map(ft => ({
-                id: ft.foodTemplateId,
-                label: ft.templateName,
-                meta: `${ft.defaultQuantity}${ft.portionDescription ? ' ' + ft.portionDescription : ''} · ${Math.round(ft.caloriesKcal)} kcal`,
-              }))}
-              onSelect={addFromFoodTemplate}
-              onClose={() => setShowFoodPicker(false)}
-              busy={addingFromFoodTemplate}
-            />
-          </div>
+          <TemplatePickerDialog
+            open={showFoodPicker}
+            title={t('dashboard.add_food_from_templates')}
+            items={activeFoodTemplates.map(ft => ({
+              id: ft.foodTemplateId,
+              label: ft.templateName,
+              meta: `${ft.defaultQuantity}${ft.portionDescription ? ' ' + ft.portionDescription : ''} · ${Math.round(ft.caloriesKcal)} kcal`,
+            }))}
+            onSelect={addFromFoodTemplate}
+            onClose={() => setShowFoodPicker(false)}
+            busy={addingFromFoodTemplate}
+          />
         </div>
         <div className={`space-y-4${tab !== "activities" ? " hidden" : ""}`}>
-          <ActivityInput date={date} onSaved={onChanged} isToday={isToday} noCard />
-          <ActivitySection date={date} activities={activities} onChanged={onChanged} isToday={isToday} noCard onToast={onToast} hasCalorieEstimate={hasCalorieEstimate} />
+          <LogComposer
+            date={date}
+            mode="activities"
+            onSaved={onChanged}
+            isToday={isToday}
+            barcodeSupported={barcodeSupported}
+            isActive={tab === "activities"}
+            onAddFromTemplates={() => setShowActivityPicker(true)}
+          />
+          <ActivitySection date={date} activities={activities} onChanged={onChanged} isToday={isToday} noCard onToast={onToast} hasCalorieEstimate={hasCalorieEstimate} showTemplatePicker={showActivityPicker} onShowTemplatePickerChange={setShowActivityPicker} />
         </div>
       </div>
     </div>

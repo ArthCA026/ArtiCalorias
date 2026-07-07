@@ -70,22 +70,19 @@ const tabs: TabItem[] = [
 export default function BottomTabBar() {
   const { t } = useTranslation();
   return (
-    <nav
-      className="fixed bottom-0 left-0 right-0 z-50 md:hidden border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-    >
+    <nav className="border-t border-gray-100 dark:border-gray-700 bg-transparent">
       <div className="flex items-end justify-around h-14">
         {tabs.map((tab) =>
           tab.isCenter ? (
             <NavLink
               key={tab.to}
               to={tab.to}
-              className="flex flex-col items-center flex-1 -translate-y-3"
+              className="flex flex-col items-center flex-1"
             >
               {({ isActive }) => (
                 <>
                   <span
-                    className={`flex h-12 w-12 items-center justify-center rounded-full transition-all duration-200 ${
+                    className={`flex h-10 w-10 items-center justify-center rounded-full transition-all duration-200 ${
                       isActive
                         ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-900'
                         : 'bg-indigo-50 dark:bg-indigo-950 text-indigo-400 shadow-sm'

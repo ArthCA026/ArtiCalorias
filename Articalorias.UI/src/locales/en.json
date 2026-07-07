@@ -577,6 +577,22 @@
       "preparing": "Preparing results…"
     }
   },
+  "dailyLog": {
+    "composer": {
+      "placeholder": "e.g. \"2 eggs, toast\"",
+      "placeholderActivity": "e.g. \"30 min run\"",
+      "placeholderImage": "e.g. \"with extra sauce\"",
+      "send": "Send",
+      "addPhoto": "Add photo",
+      "scanBarcode": "Scan barcode",
+      "uploadImage": "Upload image",
+      "moreActions": "More actions",
+      "addFromTemplates": "Add food from templates",
+      "addActivityFromTemplates": "Add activity from templates",
+      "submitting": "Adding...",
+      "error": "Could not add this log. Please try again."
+    }
+  },
   "settings": {
     "wip_title": "Settings is a work in progress",
     "wip_text": "most options here are not functional yet.",
@@ -682,7 +698,8 @@
       "loading": "Parsing…",
       "parse_error": "Couldn't parse your input. Please try again.",
       "no_results": "No favorites detected. Try a different description.",
-      "saved_count": "{{count}} favorites saved"
+      "saved_count": "{{count}} favorites saved",
+      "saved": "Favorites saved"
     },
     "ai_processing": {
       "analyzing": "Analyzing your entry…"

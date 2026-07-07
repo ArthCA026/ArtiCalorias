@@ -1,4 +1,12 @@
-﻿import { useState, useRef } from 'react';
+import { useState } from 'react';
+import LogComposer from '@/components/LogComposer';
+
+const barcodeSupported =
+  typeof window !== 'undefined' &&
+  'BarcodeDetector' in window &&
+  typeof navigator !== 'undefined' &&
+  'mediaDevices' in navigator &&
+  'getUserMedia' in navigator.mediaDevices;
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { Toast, useToast } from '@/components/Toast';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +19,6 @@ import { toDateString } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 import TemplatePickerDialog from '@/components/TemplatePickerDialog';
 import FavoritesTabSkeleton from '@/components/FavoritesTabSkeleton';
-import AiProcessingCard from '@/components/AiProcessingCard';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import EmptyState from '@/components/EmptyState';
 import { IconEdit, IconTrash, IconCheck, IconX, IconSpinner } from '@/components/icons';
@@ -241,15 +248,20 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
   if (showActivitySkeleton && isLoading) {
     return (
       <>
-        <AiInputSection tab="activities" onToast={onToast} />
+        <LogComposer mode="favorite-activities" onSaved={() => qc.invalidateQueries({ queryKey: queryKeys.activityTemplates() })} barcodeSupported={false} />
         <FavoritesTabSkeleton />
       </>
     );
   }
 
+  function handleActivityComposerSaved() {
+    qc.invalidateQueries({ queryKey: queryKeys.activityTemplates() });
+    onToast(t('favorites.ai_input.saved'), 'success');
+  }
+
   return (
     <>
-      <AiInputSection tab="activities" onToast={onToast} />
+      <LogComposer mode="favorite-activities" onSaved={handleActivityComposerSaved} barcodeSupported={false} />
     <div className="space-y-4">
       {formOpen && (
         <ModalShell onClose={cancelForm}>
@@ -359,6 +371,7 @@ function ActivitiesTab({ search, onToast }: { search: string; onToast: (msg: str
         isPending={deleteMutation.isPending || deletePrefetching}
       />
     </div>
+    <div className="md:hidden" style={{ height: "calc(var(--composer-height, 72px) + 56px + env(safe-area-inset-bottom) + 12px)" }} />
     </>
   );
 }
@@ -536,10 +549,15 @@ function FoodsTab({ search, onToast }: { search: string; onToast: (msg: string, 
   if (showFoodSkeleton && isLoading) {
     return (
       <>
-        <AiInputSection tab="foods" onToast={onToast} />
+        <LogComposer mode="favorite-meals" onSaved={() => qc.invalidateQueries({ queryKey: queryKeys.foodTemplates() })} barcodeSupported={barcodeSupported} />
         <FavoritesTabSkeleton />
       </>
     );
+  }
+
+  function handleFoodComposerSaved() {
+    qc.invalidateQueries({ queryKey: queryKeys.foodTemplates() });
+    onToast(t('favorites.ai_input.saved'), 'success');
   }
 
   const numberField = (id: keyof FoodFormState, label: string) => (
@@ -556,7 +574,7 @@ function FoodsTab({ search, onToast }: { search: string; onToast: (msg: string, 
 
   return (
     <>
-      <AiInputSection tab="foods" onToast={onToast} />
+      <LogComposer mode="favorite-meals" onSaved={handleFoodComposerSaved} barcodeSupported={barcodeSupported} />
     <div className="space-y-4">
       {formOpen && (
         <ModalShell onClose={cancelForm}>
@@ -629,6 +647,7 @@ function FoodsTab({ search, onToast }: { search: string; onToast: (msg: string, 
         isPending={deleteMutation.isPending || deletePrefetching}
       />
     </div>
+    <div className="md:hidden" style={{ height: "calc(var(--composer-height, 72px) + 56px + env(safe-area-inset-bottom) + 12px)" }} />
     </>
   );
 }
@@ -978,102 +997,6 @@ function RoutinesTab({ search, onToast }: { search: string; onToast: (msg: strin
         onClose={() => setDeleteConfirmId(null)}
         isPending={deleteMutation.isPending}
       />
-    </div>
-  );
-}
-
-// ============================================================
-// AI INPUT SECTION (T035)
-// ============================================================
-
-function AiInputSection({ tab, onToast }: { tab: 'activities' | 'foods'; onToast: (msg: string, type: 'success' | 'error') => void }) {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
-  const [text, setText] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  async function handleParse() {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = tab === 'foods'
-        ? await foodTemplateService.parseFavoriteFood(trimmed)
-        : await foodTemplateService.parseFavoriteActivity(trimmed);
-      // Dedicated endpoints only return the matching type €” no client-side filter needed
-      const items = res.data.items;
-      if (items.length === 0) {
-        setError(t('favorites.ai_input.no_results'));
-        return;
-      }
-      // Auto-save all parsed items immediately €” no confirmation gate (Constitution V)
-      await Promise.allSettled(
-        items.map(item =>
-          item.type === 'activity' && item.activity
-            ? activityService.createTemplate({
-                templateName: item.activity.activityName,
-                autoAddToNewDay: false,
-                defaultDurationMinutes: item.activity.durationMinutes,
-                defaultMET: item.activity.metValue,
-              })
-            : item.food
-            ? foodTemplateService.create({
-                templateName: item.food.foodName,
-                portionDescription: item.food.portionDescription ?? '',
-                defaultQuantity: item.food.quantity ?? 1,
-                caloriesKcal: item.food.caloriesKcal,
-                proteinGrams: item.food.proteinGrams,
-                fatGrams: item.food.fatGrams,
-                carbsGrams: item.food.carbsGrams,
-                alcoholGrams: item.food.alcoholGrams,
-                autoAddToNewDay: false,
-              })
-            : Promise.resolve()
-        )
-      );
-      if (tab === 'activities') qc.invalidateQueries({ queryKey: queryKeys.activityTemplates() });
-      else qc.invalidateQueries({ queryKey: queryKeys.foodTemplates() });
-      onToast(t('favorites.ai_input.saved_count', { count: items.length }), 'success');
-      setText('');
-    } catch (err) {
-      setError(extractApiError(err, t('favorites.ai_input.parse_error')));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const placeholder = t(
-    tab === 'foods'
-      ? 'favorites.ai_input.placeholder_foods'
-      : 'favorites.ai_input.placeholder_activities'
-  );
-
-  return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 space-y-3">
-      <div className="flex gap-2 items-start">
-        <textarea
-          ref={textareaRef}
-          rows={2}
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleParse(); } }}
-          placeholder={placeholder}
-          aria-label={placeholder}
-          className="flex-1 resize-none rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/50 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:bg-white dark:focus:bg-gray-800 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-colors"
-        />
-        <button
-          onClick={handleParse}
-          disabled={loading || !text.trim()}
-          className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
-        >
-          {loading ? <IconSpinner className="w-4 h-4" /> : <IconPlus className="w-4 h-4" />}
-        </button>
-      </div>
-      {error && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
-      {loading && <AiProcessingCard context={tab === 'activities' ? 'activity' : 'food'} className="mt-2" />}
     </div>
   );
 }
