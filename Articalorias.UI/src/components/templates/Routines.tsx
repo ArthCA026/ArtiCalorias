@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { ActionSheet, ConfirmSheet } from '@/components/ui/ActionSheet';
+import { Fab } from '@/components/ui/Fab';
 import { useToast } from '@/components/ui/Toast';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import { foodTemplateService } from '@/services/foodTemplateService';
@@ -142,12 +143,6 @@ export function Routines() {
         </Card>
       )}
 
-      {query.data && routines.length > 0 && (
-        <Button variant="secondary" icon="plus" fullWidth onClick={() => setCreating(true)}>
-          {t('templates.new_routine', 'New routine')}
-        </Button>
-      )}
-
       <ActionSheet
         open={selected !== null}
         onClose={() => setSelected(null)}
@@ -180,6 +175,8 @@ export function Routines() {
 
       {editing && <RoutineSheet routine={editing} onClose={() => setEditing(null)} />}
       {creating && <RoutineSheet routine={null} onClose={() => setCreating(false)} />}
+
+      <Fab label={t('templates.fab_new', 'New')} onClick={() => setCreating(true)} />
     </div>
   );
 }

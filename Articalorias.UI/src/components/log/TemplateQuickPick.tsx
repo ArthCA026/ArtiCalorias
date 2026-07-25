@@ -11,13 +11,15 @@ import { foodTemplateService } from '@/services/foodTemplateService';
 import { activityService } from '@/services/activityService';
 import { foodService } from '@/services/foodService';
 import { queryKeys } from '@/lib/queryKeys';
-import { fmt, toDateString } from '@/utils/format';
+import { fmt } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 import type { ActivityTemplateResponse, FoodTemplateResponse } from '@/types';
 import type { LogTab } from './LogSheetContext';
 
 interface TemplateQuickPickProps {
   tab: LogTab;
+  /** yyyy-MM-dd day the entries are logged to */
+  date: string;
   onBack: () => void;
   onAdded: (date: string) => void;
 }
@@ -28,7 +30,7 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
  * One-tap logging from saved templates. Stays open so several
  * items can be added in a row.
  */
-export function TemplateQuickPick({ tab, onBack, onAdded }: TemplateQuickPickProps) {
+export function TemplateQuickPick({ tab, date: targetDate, onBack, onAdded }: TemplateQuickPickProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
@@ -49,7 +51,7 @@ export function TemplateQuickPick({ tab, onBack, onAdded }: TemplateQuickPickPro
 
   const addFood = useMutation({
     mutationFn: (tpl: FoodTemplateResponse) => {
-      const date = toDateString();
+      const date = targetDate;
       return foodService
         .create(date, {
           foodName: tpl.templateName,
@@ -75,7 +77,7 @@ export function TemplateQuickPick({ tab, onBack, onAdded }: TemplateQuickPickPro
 
   const addActivity = useMutation({
     mutationFn: (tpl: ActivityTemplateResponse) => {
-      const date = toDateString();
+      const date = targetDate;
       return activityService
         .create(date, {
           activityTemplateId: tpl.activityTemplateId,

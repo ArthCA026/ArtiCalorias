@@ -7,10 +7,11 @@ import { InlineError } from '@/components/ui/States';
 import { Icon } from '@/components/ui/Icon';
 import { foodService } from '@/services/foodService';
 import { activityService } from '@/services/activityService';
-import { toDateString } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 
 interface ManualProps {
+  /** yyyy-MM-dd day the entry is logged to */
+  date: string;
   onBack: () => void;
   onDone: (date: string, count: number) => void;
 }
@@ -22,7 +23,7 @@ const num = (raw: string): number | null => {
 };
 
 /** Manual meal entry. Two required fields; everything else is disclosed on demand. */
-export function ManualFood({ onBack, onDone }: ManualProps) {
+export function ManualFood({ date, onBack, onDone }: ManualProps) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [kcal, setKcal] = useState('');
@@ -36,7 +37,6 @@ export function ManualFood({ onBack, onDone }: ManualProps) {
 
   const save = useMutation({
     mutationFn: () => {
-      const date = toDateString();
       return foodService
         .create(date, {
           foodName: name.trim(),
@@ -148,7 +148,7 @@ export function ManualFood({ onBack, onDone }: ManualProps) {
 }
 
 /** Manual activity entry with optional AI intensity estimate. */
-export function ManualActivity({ onBack, onDone }: ManualProps) {
+export function ManualActivity({ date, onBack, onDone }: ManualProps) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [duration, setDuration] = useState('30');
@@ -172,7 +172,6 @@ export function ManualActivity({ onBack, onDone }: ManualProps) {
 
   const save = useMutation({
     mutationFn: () => {
-      const date = toDateString();
       return activityService
         .create(date, {
           activityName: name.trim(),

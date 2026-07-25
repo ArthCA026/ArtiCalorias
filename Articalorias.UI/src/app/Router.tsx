@@ -8,6 +8,7 @@ import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import OnboardingPage from '@/pages/OnboardingPage';
 import TodayPage from '@/pages/TodayPage';
+import DayPage from '@/pages/DayPage';
 import TemplatesPage from '@/pages/TemplatesPage';
 import ProgressPage from '@/pages/ProgressPage';
 import ProfilePage from '@/pages/ProfilePage';
@@ -42,6 +43,7 @@ const router = createBrowserRouter([
         element: <AppLayout />,
         children: [
           { path: '/today', element: <TodayPage /> },
+          { path: '/day/:date', element: <DayPage /> },
           { path: '/templates', element: <TemplatesPage /> },
           { path: '/progress', element: <ProgressPage /> },
           { path: '/profile', element: <ProfilePage /> },

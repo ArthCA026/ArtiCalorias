@@ -11,6 +11,8 @@ import type { DailyDashboardResponse } from '@/types';
 interface CalorieHeroProps {
   dash: DailyDashboardResponse;
   mode: CalorieMode;
+  /** Opens the day details sheet (stats, totals, week) */
+  onOpenDetails: () => void;
 }
 
 /** Budget for the ring, depending on the selected calorie mode. */
@@ -28,12 +30,11 @@ export function budgetFor(dash: DailyDashboardResponse, mode: CalorieMode): numb
 }
 
 /**
- * The Today centerpiece: calorie ring with remaining energy, plus the
- * eaten / burned / protein summary. Copy leans into the goal gradient
- * (progress accelerates motivation near the target) and avoids
- * guilt-framing when a day goes over.
+ * Compact day centerpiece: ring, status line and protein bar.
+ * Deliberately short so the meal list is visible without scrolling;
+ * the numbers behind it live in the details sheet, one tap away.
  */
-export function CalorieHero({ dash, mode }: CalorieHeroProps) {
+export function CalorieHero({ dash, mode, onOpenDetails }: CalorieHeroProps) {
   const { t } = useTranslation();
   const { energyUnit } = useUnits();
 
@@ -48,8 +49,6 @@ export function CalorieHero({ dash, mode }: CalorieHeroProps) {
   const e = (kcal: number) => Math.round(kcalToDisplay(Math.abs(kcal), energyUnit)).toLocaleString();
   const unit = energyLabel(energyUnit);
 
-  // Ring color: warning only when meaningfully past a deficit budget.
-  // For surplus goals going past the target is fine, never alarming.
   const meaningfullyOver = over && Math.abs(remaining) > budget * 0.05;
   const ringColor = !isSurplusGoal && meaningfullyOver ? 'var(--t-warning)' : undefined;
 
@@ -81,59 +80,51 @@ export function CalorieHero({ dash, mode }: CalorieHeroProps) {
   const proteinGoal = dash.snapshotProteinGoalGrams;
 
   return (
-    <Card className="flex flex-col items-center pt-6 pb-5">
-      <ProgressRing
-        progress={progress}
-        color={ringColor}
-        label={t('today.ring_aria', 'Calorie progress')}
+    <Card className="relative flex flex-col items-center pt-5 pb-4">
+      <button
+        type="button"
+        onClick={onOpenDetails}
+        className="pressable absolute top-3 right-3 flex items-center gap-0.5 rounded-full bg-inset active:bg-press px-2.5 py-1.5 text-[12px] font-semibold text-ink-2"
       >
-        <span className="text-[34px] font-extrabold text-ink leading-none tabular-nums">
-          {dash.hasCalorieBudgetEstimate ? e(remaining) : e(eaten)}
-        </span>
-        <span className="text-[13px] font-medium text-ink-2 mt-1.5">
-          {dash.hasCalorieBudgetEstimate
-            ? over
-              ? t('today.ring_over', '{{unit}} over', { unit })
-              : t('today.ring_left', '{{unit}} left', { unit })
-            : t('today.ring_eaten', '{{unit}} eaten', { unit })}
-        </span>
-      </ProgressRing>
+        {t('today.details', 'Details')}
+        <Icon name="chevronRight" size={13} />
+      </button>
 
-      <p
-        className={cn(
-          'mt-4 text-center text-[13px] font-semibold rounded-full px-4 py-2',
-          statusTone === 'ok' && 'bg-success-soft text-success',
-          statusTone === 'push' && 'bg-primary-soft text-primary-soft-ink animate-celebrate',
-          statusTone === 'calm' && 'bg-inset text-ink-2',
-        )}
+      <button
+        type="button"
+        onClick={onOpenDetails}
+        aria-label={t('today.details_aria', 'Open day details: eaten, budget, burned and your week')}
+        className="pressable flex flex-col items-center"
       >
-        {statusText}
-      </p>
+        <ProgressRing
+          progress={progress}
+          size={158}
+          color={ringColor}
+          label={t('today.ring_aria', 'Calorie progress')}
+        >
+          <span className="text-[32px] font-extrabold text-ink leading-none tabular-nums">
+            {dash.hasCalorieBudgetEstimate ? e(remaining) : e(eaten)}
+          </span>
+          <span className="text-[13px] font-medium text-ink-2 mt-1.5">
+            {dash.hasCalorieBudgetEstimate
+              ? over
+                ? t('today.ring_over', '{{unit}} over', { unit })
+                : t('today.ring_left', '{{unit}} left', { unit })
+              : t('today.ring_eaten', '{{unit}} eaten', { unit })}
+          </span>
+        </ProgressRing>
 
-      <div className="mt-5 w-full grid grid-cols-3 gap-2">
-        <div className="rounded-2xl bg-inset px-2 py-3 text-center">
-          <p className="text-[11px] font-semibold text-ink-3 uppercase tracking-wide">
-            {t('today.eaten', 'Eaten')}
-          </p>
-          <p className="mt-1 text-[15px] font-bold text-ink tabular-nums">{e(eaten)}</p>
-        </div>
-        <div className="rounded-2xl bg-inset px-2 py-3 text-center">
-          <p className="text-[11px] font-semibold text-ink-3 uppercase tracking-wide">
-            {t('today.budget', 'Budget')}
-          </p>
-          <p className="mt-1 text-[15px] font-bold text-ink tabular-nums">
-            {dash.hasCalorieBudgetEstimate ? e(budget) : '–'}
-          </p>
-        </div>
-        <div className="rounded-2xl bg-inset px-2 py-3 text-center">
-          <p className="text-[11px] font-semibold text-ink-3 uppercase tracking-wide">
-            {t('today.burned', 'Burned')}
-          </p>
-          <p className="mt-1 text-[15px] font-bold text-ink tabular-nums">
-            {dash.hasCalorieEstimate ? e(dash.totalDailyExpenditureKcal) : '–'}
-          </p>
-        </div>
-      </div>
+        <span
+          className={cn(
+            'mt-3.5 text-center text-[13px] font-semibold rounded-full px-4 py-2',
+            statusTone === 'ok' && 'bg-success-soft text-success',
+            statusTone === 'push' && 'bg-primary-soft text-primary-soft-ink animate-celebrate',
+            statusTone === 'calm' && 'bg-inset text-ink-2',
+          )}
+        >
+          {statusText}
+        </span>
+      </button>
 
       {dash.hasProteinGoal && (
         <div className="mt-4 w-full">

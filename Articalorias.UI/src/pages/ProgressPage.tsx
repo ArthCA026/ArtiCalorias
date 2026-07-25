@@ -1,13 +1,11 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
-import { Button, IconButton } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
-import { Sheet } from '@/components/ui/Sheet';
-import { ConfirmSheet } from '@/components/ui/ActionSheet';
 import { EmptyState, ErrorState } from '@/components/ui/States';
-import { useToast } from '@/components/ui/Toast';
 import { WeekDeltaChart } from '@/components/progress/WeekDeltaChart';
 import { PremiumInsightCard } from '@/components/progress/PremiumInsightCard';
 import { StreakCard } from '@/components/progress/StreakCard';
@@ -18,13 +16,11 @@ import {
   isSurplusGoalDay,
 } from '@/components/progress/weekMath';
 import { historyService } from '@/services/historyService';
-import { dailyLogService } from '@/services/dailyLogService';
 import { queryKeys } from '@/lib/queryKeys';
-import { addDays, fmt, mondayOf, parseDate, toDateString } from '@/utils/format';
+import { addDays, mondayOf, parseDate, toDateString } from '@/utils/format';
 import { energyLabel, kcalToDisplay } from '@/utils/units';
 import { useUnits } from '@/hooks/useUnits';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
-import { extractApiError } from '@/utils/apiError';
 import { cn } from '@/utils/cn';
 
 /**
@@ -34,9 +30,8 @@ import { cn } from '@/utils/cn';
  */
 export default function ProgressPage() {
   const { t, i18n } = useTranslation();
-  const { toast } = useToast();
   const { energyUnit } = useUnits();
-  const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const today = toDateString();
   const currentMonday = mondayOf(today);
@@ -52,23 +47,6 @@ export default function ProgressPage() {
   const showSkeleton = useDelayedBoolean(query.isLoading, 300);
   const days = query.data;
 
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const selectedDay = days?.find((d) => d.logDate === selectedDate) ?? null;
-
-  const deleteMutation = useMutation({
-    mutationFn: (date: string) => dailyLogService.deleteDay(date),
-    onSuccess: () => {
-      toast('success', t('progress.day_deleted', 'Day deleted'));
-      queryClient.invalidateQueries({ queryKey: queryKeys.historyAll() });
-      setConfirmOpen(false);
-      setSelectedDate(null);
-    },
-    onError: (err) => {
-      toast('error', extractApiError(err, t('progress.delete_error', 'Could not delete the day. Try again.')));
-    },
-  });
-
   // ── Formatting helpers ────────────────────────────────────────────────────
   const energy = (kcal: number) =>
     `${Math.round(kcalToDisplay(kcal, energyUnit)).toLocaleString(i18n.language)} ${energyLabel(energyUnit)}`;
@@ -82,10 +60,6 @@ export default function ProgressPage() {
 
   const weekdayLong = useMemo(
     () => new Intl.DateTimeFormat(i18n.language, { weekday: 'long' }),
-    [i18n.language],
-  );
-  const dayTitleFormat = useMemo(
-    () => new Intl.DateTimeFormat(i18n.language, { weekday: 'long', day: 'numeric', month: 'long' }),
     [i18n.language],
   );
 
@@ -130,10 +104,14 @@ export default function ProgressPage() {
         : t('progress.week_under_plan', 'A bit under plan. Nothing a normal week cannot absorb.')
     : '';
 
-  const orderedDays = useMemo(
-    () => (days ? [...days].sort((a, b) => (a.logDate < b.logDate ? -1 : 1)) : []),
-    [days],
-  );
+  // All seven days of the week, Monday to Sunday, with their log when one exists.
+  const dayRows = useMemo(() => {
+    const byDate = new Map((days ?? []).map((d) => [d.logDate, d]));
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = addDays(monday, i);
+      return { date, log: byDate.get(date) ?? null };
+    });
+  }, [days, monday]);
 
   return (
     <div className="space-y-4">
@@ -171,7 +149,8 @@ export default function ProgressPage() {
 
       {!days && !query.isError && showSkeleton && <ProgressSkeleton />}
 
-      {days && days.length === 0 && (
+      {/* Current empty weeks skip this: the ghost rows below already teach what to do. */}
+      {days && days.length === 0 && !isCurrentWeek && (
         <Card padded={false}>
           <EmptyState
             icon="chart"
@@ -227,134 +206,89 @@ export default function ProgressPage() {
           <PremiumInsightCard monday={monday} days={days} />
 
           <WeekDeltaChart monday={monday} days={days} />
+        </>
+      )}
 
-          {orderedDays.length > 0 && (
-            <Card padded={false} className="overflow-hidden">
-              <p className="px-4 pt-4 pb-1.5 text-[13px] font-bold text-ink-2 uppercase tracking-wide">
-                {t('progress.day_list_title', 'Logged days')}
-              </p>
-              {orderedDays.map((d, i) => (
+      {days && (
+        <Card padded={false} className="overflow-hidden">
+          <p className="px-4 pt-4 pb-1.5 text-[13px] font-bold text-ink-2 uppercase tracking-wide">
+            {t('progress.days_title', 'Days')}
+          </p>
+          {dayRows.map(({ date, log }, i) => {
+            const border = i > 0 && 'border-t border-hairline/60';
+
+            // Logged day: full stats, drills into the editable day view.
+            if (log) {
+              return (
                 <button
-                  key={d.logDate}
+                  key={date}
                   type="button"
-                  onClick={() => setSelectedDate(d.logDate)}
+                  onClick={() => navigate(`/day/${log.logDate}`)}
                   className={cn(
                     'pressable w-full flex items-center gap-2.5 px-4 h-13 text-left active:bg-press',
-                    i > 0 && 'border-t border-hairline/60',
+                    border,
                   )}
                 >
                   <span className="flex-1 text-[15px] font-semibold text-ink capitalize truncate">
-                    {weekdayLong.format(parseDate(d.logDate))}
+                    {weekdayLong.format(parseDate(date))}
                   </span>
                   <span className="text-[13px] text-ink-2 tabular-nums">
-                    {energy(d.totalFoodCaloriesKcal)}
+                    {energy(log.totalFoodCaloriesKcal)}
                   </span>
                   <span
                     className={cn(
                       'rounded-full px-2 py-0.5 text-[12px] font-bold tabular-nums',
-                      isFavorableDelta(d)
+                      isFavorableDelta(log)
                         ? 'bg-success-soft text-success'
                         : 'bg-warning-soft text-warning',
                     )}
                   >
-                    {signedEnergyValue(d.dailyGoalDeltaKcal)}
+                    {signedEnergyValue(log.dailyGoalDeltaKcal)}
                   </span>
                   <Icon name="chevronRight" size={16} className="text-ink-3 shrink-0" />
                 </button>
-              ))}
-            </Card>
-          )}
-        </>
+              );
+            }
+
+            // Future day: named but inert; future days can never be added.
+            if (date > today) {
+              return (
+                <div key={date} className={cn('flex items-center px-4 h-13 opacity-40', border)}>
+                  <span className="flex-1 text-[15px] font-semibold text-ink capitalize truncate">
+                    {weekdayLong.format(parseDate(date))}
+                  </span>
+                </div>
+              );
+            }
+
+            // Ghost row: today goes to the Today screen, missed days to the day view.
+            const isToday = date === today;
+            return (
+              <button
+                key={date}
+                type="button"
+                onClick={() => navigate(isToday ? '/today' : `/day/${date}`)}
+                className={cn(
+                  'pressable w-full flex items-center gap-2.5 px-4 h-13 text-left active:bg-press',
+                  border,
+                )}
+              >
+                <span className="flex-1 text-[15px] font-semibold text-ink-3 capitalize truncate">
+                  {isToday ? t('progress.today_row', 'Today') : weekdayLong.format(parseDate(date))}
+                </span>
+                <span className="text-[13px] text-ink-3">
+                  {t('progress.add_missed_day', 'Add this day')}
+                </span>
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-inset">
+                  <Icon name="plus" size={14} className="text-ink-2" />
+                </span>
+              </button>
+            );
+          })}
+        </Card>
       )}
 
       {days && <StreakCard />}
-
-      <Sheet
-        open={selectedDay !== null}
-        onClose={() => setSelectedDate(null)}
-        title={
-          selectedDay ? (
-            <span className="capitalize">{dayTitleFormat.format(parseDate(selectedDay.logDate))}</span>
-          ) : undefined
-        }
-      >
-        {selectedDay && (
-          <div className="space-y-2 pt-1">
-            <div className="rounded-card bg-inset px-4 py-3 flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-ink-2">
-                {t('progress.day_eaten', 'Eaten')}
-              </span>
-              <span className="text-[15px] font-bold text-ink tabular-nums">
-                {energy(selectedDay.totalFoodCaloriesKcal)}
-              </span>
-            </div>
-            <div className="rounded-card bg-inset px-4 py-3 flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-ink-2">
-                {t('progress.day_burned', 'Burned')}
-              </span>
-              <span className="text-[15px] font-bold text-ink tabular-nums">
-                {energy(selectedDay.totalDailyExpenditureKcal)}
-              </span>
-            </div>
-            <div className="rounded-card bg-inset px-4 py-3 flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-ink-2">
-                {t('progress.day_protein', 'Protein')}
-              </span>
-              <span className="text-[15px] font-bold text-ink tabular-nums">
-                {selectedDay.snapshotProteinGoalGrams > 0
-                  ? t('progress.protein_of_goal', '{{eaten}} g of {{goal}} g', {
-                      eaten: fmt(selectedDay.totalProteinGrams),
-                      goal: fmt(selectedDay.snapshotProteinGoalGrams),
-                    })
-                  : t('progress.protein_grams', '{{eaten}} g', {
-                      eaten: fmt(selectedDay.totalProteinGrams),
-                    })}
-              </span>
-            </div>
-            <div className="rounded-card bg-inset px-4 py-3 flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-ink-2">
-                {t('progress.vs_plan', 'vs plan')}
-              </span>
-              <span
-                className={cn(
-                  'rounded-full px-2.5 py-1 text-[13px] font-bold tabular-nums',
-                  isFavorableDelta(selectedDay)
-                    ? 'bg-success-soft text-success'
-                    : 'bg-warning-soft text-warning',
-                )}
-              >
-                {`${signedEnergyValue(selectedDay.dailyGoalDeltaKcal)} ${energyLabel(energyUnit)}`}
-              </span>
-            </div>
-
-            {selectedDay.logDate !== today && (
-              <Button
-                variant="danger"
-                size="lg"
-                icon="trash"
-                fullWidth
-                className="!mt-5"
-                onClick={() => setConfirmOpen(true)}
-              >
-                {t('progress.delete_day', 'Delete this day')}
-              </Button>
-            )}
-          </div>
-        )}
-      </Sheet>
-
-      <ConfirmSheet
-        open={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        title={t('progress.delete_confirm_title', 'Delete this day?')}
-        body={t('progress.delete_confirm_body', 'This permanently removes the day and its entries.')}
-        confirmLabel={t('progress.delete_confirm_action', 'Delete day')}
-        cancelLabel={t('progress.cancel', 'Cancel')}
-        loading={deleteMutation.isPending}
-        onConfirm={() => {
-          if (selectedDate) deleteMutation.mutate(selectedDate);
-        }}
-      />
     </div>
   );
 }

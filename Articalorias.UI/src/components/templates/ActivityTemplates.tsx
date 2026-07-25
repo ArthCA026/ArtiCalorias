@@ -2,16 +2,19 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
-import { Button, IconButton } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
+import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { ActionSheet, ConfirmSheet } from '@/components/ui/ActionSheet';
+import { QuickAmountSheet } from '@/components/ui/QuantityField';
+import { Fab } from '@/components/ui/Fab';
 import { useToast } from '@/components/ui/Toast';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import { activityService } from '@/services/activityService';
 import { queryKeys } from '@/lib/queryKeys';
-import { fmt, toDateString } from '@/utils/format';
+import { toDateString } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 import type { ActivityTemplateResponse } from '@/types';
 import { TemplateRow } from './TemplateRow';
@@ -28,6 +31,7 @@ export function ActivityTemplates() {
   const [editing, setEditing] = useState<ActivityTemplateResponse | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ActivityTemplateResponse | null>(null);
+  const [durationTarget, setDurationTarget] = useState<ActivityTemplateResponse | null>(null);
   const [usedIn, setUsedIn] = useState<string[]>([]);
 
   const query = useQuery({
@@ -61,6 +65,24 @@ export function ActivityTemplates() {
       queryClient.invalidateQueries({ queryKey: queryKeys.historyAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.streak() });
       toast('success', t('templates.added_to_today', '{{name}} added to today', { name }));
+    },
+    onError: (err) =>
+      toast('error', extractApiError(err, t('templates.save_error', 'Could not save. Check your connection and try again.'))),
+  });
+
+  const updateDuration = useMutation({
+    mutationFn: ({ tpl, minutes }: { tpl: ActivityTemplateResponse; minutes: number }) =>
+      activityService.updateTemplate(tpl.activityTemplateId, {
+        templateName: tpl.templateName,
+        autoAddToNewDay: tpl.autoAddToNewDay,
+        defaultDurationMinutes: minutes,
+        defaultMET: tpl.defaultMET,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.activityTemplates() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.routines() });
+      setDurationTarget(null);
+      toast('success', t('templates.saved', 'Saved'));
     },
     onError: (err) =>
       toast('error', extractApiError(err, t('templates.save_error', 'Could not save. Check your connection and try again.'))),
@@ -138,10 +160,6 @@ export function ActivityTemplates() {
               <TemplateRow
                 key={tpl.activityTemplateId}
                 title={tpl.templateName}
-                subtitle={t('templates.duration_met', '{{min}} min, MET {{met}}', {
-                  min: fmt(tpl.defaultDurationMinutes ?? 0),
-                  met: tpl.defaultMET ?? 0,
-                })}
                 ariaLabel={t('templates.row_aria', '{{name}}, open options', { name: tpl.templateName })}
                 autoBadge={tpl.autoAddToNewDay}
                 onOpen={() => setSelected(tpl)}
@@ -160,6 +178,26 @@ export function ActivityTemplates() {
                     onClick={() => quickAdd.mutate(tpl)}
                   />
                 }
+                chip={
+                  <button
+                    type="button"
+                    aria-label={t('templates.duration_chip_aria', 'Change duration')}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onPointerUp={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDurationTarget(tpl);
+                    }}
+                    className="pressable inline-flex items-center gap-1 bg-inset rounded-lg px-2 py-1 text-[13px] font-medium text-ink-2"
+                  >
+                    <span className="truncate">
+                      {t('templates.duration_chip', '({{min}} min)', {
+                        min: tpl.defaultDurationMinutes ?? 0,
+                      })}
+                    </span>
+                    <Icon name="chevronDown" size={13} className="text-ink-3 shrink-0" />
+                  </button>
+                }
               />
             ))}
           </div>
@@ -169,12 +207,6 @@ export function ActivityTemplates() {
             </p>
           )}
         </Card>
-      )}
-
-      {query.data && total > 0 && (
-        <Button variant="secondary" icon="plus" fullWidth onClick={() => setCreating(true)}>
-          {t('templates.new_activity', 'New activity template')}
-        </Button>
       )}
 
       <ActionSheet
@@ -212,8 +244,24 @@ export function ActivityTemplates() {
         onConfirm={() => deleteTarget && del.mutate(deleteTarget)}
       />
 
+      <QuickAmountSheet
+        open={durationTarget !== null}
+        onClose={() => setDurationTarget(null)}
+        title={t('templates.duration', 'Duration')}
+        subtitle={durationTarget?.templateName}
+        value={durationTarget?.defaultDurationMinutes ?? 30}
+        min={5}
+        max={1440}
+        step={5}
+        suffix={t('templates.min_suffix', 'min')}
+        saving={updateDuration.isPending}
+        onSave={(next) => durationTarget && updateDuration.mutate({ tpl: durationTarget, minutes: next })}
+      />
+
       {editing && <ActivityTemplateSheet template={editing} onClose={() => setEditing(null)} />}
       {creating && <ActivityTemplateSheet template={null} onClose={() => setCreating(false)} />}
+
+      <Fab label={t('templates.fab_new', 'New')} onClick={() => setCreating(true)} />
     </div>
   );
 }

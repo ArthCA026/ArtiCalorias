@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { Field, DecimalField } from '@/components/ui/Field';
-import { Stepper } from '@/components/ui/Stepper';
+import { QuantityField } from '@/components/ui/QuantityField';
 import { Switch } from '@/components/ui/Switch';
 import { InlineError } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
@@ -106,15 +106,13 @@ export function ActivityTemplateSheet({ template, onClose }: ActivityTemplateShe
           <p className="text-[13px] font-semibold text-ink-2 mb-1.5">
             {t('templates.duration', 'Duration')}
           </p>
-          <Stepper
+          <QuantityField
             value={duration}
-            step={5}
+            onCommit={setDuration}
             min={5}
             max={1440}
-            format={(v) => t('templates.minutes_short', '{{v}} min', { v })}
-            onChange={setDuration}
-            decreaseLabel={t('templates.less', 'Less')}
-            increaseLabel={t('templates.more', 'More')}
+            step={5}
+            suffix={t('templates.min_suffix', 'min')}
           />
         </div>
         <DecimalField

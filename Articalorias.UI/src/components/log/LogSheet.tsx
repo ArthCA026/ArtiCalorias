@@ -9,7 +9,6 @@ import { InlineError } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
 import { dailyLogService } from '@/services/dailyLogService';
 import { queryKeys } from '@/lib/queryKeys';
-import { toDateString } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 import { compressImage } from '@/utils/compressImage';
 import type {
@@ -26,6 +25,8 @@ import type { LogTab } from './LogSheetContext';
 interface LogSheetProps {
   open: boolean;
   initialTab: LogTab;
+  /** yyyy-MM-dd day the entries are logged to (today or a past day) */
+  targetDate: string;
   onClose: () => void;
 }
 
@@ -53,7 +54,7 @@ const toActivityRequest = (item: ParsedActivityItem): CreateActivityEntryRequest
  * or manual entry. Always logs to today. One-shot flow: parse and save
  * in a single step, no confirmation screen.
  */
-export function LogSheet({ open, initialTab, onClose }: LogSheetProps) {
+export function LogSheet({ open, initialTab, targetDate, onClose }: LogSheetProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -94,7 +95,7 @@ export function LogSheet({ open, initialTab, onClose }: LogSheetProps) {
 
   const addFromText = useMutation({
     mutationFn: async (freeText: string) => {
-      const date = toDateString();
+      const date = targetDate;
       if (tab === 'meal') {
         const items = await dailyLogService.parseFood(date, { freeText }).then((r) => r.data);
         return saveFoods(date, items);
@@ -119,7 +120,7 @@ export function LogSheet({ open, initialTab, onClose }: LogSheetProps) {
 
   const addFromImage = useMutation({
     mutationFn: async (file: File) => {
-      const date = toDateString();
+      const date = targetDate;
       const { base64, mimeType } = await compressImage(file);
       const items = await dailyLogService
         .parseFoodWithImage(date, {
@@ -137,7 +138,7 @@ export function LogSheet({ open, initialTab, onClose }: LogSheetProps) {
 
   const addFromBarcode = useMutation({
     mutationFn: async (barcode: string) => {
-      const date = toDateString();
+      const date = targetDate;
       const items = await dailyLogService.lookupBarcode(barcode).then((r) => r.data);
       return saveFoods(date, items);
     },
@@ -303,15 +304,16 @@ export function LogSheet({ open, initialTab, onClose }: LogSheetProps) {
         )}
 
         {view === 'manual' && tab === 'meal' && (
-          <ManualFood onBack={() => setView('input')} onDone={onLogged} />
+          <ManualFood date={targetDate} onBack={() => setView('input')} onDone={onLogged} />
         )}
         {view === 'manual' && tab === 'activity' && (
-          <ManualActivity onBack={() => setView('input')} onDone={onLogged} />
+          <ManualActivity date={targetDate} onBack={() => setView('input')} onDone={onLogged} />
         )}
 
         {view === 'templates' && (
           <TemplateQuickPick
             tab={tab}
+            date={targetDate}
             onBack={() => setView('input')}
             onAdded={(date) => invalidateDay(date)}
           />

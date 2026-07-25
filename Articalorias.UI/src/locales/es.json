@@ -12,7 +12,10 @@
     "no_results": "Nada coincide con tu búsqueda",
     "loading": "Cargando",
     "continue": "Continuar",
-    "add": "Añadir"
+    "add": "Añadir",
+    "decrease": "Reducir",
+    "increase": "Aumentar",
+    "amount": "Cantidad"
   },
   "tabs": {
     "today": "Hoy",
@@ -70,6 +73,8 @@
     "carbs": "Carbohidratos",
     "alcohol": "Alcohol",
     "quantity": "Cantidad",
+    "fab": "Registrar",
+    "met_hint": "La intensidad del ejercicio. Caminar es aproximadamente 3.5.",
     "portion": "Porción",
     "portion_ph": "p. ej. 1 taza",
     "more_details": "Más detalles",
@@ -136,7 +141,26 @@
     "checklist_aria": "Progreso de configuración",
     "step_account": "Crear tu cuenta",
     "step_goal": "Definir tu objetivo",
-    "step_meal": "Registrar tu primera comida"
+    "step_meal": "Registrar tu primera comida",
+    "details": "Detalles",
+    "details_aria": "Abrir detalles del día: comido, presupuesto, quemado y tu semana",
+    "details_title": "Detalles del día",
+    "macro_totals": "Macros hasta ahora",
+    "col_prot": "Prot",
+    "col_fat": "Grasa",
+    "col_carbs": "Carbs",
+    "change_qty_aria": "Cambiar cantidad de {{name}}",
+    "change_duration_aria": "Cambiar duración de {{name}}",
+    "list_switch": "Comidas o actividades"
+  },
+  "day": {
+    "past_hint": "Editando un día pasado",
+    "delete": "Eliminar este día",
+    "delete_title": "¿Eliminar este día?",
+    "delete_body": "Esto elimina para siempre el día y todo lo registrado en él.",
+    "delete_confirm": "Eliminar día",
+    "deleted": "Día eliminado",
+    "delete_error": "No se pudo eliminar el día. Inténtalo de nuevo."
   },
   "streak": {
     "chip_aria": "Racha de registro: {{n}} días",
@@ -440,7 +464,10 @@
     "insight_days_logged": "Registraste {{n}} de 7 días esta semana.",
     "streak_day": "día seguido registrando",
     "streak_days": "días seguidos registrando",
-    "streak_longest": "Mejor: {{n}}"
+    "streak_longest": "Mejor: {{n}}",
+    "days_title": "Días",
+    "today_row": "Hoy",
+    "add_missed_day": "Añadir este día"
   },
   "templates": {
     "title": "Plantillas",
@@ -509,6 +536,16 @@
     "routine_no_templates": "Crea primero plantillas de comida o actividad y luego agrúpalas aquí.",
     "max_items": "Hasta 20 elementos por rutina",
     "delete_routine_title": "¿Eliminar rutina?",
-    "delete_routine_body": "Esto elimina la rutina. Las plantillas que contiene se conservan."
+    "delete_routine_body": "Esto elimina la rutina. Las plantillas que contiene se conservan.",
+    "fab_new": "Nuevo",
+    "amount_chip": "{{qty}} - {{portion}}",
+    "qty_chip_aria": "Cambiar la cantidad por defecto",
+    "duration_chip": "({{min}} min)",
+    "duration_chip_aria": "Cambiar la duración",
+    "min_suffix": "min",
+    "col_kcal": "KCAL",
+    "col_protein": "PROT",
+    "col_fat": "GRASA",
+    "col_carbs": "CARBS"
   }
 }

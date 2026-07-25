@@ -6,7 +6,9 @@ import { Sheet } from '@/components/ui/Sheet';
 import { ActionSheet } from '@/components/ui/ActionSheet';
 import { Button } from '@/components/ui/Button';
 import { Field, DecimalField } from '@/components/ui/Field';
-import { Stepper } from '@/components/ui/Stepper';
+import { QuantityField, QuickAmountSheet } from '@/components/ui/QuantityField';
+import { MiniTable } from '@/components/ui/MiniTable';
+import { Icon } from '@/components/ui/Icon';
 import { EmptyState, InlineError } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
 import { useLongPress } from '@/hooks/useLongPress';
@@ -16,47 +18,22 @@ import { activityService } from '@/services/activityService';
 import { foodTemplateService } from '@/services/foodTemplateService';
 import { extractApiError } from '@/utils/apiError';
 import { fmt } from '@/utils/format';
-import type { ActivityEntryResponse, FoodEntryResponse } from '@/types';
+import type { ActivityEntryResponse, FoodEntryResponse, UpdateFoodEntryRequest } from '@/types';
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
+/** "18.9", "14", "1.2": one decimal max, no trailing zero */
+const g = (n: number) => String(round1(n));
+const qtyStr = (n: number) => String(Math.round(n * 1000) / 1000);
 const num = (raw: string): number => {
   const n = Number(raw.replace(',', '.'));
   return Number.isFinite(n) ? n : 0;
 };
 
-/* ------------------------------------------------------------------ */
-/* Shared row                                                          */
-/* ------------------------------------------------------------------ */
-
-interface RowProps {
-  title: string;
-  subtitle: string;
-  value: string;
-  onOpen: () => void;
-}
-
-function EntryRow({ title, subtitle, value, onOpen }: RowProps) {
-  const { t } = useTranslation();
-  const handlers = useLongPress({ onLongPress: onOpen, onTap: onOpen });
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={t('today.entry_aria', '{{name}}, open options', { name: title })}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') onOpen();
-      }}
-      {...handlers}
-      className="pressable w-full flex items-center gap-3 px-4 py-3 active:bg-press cursor-pointer"
-    >
-      <span className="flex-1 min-w-0">
-        <span className="block text-[15px] font-semibold text-ink truncate">{title}</span>
-        <span className="block text-[13px] text-ink-2 mt-0.5 truncate">{subtitle}</span>
-      </span>
-      <span className="shrink-0 text-[15px] font-bold text-ink tabular-nums">{value}</span>
-    </div>
-  );
-}
+/** Stops a nested control from triggering the row's tap/long-press */
+const isolate = {
+  onPointerDown: (e: React.PointerEvent) => e.stopPropagation(),
+  onPointerUp: (e: React.PointerEvent) => e.stopPropagation(),
+};
 
 /* ------------------------------------------------------------------ */
 /* Meals                                                               */
@@ -68,12 +45,70 @@ interface MealsListProps {
   onChanged: () => void;
 }
 
+function MealRow({
+  entry,
+  onOpen,
+  onQty,
+}: {
+  entry: FoodEntryResponse;
+  onOpen: () => void;
+  onQty: () => void;
+}) {
+  const { t } = useTranslation();
+  const handlers = useLongPress({ onLongPress: onOpen, onTap: onOpen });
+  const qty = entry.quantity && entry.quantity > 0 ? entry.quantity : 1;
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={t('today.entry_aria', '{{name}}, open options', { name: entry.foodName })}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onOpen();
+      }}
+      {...handlers}
+      className="pressable px-4 py-3 active:bg-press cursor-pointer"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[15px] font-bold text-ink truncate flex-1">{entry.foodName}</p>
+        <p className="text-[15px] font-extrabold text-ink tabular-nums shrink-0">
+          {fmt(entry.caloriesKcal)} kcal
+        </p>
+      </div>
+      <button
+        type="button"
+        {...isolate}
+        onClick={(e) => {
+          e.stopPropagation();
+          onQty();
+        }}
+        aria-label={t('today.change_qty_aria', 'Change quantity of {{name}}', { name: entry.foodName })}
+        className="pressable mt-1.5 inline-flex items-center gap-1 rounded-lg bg-inset active:bg-press px-2 py-1 text-[13px] font-semibold text-ink-2"
+      >
+        {qtyStr(qty)}
+        {entry.portionDescription ? ` - ${entry.portionDescription}` : ''}
+        <Icon name="chevronDown" size={13} />
+      </button>
+      <MiniTable
+        className="mt-2"
+        cols={[
+          { label: t('today.col_prot', 'Prot'), value: g(entry.proteinGrams) },
+          { label: t('today.col_fat', 'Fat'), value: g(entry.fatGrams) },
+          { label: t('today.col_carbs', 'Carbs'), value: g(entry.carbsGrams) },
+        ]}
+      />
+    </div>
+  );
+}
+
 export function MealsList({ date, entries, onChanged }: MealsListProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { openLog } = useLogSheet();
   const [selected, setSelected] = useState<FoodEntryResponse | null>(null);
   const [editing, setEditing] = useState<FoodEntryResponse | null>(null);
+  const [qtyTarget, setQtyTarget] = useState<FoodEntryResponse | null>(null);
+
+  const saveError = () => t('log.save_error', 'Could not save. Check your connection and try again.');
 
   const del = useMutation({
     mutationFn: (entry: FoodEntryResponse) => foodService.remove(date, entry.foodEntryId),
@@ -81,7 +116,7 @@ export function MealsList({ date, entries, onChanged }: MealsListProps) {
       onChanged();
       toast('success', t('today.deleted', 'Deleted'));
     },
-    onError: (err) => toast('error', extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
+    onError: (err) => toast('error', extractApiError(err, saveError())),
   });
 
   const saveTemplate = useMutation({
@@ -100,12 +135,48 @@ export function MealsList({ date, entries, onChanged }: MealsListProps) {
       });
     },
     onSuccess: () => toast('success', t('today.saved_as_template', 'Saved to Templates')),
-    onError: (err) => toast('error', extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
+    onError: (err) => toast('error', extractApiError(err, saveError())),
+  });
+
+  // One-tap quantity change. Uses the API's scale-by-quantity so the
+  // server rescales every macro from the entry's stored base amount.
+  const quickQty = useMutation({
+    mutationFn: ({ entry, qty }: { entry: FoodEntryResponse; qty: number }) => {
+      const base: UpdateFoodEntryRequest = {
+        foodName: entry.foodName,
+        portionDescription: entry.portionDescription,
+        quantity: qty,
+        caloriesKcal: entry.caloriesKcal,
+        proteinGrams: entry.proteinGrams,
+        fatGrams: entry.fatGrams,
+        carbsGrams: entry.carbsGrams,
+        alcoholGrams: entry.alcoholGrams,
+        notes: entry.notes,
+      };
+      if (entry.quantity && entry.quantity > 0) {
+        return foodService.update(date, entry.foodEntryId, { ...base, scaleByQuantity: true });
+      }
+      // No stored quantity: treat current macros as the amount for 1 unit
+      return foodService.update(date, entry.foodEntryId, {
+        ...base,
+        caloriesKcal: round1(entry.caloriesKcal * qty),
+        proteinGrams: round1(entry.proteinGrams * qty),
+        fatGrams: round1(entry.fatGrams * qty),
+        carbsGrams: round1(entry.carbsGrams * qty),
+        alcoholGrams: round1(entry.alcoholGrams * qty),
+        scaleByQuantity: false,
+      });
+    },
+    onSuccess: () => {
+      setQtyTarget(null);
+      onChanged();
+      toast('success', t('common.saved', 'Saved'));
+    },
+    onError: (err) => toast('error', extractApiError(err, saveError())),
   });
 
   return (
     <section>
-      <h2 className="text-[15px] font-bold text-ink mb-2 px-1">{t('today.meals', 'Meals')}</h2>
       <Card padded={false} className="overflow-hidden">
         {entries.length === 0 ? (
           <EmptyState
@@ -113,23 +184,16 @@ export function MealsList({ date, entries, onChanged }: MealsListProps) {
             title={t('today.no_meals_title', 'Nothing logged yet')}
             body={t('today.no_meals_body', 'Describe your meal in plain words and the AI fills in the macros for you.')}
             actionLabel={t('today.log_first_meal', 'Log a meal')}
-            onAction={() => openLog('meal')}
+            onAction={() => openLog('meal', date)}
           />
         ) : (
           <div className="divide-y divide-hairline/50">
             {entries.map((e) => (
-              <EntryRow
+              <MealRow
                 key={e.foodEntryId}
-                title={e.foodName}
-                subtitle={[
-                  e.quantity && e.quantity !== 1 ? `x${e.quantity}` : null,
-                  e.portionDescription,
-                  `P ${fmt(e.proteinGrams)}g`,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-                value={`${fmt(e.caloriesKcal)} kcal`}
+                entry={e}
                 onOpen={() => setSelected(e)}
+                onQty={() => setQtyTarget(e)}
               />
             ))}
           </div>
@@ -159,6 +223,20 @@ export function MealsList({ date, entries, onChanged }: MealsListProps) {
           },
         ]}
       />
+
+      {qtyTarget && (
+        <QuickAmountSheet
+          open
+          onClose={() => setQtyTarget(null)}
+          title={t('log.quantity', 'Quantity')}
+          subtitle={qtyTarget.foodName}
+          value={qtyTarget.quantity && qtyTarget.quantity > 0 ? qtyTarget.quantity : 1}
+          min={0.1}
+          step={qtyTarget.quantity && qtyTarget.quantity >= 1 ? 1 : 0.5}
+          saving={quickQty.isPending}
+          onSave={(qty) => quickQty.mutate({ entry: qtyTarget, qty })}
+        />
+      )}
 
       {editing && (
         <EditFoodSheet
@@ -233,13 +311,11 @@ function EditFoodSheet({ date, entry, onClose, onChanged }: EditFoodSheetProps) 
         />
         <div>
           <p className="text-[13px] font-semibold text-ink-2 mb-1.5">{t('log.quantity', 'Quantity')}</p>
-          <Stepper
+          <QuantityField
             value={qty}
+            min={0.1}
             step={qty >= 1 ? 1 : 0.5}
-            min={0.5}
-            onChange={applyQty}
-            decreaseLabel={t('log.less', 'Less')}
-            increaseLabel={t('log.more', 'More')}
+            onCommit={applyQty}
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -277,12 +353,62 @@ interface ActivitiesListProps {
   onChanged: () => void;
 }
 
+function ActivityRow({
+  entry,
+  hasCalorieEstimate,
+  onOpen,
+  onDuration,
+}: {
+  entry: ActivityEntryResponse;
+  hasCalorieEstimate: boolean;
+  onOpen: () => void;
+  onDuration: () => void;
+}) {
+  const { t } = useTranslation();
+  const handlers = useLongPress({ onLongPress: onOpen, onTap: onOpen });
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={t('today.entry_aria', '{{name}}, open options', { name: entry.activityName })}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onOpen();
+      }}
+      {...handlers}
+      className="pressable px-4 py-3 active:bg-press cursor-pointer"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[15px] font-bold text-ink truncate flex-1">{entry.activityName}</p>
+        <p className="text-[15px] font-extrabold text-ink tabular-nums shrink-0">
+          {hasCalorieEstimate ? `${fmt(entry.calculatedCaloriesKcal)} kcal` : '–'}
+        </p>
+      </div>
+      <button
+        type="button"
+        {...isolate}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDuration();
+        }}
+        aria-label={t('today.change_duration_aria', 'Change duration of {{name}}', { name: entry.activityName })}
+        className="pressable mt-1.5 inline-flex items-center gap-1 rounded-lg bg-inset active:bg-press px-2 py-1 text-[13px] font-semibold text-ink-2"
+      >
+        ({qtyStr(entry.durationMinutes ?? 0)} min)
+        <Icon name="chevronDown" size={13} />
+      </button>
+    </div>
+  );
+}
+
 export function ActivitiesList({ date, entries, hasCalorieEstimate, onChanged }: ActivitiesListProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { openLog } = useLogSheet();
   const [selected, setSelected] = useState<ActivityEntryResponse | null>(null);
   const [editing, setEditing] = useState<ActivityEntryResponse | null>(null);
+  const [durationTarget, setDurationTarget] = useState<ActivityEntryResponse | null>(null);
+
+  const saveError = () => t('log.save_error', 'Could not save. Check your connection and try again.');
 
   const del = useMutation({
     mutationFn: (entry: ActivityEntryResponse) =>
@@ -291,7 +417,7 @@ export function ActivitiesList({ date, entries, hasCalorieEstimate, onChanged }:
       onChanged();
       toast('success', t('today.deleted', 'Deleted'));
     },
-    onError: (err) => toast('error', extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
+    onError: (err) => toast('error', extractApiError(err, saveError())),
   });
 
   const saveTemplate = useMutation({
@@ -303,12 +429,27 @@ export function ActivitiesList({ date, entries, hasCalorieEstimate, onChanged }:
         defaultMET: entry.metValue ?? 3.5,
       }),
     onSuccess: () => toast('success', t('today.saved_as_template', 'Saved to Templates')),
-    onError: (err) => toast('error', extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
+    onError: (err) => toast('error', extractApiError(err, saveError())),
+  });
+
+  // One-tap duration change: the server recalculates burned calories.
+  const quickDuration = useMutation({
+    mutationFn: ({ entry, minutes }: { entry: ActivityEntryResponse; minutes: number }) =>
+      activityService.update(date, entry.activityEntryId, {
+        activityName: entry.activityName,
+        durationMinutes: minutes,
+        metValue: entry.metValue,
+      }),
+    onSuccess: () => {
+      setDurationTarget(null);
+      onChanged();
+      toast('success', t('common.saved', 'Saved'));
+    },
+    onError: (err) => toast('error', extractApiError(err, saveError())),
   });
 
   return (
     <section>
-      <h2 className="text-[15px] font-bold text-ink mb-2 px-1">{t('today.activities', 'Activities')}</h2>
       <Card padded={false} className="overflow-hidden">
         {entries.length === 0 ? (
           <EmptyState
@@ -316,20 +457,17 @@ export function ActivitiesList({ date, entries, hasCalorieEstimate, onChanged }:
             title={t('today.no_activities_title', 'No activity yet')}
             body={t('today.no_activities_body', 'Moving raises your budget. Log a walk, a workout, anything that got you moving.')}
             actionLabel={t('today.log_activity', 'Log activity')}
-            onAction={() => openLog('activity')}
+            onAction={() => openLog('activity', date)}
           />
         ) : (
           <div className="divide-y divide-hairline/50">
             {entries.map((a) => (
-              <EntryRow
+              <ActivityRow
                 key={a.activityEntryId}
-                title={a.activityName}
-                subtitle={t('today.activity_meta', '{{min}} min, MET {{met}}', {
-                  min: fmt(a.durationMinutes ?? 0),
-                  met: a.metValue ?? 0,
-                })}
-                value={hasCalorieEstimate ? `${fmt(a.calculatedCaloriesKcal)} kcal` : '–'}
+                entry={a}
+                hasCalorieEstimate={hasCalorieEstimate}
                 onOpen={() => setSelected(a)}
+                onDuration={() => setDurationTarget(a)}
               />
             ))}
           </div>
@@ -359,6 +497,22 @@ export function ActivitiesList({ date, entries, hasCalorieEstimate, onChanged }:
           },
         ]}
       />
+
+      {durationTarget && (
+        <QuickAmountSheet
+          open
+          onClose={() => setDurationTarget(null)}
+          title={t('log.duration', 'Duration')}
+          subtitle={durationTarget.activityName}
+          value={durationTarget.durationMinutes ?? 30}
+          min={1}
+          max={1440}
+          step={5}
+          suffix="min"
+          saving={quickDuration.isPending}
+          onSave={(minutes) => quickDuration.mutate({ entry: durationTarget, minutes })}
+        />
+      )}
 
       {editing && (
         <EditActivitySheet
@@ -416,18 +570,21 @@ function EditActivitySheet({ date, entry, onClose, onChanged }: EditActivityShee
         />
         <div>
           <p className="text-[13px] font-semibold text-ink-2 mb-1.5">{t('log.duration', 'Duration')}</p>
-          <Stepper
+          <QuantityField
             value={duration}
-            step={5}
-            min={5}
+            min={1}
             max={1440}
-            format={(v) => t('log.minutes_short', '{{v}} min', { v })}
-            onChange={setDuration}
-            decreaseLabel={t('log.less', 'Less')}
-            increaseLabel={t('log.more', 'More')}
+            step={5}
+            suffix="min"
+            onCommit={setDuration}
           />
         </div>
-        <DecimalField label={t('log.met', 'Intensity (MET)')} value={met} onValueChange={setMet} />
+        <DecimalField
+          label={t('log.met', 'Intensity (MET)')}
+          hint={t('log.met_hint', 'How intense it is. A walk is about 3.5.')}
+          value={met}
+          onValueChange={setMet}
+        />
         {error && <InlineError message={error} />}
         <Button
           variant="primary"

@@ -10,10 +10,12 @@ import { cn } from '@/utils/cn';
 import type { DailyLogResponse } from '@/types';
 
 interface WeekStripProps {
-  /** Today, yyyy-MM-dd */
+  /** The viewed day, yyyy-MM-dd (its week is shown) */
   date: string;
   /** Positive base goal means a surplus (bulking) goal */
   baseGoalKcal: number;
+  /** Render on the inset surface (when shown inside a sheet) */
+  inset?: boolean;
 }
 
 /**
@@ -21,7 +23,7 @@ interface WeekStripProps {
  * Filled dots reward consistency (completion bias); the copy keeps the
  * focus on the week, not on any single imperfect day.
  */
-export function WeekStrip({ date, baseGoalKcal }: WeekStripProps) {
+export function WeekStrip({ date, baseGoalKcal, inset }: WeekStripProps) {
   const { t, i18n } = useTranslation();
   const monday = mondayOf(date);
   const sunday = addDays(monday, 6);
@@ -70,7 +72,7 @@ export function WeekStrip({ date, baseGoalKcal }: WeekStripProps) {
   }
 
   return (
-    <Card>
+    <Card variant={inset ? 'inset' : 'card'}>
       <div className="flex items-center justify-between mb-3">
         <p className="text-[13px] font-bold text-ink-2 uppercase tracking-wide">
           {t('today.this_week', 'This week')}
@@ -88,7 +90,11 @@ export function WeekStrip({ date, baseGoalKcal }: WeekStripProps) {
             <span
               className={cn(
                 'w-8 h-8 rounded-full flex items-center justify-center',
-                d.logged ? 'bg-primary text-on-primary' : 'bg-inset text-ink-3',
+                d.logged
+                  ? 'bg-primary text-on-primary'
+                  : inset
+                    ? 'bg-card text-ink-3'
+                    : 'bg-inset text-ink-3',
                 d.isToday && !d.logged && 'ring-2 ring-primary/60',
                 d.isFuture && 'opacity-45',
               )}

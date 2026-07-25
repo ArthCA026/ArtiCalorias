@@ -5,7 +5,7 @@ import { AxiosError } from 'axios';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { Field, DecimalField } from '@/components/ui/Field';
-import { Stepper } from '@/components/ui/Stepper';
+import { QuantityField } from '@/components/ui/QuantityField';
 import { Switch } from '@/components/ui/Switch';
 import { InlineError } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
@@ -169,14 +169,7 @@ export function MealTemplateSheet({ template, onClose }: MealTemplateSheetProps)
           <p className="text-[13px] font-semibold text-ink-2 mb-1.5">
             {t('templates.default_quantity', 'Default quantity')}
           </p>
-          <Stepper
-            value={qty}
-            step={0.5}
-            min={0.5}
-            onChange={setQty}
-            decreaseLabel={t('templates.less', 'Less')}
-            increaseLabel={t('templates.more', 'More')}
-          />
+          <QuantityField value={qty} onCommit={setQty} min={0.5} step={0.5} />
         </div>
         <div>
           <p className="text-[13px] font-semibold text-ink-2">
