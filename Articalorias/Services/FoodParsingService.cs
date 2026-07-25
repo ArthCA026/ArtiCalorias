@@ -77,6 +77,11 @@ public class FoodParsingService : IFoodParsingService
         {
             completion = await _chatClient.CompleteChatAsync(messages, options);
         }
+        catch (System.ClientModel.ClientResultException ex) when (ex.Status == 429)
+        {
+            _logger.LogError(ex, "OpenAI API quota exceeded for input: {Input}", freeText);
+            throw new InvalidOperationException("AI food parsing is temporarily unavailable (API quota exceeded).");
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "OpenAI API call failed for input: {Input}", freeText);

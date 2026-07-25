@@ -1,32 +1,23 @@
-﻿import { createBrowserRouter, Navigate } from 'react-router';
-
-import AppLayout from '@/layouts/AppLayout';
+import { createBrowserRouter, Navigate } from 'react-router';
+import { PublicOnly, RequireAuth, RequireOnboarded } from './guards';
 import AuthLayout from '@/layouts/AuthLayout';
-import OnboardingLayout from '@/layouts/OnboardingLayout';
-import ProtectedRoute from '@/components/ProtectedRoute';
-import PublicOnlyRoute from '@/components/PublicOnlyRoute';
-
+import AppLayout from '@/layouts/AppLayout';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import OnboardingPage from '@/pages/OnboardingPage';
-import DashboardPage from '@/pages/DashboardPage';
-import HistoryPage from '@/pages/HistoryPage';
+import TodayPage from '@/pages/TodayPage';
+import TemplatesPage from '@/pages/TemplatesPage';
+import ProgressPage from '@/pages/ProgressPage';
 import ProfilePage from '@/pages/ProfilePage';
-import FavoritesPage from '@/pages/FavoritesPage';
-import SettingsPage from '@/pages/SettingsPage';
+import PremiumPage from '@/pages/PremiumPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 
 const router = createBrowserRouter([
+  { path: '/', element: <Navigate to="/today" replace /> },
   {
-    path: '/',
-    element: <Navigate to="/today" replace />,
-  },
-
-  // Public routes — redirect to /today if already logged in
-  {
-    element: <PublicOnlyRoute />,
+    element: <PublicOnly />,
     children: [
       {
         element: <AuthLayout />,
@@ -39,33 +30,31 @@ const router = createBrowserRouter([
       },
     ],
   },
-
-  // Protected routes — redirect to /login if not authenticated
   {
-    element: <ProtectedRoute />,
+    element: <RequireAuth />,
+    children: [{ path: '/onboarding', element: <OnboardingPage /> }],
+  },
+  {
+    element: <RequireOnboarded />,
     children: [
-      {
-        element: <OnboardingLayout />,
-        children: [
-          { path: '/onboarding', element: <OnboardingPage /> },
-        ],
-      },
+      { path: '/premium', element: <PremiumPage /> },
       {
         element: <AppLayout />,
         children: [
-          { path: '/today', element: <DashboardPage /> },
-          { path: '/history', element: <HistoryPage /> },
-          { path: '/history/:date', element: <HistoryPage /> },
+          { path: '/today', element: <TodayPage /> },
+          { path: '/templates', element: <TemplatesPage /> },
+          { path: '/progress', element: <ProgressPage /> },
           { path: '/profile', element: <ProfilePage /> },
-          { path: '/favorites', element: <FavoritesPage /> },
-          { path: '/activities', element: <Navigate replace to="/favorites" /> },
-          { path: '/settings', element: <SettingsPage /> },
         ],
       },
+      // Legacy routes from the previous UI
+      { path: '/favorites', element: <Navigate to="/templates" replace /> },
+      { path: '/activities', element: <Navigate to="/templates" replace /> },
+      { path: '/history', element: <Navigate to="/progress" replace /> },
+      { path: '/history/:date', element: <Navigate to="/progress" replace /> },
+      { path: '/settings', element: <Navigate to="/profile" replace /> },
     ],
   },
-
-  // Catch-all
   { path: '*', element: <NotFoundPage /> },
 ]);
 

@@ -10,14 +10,14 @@ import { useState, useEffect } from 'react';
 export function useDelayedBoolean(value: boolean, delayMs: number): boolean {
   const [delayed, setDelayed] = useState(false);
 
+  // Adjust-state-during-render: reset instantly when value drops to false
+  if (!value && delayed) setDelayed(false);
+
   useEffect(() => {
-    if (!value) {
-      setDelayed(false);
-      return;
-    }
+    if (!value) return;
     const timer = setTimeout(() => setDelayed(true), delayMs);
     return () => clearTimeout(timer);
   }, [value, delayMs]);
 
-  return delayed;
+  return value && delayed;
 }

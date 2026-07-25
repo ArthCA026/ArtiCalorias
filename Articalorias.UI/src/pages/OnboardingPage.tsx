@@ -1,467 +1,388 @@
-﻿import { useState, useMemo } from "react";
-import type { FormEvent } from "react";
-import { useNavigate } from "react-router";
-import { useTranslation } from "react-i18next";
-import { profileService } from "@/services/profileService";
-import type { UserProfileRequest } from "@/types";
-import { extractApiError } from "@/utils/apiError";
-import { useUnits } from "@/hooks/useUnits";
-import { energyRateLabel, kgToDisplay, displayToKg, kcalToDisplay, displayToKcal } from "@/utils/units";
-import GoalSelector from "@/components/goal/GoalSelector";
-import ProteinPresetSelector from "@/components/protein/ProteinPresetSelector";
-import { PROTEIN_PRESETS, getAgeProteinMinimum } from "@/config/proteinPresets";
-import type { ProteinPresetId } from "@/config/proteinPresets";
+import { useState } from 'react';
+import { useNavigate } from 'react-router';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { Card } from '@/components/ui/Card';
+import { Button, IconButton } from '@/components/ui/Button';
+import { DecimalField, Field } from '@/components/ui/Field';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { ProgressBar } from '@/components/ui/Progress';
+import { Icon, type IconName } from '@/components/ui/Icon';
+import { InlineError } from '@/components/ui/States';
+import { useAuth } from '@/hooks/useAuth';
+import { useUnits } from '@/hooks/useUnits';
+import { profileService } from '@/services/profileService';
+import { queryKeys } from '@/lib/queryKeys';
+import { displayToKg, weightLabel, kgToDisplay } from '@/utils/units';
+import {
+  GOAL_PRESETS,
+  formatKgPerWeekShort,
+  type GoalPresetKey,
+} from '@/utils/goalUtils';
+import { PROTEIN_PRESETS, getAgeProteinMinimum, type ProteinPresetId } from '@/config/proteinPresets';
+import { extractApiError } from '@/utils/apiError';
+import { cn } from '@/utils/cn';
+
+/**
+ * Onboarding wizard. Endowed progress: the bar starts at 25% because
+ * creating the account already counts as the first step. Each screen
+ * offers a handful of obvious choices with a recommended smart default
+ * preselected, so finishing takes under a minute.
+ */
+
+const GOAL_KEYS: GoalPresetKey[] = ['lose-fast', 'lose-moderate', 'lose-slow', 'maintain', 'gain'];
+const TOTAL_STEPS = 4; // account (done), body, goal, protein
+
+const num = (raw: string): number | null => {
+  if (raw.trim() === '') return null;
+  const n = Number(raw.replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+};
 
 export default function OnboardingPage() {
   const { t } = useTranslation();
-  const { weightUnit, energyUnit } = useUnits();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const queryClient = useQueryClient();
+  const { logout } = useAuth();
+  const { weightUnit } = useUnits();
 
-  const [form, setForm] = useState({
-    currentWeightKg: "",
-    heightCm: "",
-    age: "",
-    biologicalSex: "",
-    bmrKcal: "",
-    bodyFatPercent: "",
-    autoCalculateBMR: true,
-    autoCalculateBodyFat: true,
-    dailyBaseGoalKcal: "-500",
-    proteinGoalGrams: "",
-    proteinPresetId: "muscle-gain",
-    autoCalculateProteinGoal: true,
-    country: "",
+  const [step, setStep] = useState(0); // 0=body, 1=goal, 2=protein, 3=summary
+  const [weight, setWeight] = useState('');
+  const [height, setHeight] = useState('');
+  const [age, setAge] = useState('');
+  const [sex, setSex] = useState<'M' | 'F' | ''>('');
+  const [goalKey, setGoalKey] = useState<GoalPresetKey>('lose-moderate');
+  const [proteinId, setProteinId] = useState<ProteinPresetId>('everyday');
+  const [error, setError] = useState<string | null>(null);
+
+  const w = num(weight);
+  const h = num(height);
+  const a = num(age);
+  const weightKg = w !== null ? Math.round(displayToKg(w, weightUnit) * 10) / 10 : null;
+
+  const goal = GOAL_PRESETS.find((p) => p.key === goalKey)!;
+  const proteinPreset = PROTEIN_PRESETS.find((p) => p.id === proteinId)!;
+  const proteinGrams =
+    weightKg !== null
+      ? Math.round(weightKg * Math.max(proteinPreset.gramsPerKg, getAgeProteinMinimum(a ?? 30)))
+      : null;
+
+  // Local preview with the same formulas the server uses (Mifflin-St Jeor)
+  const bmrPreview = (() => {
+    if (weightKg === null || h === null) return null;
+    const offset = sex === 'M' ? 5 : sex === 'F' ? -161 : -78;
+    return Math.round(10 * weightKg + 6.25 * h - 5 * (a ?? 30) + offset);
+  })();
+  const maintenancePreview = bmrPreview !== null && weightKg !== null
+    ? Math.round(bmrPreview + 4.8 * weightKg)
+    : null;
+  const budgetPreview = maintenancePreview !== null
+    ? maintenancePreview + Number(goal.kcal)
+    : null;
+
+  const save = useMutation({
+    mutationFn: () =>
+      profileService
+        .update({
+          currentWeightKg: weightKg,
+          heightCm: h,
+          age: a,
+          biologicalSex: sex,
+          autoCalculateBMR: true,
+          autoCalculateBodyFat: true,
+          dailyBaseGoalKcal: Number(goal.kcal),
+          proteinGoalGrams: proteinGrams,
+          autoCalculateProteinGoal: proteinGrams === null,
+          calorieDisplayMode: 'adjusted',
+          minCaloriesSafeguardEnabled: true,
+          sleepHours: 8,
+          neatHours: 3,
+        })
+        .then((r) => r.data),
+    onSuccess: (profile) => {
+      queryClient.setQueryData(queryKeys.profile(), profile);
+      navigate('/today', { replace: true });
+    },
+    onError: (err) =>
+      setError(extractApiError(err, t('onboarding.save_error', 'Could not save your profile. Check your connection and try again.'))),
   });
 
-  function set(field: string, value: string | boolean) {
-    setForm((prev) => ({ ...prev, [field]: value }));
-    setFieldErrors((prev) => {
-      if (!prev[field]) return prev;
-      const next = { ...prev };
-      delete next[field];
-      return next;
-    });
-  }
+  const stepValid =
+    step !== 0 ||
+    ((w === null || (w > 0 && w < 1200)) &&
+      (h === null || (h > 0 && h < 300)) &&
+      (a === null || (a >= 1 && a <= 150)));
 
-  const estimate = useMemo(() => {
-    const weight = parseFloat(form.currentWeightKg);
-    const height = parseFloat(form.heightCm);
-    const age = parseInt(form.age);
-    const sex = form.biologicalSex;
-
-    if (!weight || !height || !age || !sex) return null;
-
-    const sexOffset = sex === "M" ? 5 : -161;
-    const bmr = Math.round(10 * weight + 6.25 * height - 5 * age + sexOffset);
-    const maintenance = Math.round(bmr + 4.8 * weight);
-    const goalKcal = parseFloat(form.dailyBaseGoalKcal) || 0;
-    const dailyTarget = Math.round(maintenance + goalKcal);
-
-    const protein =
-      !form.autoCalculateProteinGoal && form.proteinGoalGrams
-        ? Math.round(parseFloat(form.proteinGoalGrams))
-        : Math.round(weight * 2.0);
-
-    const heightM = height / 100;
-    const bmi = weight / (heightM * heightM);
-    const sexFactor = sex === "M" ? 1 : 0;
-    const bodyFat = Math.round((1.20 * bmi + 0.23 * age - 10.8 * sexFactor - 5.4) * 10) / 10;
-
-    return { maintenance, dailyTarget, protein, bmr, bodyFat };
-  }, [
-    form.currentWeightKg,
-    form.heightCm,
-    form.age,
-    form.biologicalSex,
-    form.dailyBaseGoalKcal,
-    form.autoCalculateProteinGoal,
-    form.proteinGoalGrams,
-  ]);
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-
-    const errors: Record<string, string> = {};
-    const weight = parseFloat(form.currentWeightKg);
-    const height = parseFloat(form.heightCm);
-
-    if (form.currentWeightKg && (isNaN(weight) || weight <= 0)) {
-      errors.currentWeightKg = t('profile.validation_weight_empty');
-    } else if (form.currentWeightKg && weight > 500) {
-      errors.currentWeightKg = t('profile.validation_weight_high');
-    }
-
-    if (form.heightCm && (isNaN(height) || height <= 0)) {
-      errors.heightCm = t('profile.validation_height_empty');
-    } else if (form.heightCm && height > 300) {
-      errors.heightCm = t('profile.validation_height_high');
-    }
-
-    if (form.age) {
-      const age = parseInt(form.age);
-      if (isNaN(age) || age < 1) errors.age = t('onboarding.age_low');
-      else if (age > 150) errors.age = t('onboarding.age_high');
-    }
-    if (!form.autoCalculateBMR) {
-      const bmr = parseFloat(form.bmrKcal);
-      if (!form.bmrKcal || !bmr || bmr <= 0) {
-        errors.bmrKcal = t('onboarding.advanced_bmr_hint');
-      }
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      return;
-    }
-    setFieldErrors({});
-
-    // Resolve the final protein grams from the current (validated) weight so
-    // a stale computedGrams value stored when the preset was first clicked
-    // (possibly before weight was entered) can never reach the API.
-    let resolvedProteinGrams: number | null = null;
-    if (!form.autoCalculateProteinGoal) {
-      if (form.proteinPresetId) {
-        const preset = PROTEIN_PRESETS.find((p) => p.id === form.proteinPresetId);
-        const ageNum = form.age ? parseInt(form.age) : NaN;
-        const ageMin = !isNaN(ageNum) && ageNum > 0 ? getAgeProteinMinimum(ageNum) : 0;
-        if (preset) resolvedProteinGrams = Math.round(weight * Math.max(preset.gramsPerKg, ageMin));
-      } else {
-        resolvedProteinGrams = form.proteinGoalGrams ? parseFloat(form.proteinGoalGrams) : null;
-      }
-    }
-
-    const data: UserProfileRequest = {
-      currentWeightKg: form.currentWeightKg ? weight : null,
-      heightCm: form.heightCm ? height : null,
-      age: form.age ? parseInt(form.age) : null,
-      biologicalSex: form.biologicalSex || null,
-      bmrKcal: form.bmrKcal ? parseFloat(form.bmrKcal) : null,
-      bodyFatPercent: form.bodyFatPercent ? parseFloat(form.bodyFatPercent) : null,
-      autoCalculateBMR: form.autoCalculateBMR,
-      autoCalculateBodyFat: form.autoCalculateBodyFat,
-      dailyBaseGoalKcal: form.dailyBaseGoalKcal ? parseFloat(form.dailyBaseGoalKcal) : null,
-      proteinGoalGrams: resolvedProteinGrams,
-      autoCalculateProteinGoal: form.autoCalculateProteinGoal,
-      country: form.country || null,
-      calorieDisplayMode: 'net',
-      minCaloriesSafeguardEnabled: true,
-      sleepHours: 8,
-      neatHours: 3,
-    };
-
-    setLoading(true);
-    try {
-      await profileService.update(data);
-      navigate("/today", { replace: true });
-    } catch (err) {
-      setError(extractApiError(err, t('onboarding.server_error')));
-    } finally {
-      setLoading(false);
-    }
-  }
+  const progress = (step + 1) / (TOTAL_STEPS + 1);
 
   return (
-    <div className="w-full min-w-0">
-      <div className="text-center mb-4 sm:mb-8 max-w-xl mx-auto">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/40">
-          <svg className="h-6 w-6 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
-          </svg>
+    <main className="mx-auto max-w-md min-h-dvh px-5 pt-6 pb-10 pt-safe flex flex-col">
+      <header className="flex items-center gap-3">
+        {step > 0 ? (
+          <IconButton icon="arrowLeft" label={t('common.back', 'Back')} onClick={() => setStep(step - 1)} />
+        ) : (
+          <span className="w-11" />
+        )}
+        <div className="flex-1">
+          <ProgressBar progress={progress} label={t('onboarding.progress_aria', 'Setup progress')} />
         </div>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">{t('onboarding.title')}</h1>
-        <p className="mt-3 text-base text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-          {t('onboarding.subtitle')}
-        </p>
+        <button
+          type="button"
+          className="pressable text-[13px] font-semibold text-ink-3 px-1"
+          onClick={() => logout()}
+        >
+          {t('profile.row_logout', 'Sign out')}
+        </button>
+      </header>
+      <p className="mt-2 text-[12px] font-semibold text-primary-soft-ink text-center">
+        {step < 3
+          ? t('onboarding.progress_note', 'Account created. You are already {{pct}}% done.', {
+              pct: Math.round(progress * 100),
+            })
+          : t('onboarding.progress_almost', 'Almost there, one tap to go')}
+      </p>
+
+      <div className="flex-1 mt-6">
+        {step === 0 && (
+          <div className="space-y-4">
+            <div>
+              <h1 className="text-xl font-extrabold text-ink">
+                {t('onboarding.body_title', 'A little about you')}
+              </h1>
+              <p className="text-sm text-ink-2 mt-1">
+                {t('onboarding.body_sub', 'This sizes your daily calorie budget. You can change everything later.')}
+              </p>
+            </div>
+            <Card className="space-y-3.5">
+              <div className="grid grid-cols-2 gap-3">
+                <DecimalField
+                  label={t('profile.weight', 'Weight')}
+                  suffix={weightLabel(weightUnit)}
+                  placeholder={weightUnit === 'lbs' ? '155' : '70'}
+                  value={weight}
+                  onValueChange={setWeight}
+                />
+                <DecimalField
+                  label={t('profile.height', 'Height')}
+                  suffix="cm"
+                  placeholder="175"
+                  value={height}
+                  onValueChange={setHeight}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field
+                  label={t('profile.age', 'Age')}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="30"
+                  value={age}
+                  onChange={(e) => setAge(e.target.value.replace(/\D/g, ''))}
+                />
+                <div>
+                  <p className="text-[13px] font-semibold text-ink-2 mb-1.5">{t('profile.sex', 'Sex')}</p>
+                  <SegmentedControl<'M' | 'F' | ''>
+                    aria-label={t('profile.sex', 'Sex')}
+                    options={[
+                      { value: 'M', label: t('profile.sex_m', 'M') },
+                      { value: 'F', label: t('profile.sex_f', 'F') },
+                      { value: '', label: t('profile.sex_none', 'Skip') },
+                    ]}
+                    value={sex}
+                    onChange={setSex}
+                  />
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div className="space-y-4">
+            <div>
+              <h1 className="text-xl font-extrabold text-ink">
+                {t('onboarding.goal_title', 'What is your goal?')}
+              </h1>
+              <p className="text-sm text-ink-2 mt-1">
+                {t('onboarding.goal_sub', 'Most members pick a steady pace. Slow and consistent wins.')}
+              </p>
+            </div>
+            <div className="space-y-2" role="radiogroup" aria-label={t('onboarding.goal_title', 'What is your goal?')}>
+              {GOAL_KEYS.map((key) => {
+                const p = GOAL_PRESETS.find((g) => g.key === key)!;
+                const active = goalKey === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setGoalKey(key)}
+                    className={cn(
+                      'pressable w-full rounded-card px-4 py-3 text-left flex items-center gap-3',
+                      active ? 'bg-primary-soft ring-2 ring-primary/60' : 'bg-card',
+                    )}
+                  >
+                    <span className="flex-1">
+                      <span className="flex items-center gap-2">
+                        <span className="text-[15px] font-bold text-ink">{t(`goal.${p.key}`, p.label)}</span>
+                        {key === 'lose-moderate' && (
+                          <span className="text-[10px] font-extrabold uppercase tracking-wide bg-primary text-on-primary rounded-full px-2 py-0.5">
+                            {t('onboarding.goal_popular', '62% choose this')}
+                          </span>
+                        )}
+                      </span>
+                      <span className="block text-[12px] text-ink-2 mt-0.5">
+                        {formatKgPerWeekShort(p.kgPerWeek, weightUnit)}
+                      </span>
+                    </span>
+                    {active && <Icon name="checkCircle" size={20} className="text-primary" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-4">
+            <div>
+              <h1 className="text-xl font-extrabold text-ink">
+                {t('onboarding.protein_title', 'Protein matters too')}
+              </h1>
+              <p className="text-sm text-ink-2 mt-1">
+                {t('onboarding.protein_sub', 'It keeps you full and protects muscle. Pick what fits your routine.')}
+              </p>
+            </div>
+            <div className="space-y-2" role="radiogroup" aria-label={t('onboarding.protein_title', 'Protein matters too')}>
+              {PROTEIN_PRESETS.map((p) => {
+                const active = proteinId === p.id;
+                const grams =
+                  weightKg !== null
+                    ? Math.round(weightKg * Math.max(p.gramsPerKg, getAgeProteinMinimum(a ?? 30)))
+                    : null;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setProteinId(p.id)}
+                    className={cn(
+                      'pressable w-full rounded-card px-4 py-3 text-left flex items-center gap-3',
+                      active ? 'bg-primary-soft ring-2 ring-primary/60' : 'bg-card',
+                    )}
+                  >
+                    <span className="flex-1">
+                      <span className="text-[15px] font-bold text-ink">{t(`protein.${p.id}`, p.label)}</span>
+                      <span className="block text-[12px] text-ink-2 mt-0.5">
+                        {p.gramsPerKg} g/kg{grams !== null ? ` = ${grams} g` : ''}
+                      </span>
+                    </span>
+                    {active && <Icon name="checkCircle" size={20} className="text-primary" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="space-y-4">
+            <div className="text-center">
+              <span className="inline-flex w-14 h-14 rounded-2xl bg-primary-soft text-primary-soft-ink items-center justify-center animate-pop">
+                <Icon name="checkCircle" size={28} />
+              </span>
+              <h1 className="mt-3 text-xl font-extrabold text-ink">
+                {t('onboarding.summary_title', 'Your plan is ready')}
+              </h1>
+              <p className="text-sm text-ink-2 mt-1">
+                {t('onboarding.summary_sub', 'Here is what your week looks like. Log your first meal to make it real.')}
+              </p>
+            </div>
+            <Card className="space-y-3">
+              <SummaryRow
+                icon="target"
+                label={t('onboarding.summary_goal', 'Goal')}
+                value={t(`goal.${goal.key}`, goal.label)}
+              />
+              {budgetPreview !== null && (
+                <SummaryRow
+                  icon="chart"
+                  label={t('onboarding.summary_budget', 'Daily budget')}
+                  value={`~${budgetPreview.toLocaleString()} kcal`}
+                />
+              )}
+              {proteinGrams !== null && (
+                <SummaryRow
+                  icon="zap"
+                  label={t('onboarding.summary_protein', 'Protein target')}
+                  value={`${proteinGrams} g`}
+                />
+              )}
+              {weightKg !== null && (
+                <SummaryRow
+                  icon="scale"
+                  label={t('profile.weight', 'Weight')}
+                  value={`${Math.round(kgToDisplay(weightKg, weightUnit) * 10) / 10} ${weightLabel(weightUnit)}`}
+                />
+              )}
+              {budgetPreview === null && (
+                <p className="text-[13px] text-ink-2 leading-relaxed">
+                  {t('onboarding.summary_no_body', 'You skipped your body details, so your budget stays locked for now. Add them any time in Profile.')}
+                </p>
+              )}
+            </Card>
+          </div>
+        )}
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
-        {error && (
-          <div className="rounded-md bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-400">{error}</div>
-        )}
+      {error && <InlineError message={error} className="mb-2" />}
 
-        {/* ── Section 1: Basic details ── */}
-        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5 sm:p-8 shadow-sm space-y-4">
-          <div className="flex items-start gap-3">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white flex-shrink-0 mt-0.5">1</span>
-            <div>
-              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('onboarding.section1_title')}</h2>
-              <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{t('onboarding.section1_subtitle')}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('onboarding.weight_label')}</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                pattern="[0-9]*[.,]?[0-9]*"
-                value={weightUnit === "lbs" ? (form.currentWeightKg ? String(Math.round(kgToDisplay(parseFloat(form.currentWeightKg), "lbs") * 10) / 10) : "") : form.currentWeightKg}
-                onChange={(e) => { const raw = e.target.value.replace(",", "."); set("currentWeightKg", weightUnit === "lbs" ? (raw ? String(displayToKg(parseFloat(raw), "lbs")) : "") : e.target.value); }}
-                placeholder={t('onboarding.weight_placeholder')}
-                className={`mt-1 block w-full rounded-md border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm shadow-sm focus:ring-1 focus:outline-none ${fieldErrors.currentWeightKg ? "border-red-300 dark:border-red-600 focus:border-red-500 focus:ring-red-500" : "border-gray-300 dark:border-gray-600 focus:border-indigo-500 focus:ring-indigo-500"}`}
-              />
-              {fieldErrors.currentWeightKg && <p className="mt-1 text-xs text-red-600">{fieldErrors.currentWeightKg}</p>}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('onboarding.height_label')}</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                pattern="[0-9]*[.,]?[0-9]*"
-                value={form.heightCm}
-                onChange={(e) => set("heightCm", e.target.value)}
-                placeholder={t('onboarding.height_placeholder')}
-                className={`mt-1 block w-full rounded-md border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm shadow-sm focus:ring-1 focus:outline-none ${fieldErrors.heightCm ? "border-red-300 dark:border-red-600 focus:border-red-500 focus:ring-red-500" : "border-gray-300 dark:border-gray-600 focus:border-indigo-500 focus:ring-indigo-500"}`}
-              />
-              {fieldErrors.heightCm && <p className="mt-1 text-xs text-red-600">{fieldErrors.heightCm}</p>}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('onboarding.age_label')}</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={form.age}
-                onChange={(e) => set("age", e.target.value)}
-                className={`mt-1 block w-full rounded-md border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm shadow-sm focus:ring-1 focus:outline-none ${fieldErrors.age ? "border-red-300 dark:border-red-600 focus:border-red-500 focus:ring-red-500" : "border-gray-300 dark:border-gray-600 focus:border-indigo-500 focus:ring-indigo-500"}`}
-              />
-              {fieldErrors.age && <p className="mt-1 text-xs text-red-600">{fieldErrors.age}</p>}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('onboarding.sex_label')}</label>
-              <select
-                value={form.biologicalSex}
-                onChange={(e) => set("biologicalSex", e.target.value)}
-                className={`mt-1 block w-full rounded-md border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm shadow-sm focus:ring-1 focus:outline-none ${fieldErrors.biologicalSex ? "border-red-300 dark:border-red-600 focus:border-red-500 focus:ring-red-500" : "border-gray-300 dark:border-gray-600 focus:border-indigo-500 focus:ring-indigo-500"}`}
-              >
-                <option value="">{t('common.prefer_not_to_say')}</option>
-                <option value="M">{t('common.male')}</option>
-                <option value="F">{t('common.female')}</option>
-              </select>
-              {fieldErrors.biologicalSex && <p className="mt-1 text-xs text-red-600">{fieldErrors.biologicalSex}</p>}
-            </div>
-          </div>
-        </div>
-
-        {/* ── Section 2: Your goal ── */}
-        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5 sm:p-8 shadow-sm space-y-4">
-          <div className="flex items-start gap-3">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white flex-shrink-0 mt-0.5">2</span>
-            <div>
-              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('onboarding.section2_title')}</h2>
-              <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{t('onboarding.section2_subtitle')}</p>
-            </div>
-          </div>
-
-          <GoalSelector
-            selectedKcal={form.dailyBaseGoalKcal}
-            onGoalChange={(kcal) => set("dailyBaseGoalKcal", kcal)}
-            disabled={loading}
-          />
-
-          {/* Protein target */}
-          <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
-            <p className="mb-3 text-sm font-medium text-gray-700 dark:text-gray-300">{t('onboarding.protein_label')}</p>
-            <ProteinPresetSelector
-              savedPresetId={form.proteinPresetId}
-              savedGrams={form.proteinGoalGrams}
-              weightKg={form.currentWeightKg}
-              goalKcal={form.dailyBaseGoalKcal}
-              age={form.age}
-              disabled={loading}
-              onPresetSelect={(presetId: ProteinPresetId, computedGrams: string) => {
-                setForm((prev) => ({
-                  ...prev,
-                  proteinPresetId: presetId,
-                  proteinGoalGrams: computedGrams,
-                  autoCalculateProteinGoal: false,
-                }));
-              }}
-              onCustomApply={(grams: string) => {
-                setForm((prev) => ({
-                  ...prev,
-                  proteinPresetId: "",
-                  proteinGoalGrams: grams,
-                  autoCalculateProteinGoal: false,
-                }));
-              }}
-            />
-          </div>
-        </div>
-
-        {/* ── Section 3: Optional details ── */}
-        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5 sm:p-8 shadow-sm space-y-4">
-          <div className="flex items-start gap-3">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white flex-shrink-0 mt-0.5">3</span>
-            <div>
-              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('onboarding.section3_title')}</h2>
-              <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{t('onboarding.section3_subtitle')}</p>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('onboarding.country_label')}</label>
-            <input
-              type="text"
-              value={form.country}
-              onChange={(e) => set("country", e.target.value)}
-              placeholder={t('onboarding.country_placeholder')}
-              className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-            />
-            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t('onboarding.section3_country_hint')}</p>
-          </div>
-
-          {/* ── Advanced options (collapsible) ── */}
-          <div className="pt-3 border-t border-gray-100 dark:border-gray-800">
-            <button
-              type="button"
-              onClick={() => setShowAdvanced((v) => !v)}
-              className="flex items-center gap-1.5 py-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
-            >
-              <svg
-                className={`h-3.5 w-3.5 transition-transform ${showAdvanced ? "rotate-90" : ""}`}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-              {showAdvanced ? t('onboarding.advanced_toggle_hide') : t('onboarding.advanced_toggle')}
-            </button>
-            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t('onboarding.section3_hint')}</p>
-
-            {showAdvanced && (
-              <div className="mt-4 space-y-5">
-                {/* BMR override */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {form.autoCalculateBMR ? t('onboarding.bmr_label_full') : t('onboarding.bmr_label_with_unit')}
-                  </label>
-                  {form.autoCalculateBMR ? (
-                    <>
-                      <div className="mt-1.5 flex items-center gap-2 rounded-md border border-indigo-100 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-950/40 px-3 py-2.5 text-sm">
-                        <svg className="h-4 w-4 text-indigo-500 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                        <span className="text-gray-600 dark:text-gray-400">
-                          {estimate
-                            ? <>{t('onboarding.bmr_calculated', { kcal: Math.round(kcalToDisplay(estimate.bmr, energyUnit)).toLocaleString(), energyUnit: energyRateLabel(energyUnit) })}</>
-                            : t('onboarding.bmr_auto_note')}
-                        </span>
-                      </div>
-                      <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">{t('onboarding.bmr_info')}</p>
-                      <button type="button" onClick={() => set("autoCalculateBMR", false)} className="mt-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
-                        {t('onboarding.bmr_enter')}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={energyUnit === "kJ" ? String(Math.round(kcalToDisplay(parseFloat(form.bmrKcal) || 0, "kJ"))) : form.bmrKcal}
-                        onChange={(e) => set("bmrKcal", energyUnit === "kJ" ? String(displayToKcal(parseFloat(e.target.value) || 0, "kJ")) : e.target.value)}
-                        placeholder={energyUnit === "kJ" ? "e.g. 7113" : "e.g. 1700"}
-                        className={`mt-1 block w-full rounded-md border bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm shadow-sm focus:ring-1 focus:outline-none ${fieldErrors.bmrKcal ? "border-red-300 dark:border-red-600 focus:border-red-500 focus:ring-red-500" : "border-gray-300 dark:border-gray-600 focus:border-indigo-500 focus:ring-indigo-500"}`}
-                      />
-                      {fieldErrors.bmrKcal && <p className="mt-1 text-xs text-red-600">{fieldErrors.bmrKcal}</p>}
-                      <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">{t('onboarding.bmr_info')}</p>
-                      <button type="button" onClick={() => set("autoCalculateBMR", true)} className="mt-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
-                        {t('onboarding.bmr_calc_for_me')}
-                      </button>
-                    </>
-                  )}
-                </div>
-
-                {/* Body fat override */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t('onboarding.body_fat_label')}{!form.autoCalculateBodyFat && " — %"}
-                  </label>
-                  {form.autoCalculateBodyFat ? (
-                    <>
-                      <div className="mt-1.5 flex items-center gap-2 rounded-md border border-indigo-100 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-950/40 px-3 py-2.5 text-sm">
-                        <svg className="h-4 w-4 text-indigo-500 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                        <span className="text-gray-600 dark:text-gray-400">
-                          {estimate
-                            ? <>{t('onboarding.body_fat_calculated', { pct: estimate.bodyFat.toFixed(1) })}</>
-                            : t('onboarding.body_fat_auto_note')}
-                        </span>
-                      </div>
-                      <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">{t('onboarding.body_fat_info')}</p>
-                      <button type="button" onClick={() => set("autoCalculateBodyFat", false)} className="mt-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
-                        {t('onboarding.body_fat_enter')}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        pattern="[0-9]*[.,]?[0-9]*"
-                        value={form.bodyFatPercent}
-                        onChange={(e) => set("bodyFatPercent", e.target.value)}
-                        placeholder="e.g. 25"
-                        className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                      />
-                      <p className="mt-1.5 text-xs text-gray-400 dark:text-gray-500">{t('onboarding.body_fat_optional_info')}</p>
-                      <button type="button" onClick={() => set("autoCalculateBodyFat", true)} className="mt-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
-                        {t('onboarding.body_fat_calc_for_me')}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {estimate && (
-          <div className="rounded-xl border border-indigo-200 dark:border-indigo-700 bg-gradient-to-br from-indigo-50 dark:from-indigo-950/40 to-white dark:to-gray-900 p-5 sm:p-8 shadow-sm space-y-3">
-            <div className="flex items-center gap-2">
-              <svg className="h-5 w-5 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
-              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('onboarding.summary_title')}</h2>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">{t('onboarding.summary_maintain')}</span>
-                <span className="font-semibold text-gray-900 dark:text-gray-100">{Math.round(kcalToDisplay(estimate.maintenance, energyUnit)).toLocaleString()} {energyRateLabel(energyUnit)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">{t('onboarding.summary_reach_goal')}</span>
-                <span className="font-semibold text-indigo-600">{Math.round(kcalToDisplay(estimate.dailyTarget, energyUnit)).toLocaleString()} {energyRateLabel(energyUnit)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">{t('onboarding.protein_label')}</span>
-                <span className="font-semibold text-gray-900 dark:text-gray-100">{estimate.protein} g</span>
-              </div>
-            </div>
-            <p className="text-xs text-gray-400 dark:text-gray-500 pt-3 border-t border-indigo-100 dark:border-indigo-800">{t('onboarding.summary_note_bottom')}</p>
-          </div>
-        )}
-
-        <div className="space-y-3">
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-xl bg-indigo-600 px-6 py-3.5 text-base font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+      <div className="mt-6">
+        {step < 3 ? (
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            disabled={!stepValid}
+            onClick={() => setStep(step + 1)}
           >
-            {loading ? t('onboarding.submitting_text') : t('onboarding.submit')}
+            {t('common.continue', 'Continue')}
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            loading={save.isPending}
+            onClick={() => save.mutate()}
+          >
+            {t('onboarding.finish', 'Start tracking')}
+          </Button>
+        )}
+        {step === 0 && (
+          <button
+            type="button"
+            className="pressable w-full text-center text-[13px] font-semibold text-ink-3 py-3 mt-1"
+            onClick={() => setStep(1)}
+          >
+            {t('onboarding.skip_body', 'Skip for now')}
           </button>
-          <p className="text-center text-xs text-gray-400 dark:text-gray-500">{t('onboarding.summary_note_bottom')}</p>
-        </div>
-      </form>
+        )}
+      </div>
+    </main>
+  );
+}
+
+function SummaryRow({ icon, label, value }: { icon: IconName; label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-8 h-8 rounded-xl bg-inset text-ink-2 flex items-center justify-center shrink-0">
+        <Icon name={icon} size={16} />
+      </span>
+      <span className="flex-1 text-[14px] font-semibold text-ink-2">{label}</span>
+      <span className="text-[15px] font-bold text-ink">{value}</span>
     </div>
   );
 }

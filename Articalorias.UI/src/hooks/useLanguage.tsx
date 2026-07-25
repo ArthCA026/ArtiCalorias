@@ -18,7 +18,9 @@ function detectDefaultLanguage(): Language {
     if (stored === "en" || stored === "es") return stored;
     // Fall back to browser language
     if (navigator.language.startsWith("es")) return "es";
-  } catch (_) {}
+  } catch {
+    /* storage unavailable */
+  }
   return "en";
 }
 
@@ -29,7 +31,9 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     i18n.changeLanguage(language);
     try {
       localStorage.setItem(STORAGE_KEY, language);
-    } catch (_) {}
+    } catch {
+      /* storage unavailable */
+    }
   }, [language]);
 
   function setLanguage(lang: Language) {
@@ -43,6 +47,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- provider + hook belong together
 export function useLanguage(): LanguageContextValue {
   const ctx = useContext(LanguageContext);
   if (!ctx) throw new Error("useLanguage must be used inside LanguageProvider");

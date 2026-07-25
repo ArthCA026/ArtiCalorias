@@ -1,0 +1,121 @@
+/* ============================================================
+   ArtiCalorias Design Tokens
+   ------------------------------------------------------------
+   Single source of truth for every color in the app.
+   Change a variable here and the whole UI follows.
+
+   Structure:
+     1. Light theme (default, on :root)
+     2. Dark theme (on .dark)
+
+   Naming:
+     --t-app        page background
+     --t-card       card background (slightly darker than page in
+                    light mode, slightly lighter in dark mode;
+                    cards have NO borders by design)
+     --t-inset      nested wells inside cards (inputs, list rows)
+     --t-press      pressed/active surface
+     --t-ink        primary text
+     --t-ink-2      secondary text
+     --t-ink-3      tertiary/hint text
+     --t-primary    brand action color
+     --t-*-soft     tinted background for the matching color
+   ============================================================ */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --t-app: #f7f8fa;
+  --t-card: #eef0f4;
+  --t-inset: #e3e7ed;
+  --t-press: #dde1e8;
+  --t-overlay: rgb(18 21 26 / 0.48);
+  --t-tabbar: #fbfcfe;
+
+  /* Text */
+  --t-ink: #171a1f;
+  --t-ink-2: #59626e;
+  --t-ink-3: #8b95a2;
+  --t-hairline: #dbe0e7;
+
+  /* Brand / primary action */
+  --t-primary: #0ba06b;
+  --t-primary-press: #08865a;
+  --t-on-primary: #ffffff;
+  --t-primary-soft: #dbf3e8;
+  --t-primary-soft-ink: #077a52;
+
+  /* Status */
+  --t-success: #16a34a;
+  --t-success-soft: #dcf3e3;
+  --t-warning: #d97706;
+  --t-warning-soft: #fcecd4;
+  --t-danger: #dc2626;
+  --t-danger-soft: #fbe2e2;
+
+  /* Domain accents */
+  --t-protein: #5b64ec;
+  --t-protein-soft: #e3e5fb;
+  --t-streak: #ea8c00;
+  --t-streak-soft: #fdeed2;
+  --t-premium: #b8860b;
+  --t-premium-soft: #f6ecd2;
+
+  /* Progress ring gradient (goal gradient effect) */
+  --t-ring-from: #38d08f;
+  --t-ring-to: #0ba06b;
+  --t-ring-track: #dde1e8;
+
+  /* Focus */
+  --t-focus: rgb(11 160 107 / 0.35);
+}
+
+.dark {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --t-app: #0c0e11;
+  --t-card: #16191f;
+  --t-inset: #20242c;
+  --t-press: #262b34;
+  --t-overlay: rgb(0 0 0 / 0.62);
+  --t-tabbar: #14171c;
+
+  /* Text */
+  --t-ink: #f2f4f7;
+  --t-ink-2: #a4adba;
+  --t-ink-3: #6d7684;
+  --t-hairline: #262c35;
+
+  /* Brand / primary action */
+  --t-primary: #22c68a;
+  --t-primary-press: #1cb078;
+  --t-on-primary: #05281a;
+  --t-primary-soft: #12352a;
+  --t-primary-soft-ink: #52dfa9;
+
+  /* Status */
+  --t-success: #34d17d;
+  --t-success-soft: #12331f;
+  --t-warning: #f0a13c;
+  --t-warning-soft: #362610;
+  --t-danger: #f47171;
+  --t-danger-soft: #3a1c1c;
+
+  /* Domain accents */
+  --t-protein: #8a92f8;
+  --t-protein-soft: #23264a;
+  --t-streak: #f5a623;
+  --t-streak-soft: #362a12;
+  --t-premium: #e3b341;
+  --t-premium-soft: #33290f;
+
+  /* Progress ring gradient */
+  --t-ring-from: #2fdb96;
+  --t-ring-to: #16a374;
+  --t-ring-track: #20242c;
+
+  /* Focus */
+  --t-focus: rgb(34 198 138 / 0.4);
+}

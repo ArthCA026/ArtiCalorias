@@ -301,6 +301,7 @@ public class DailyLogController : ControllerBase
         ProteinRemainingGrams = d.ProteinRemainingGrams,
         SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
         SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams,
+        SnapshotDailyBaseGoalKcal = d.SnapshotDailyBaseGoalKcal,
         HasCalorieBudgetEstimate = d.SnapshotWeightKg.HasValue && d.SnapshotHeightCm.HasValue
     };
 
@@ -345,6 +346,7 @@ public class DailyLogController : ControllerBase
         ProteinRemainingGrams = d.ProteinRemainingGrams,
         SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
         SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams,
+        SnapshotDailyBaseGoalKcal = d.SnapshotDailyBaseGoalKcal,
         FoodEntries = foods.Select(MapFoodToResponse).ToList(),
         ActivityEntries = activities.Select(MapActivityToResponse).ToList(),
         SleepCaloriesKcal = d.SleepCaloriesKcal,
@@ -353,5 +355,22 @@ public class DailyLogController : ControllerBase
         SnapshotNeatHours = d.SnapshotNeatHours,
         SnapshotWeightKg = d.SnapshotWeightKg,
         SnapshotHeightCm = d.SnapshotHeightCm,
+        SnapshotBMRKcal = d.SnapshotBMRKcal,
+        SnapshotBodyFatPercent = d.SnapshotBodyFatPercent,
+        TotalFatGrams = d.TotalFatGrams,
+        TotalCarbsGrams = d.TotalCarbsGrams,
+        TotalAlcoholGrams = d.TotalAlcoholGrams,
+        TotalActivityCaloriesKcal = d.TotalActivityCaloriesKcal,
+        TEFKcal = d.TEFKcal,
+        HoursRemainingInDay = d.HoursRemainingInDay,
+        IdleTimeCaloriesKcal = d.IdleTimeCaloriesKcal,
+        NetBalanceKcal = d.NetBalanceKcal,
+        WeekStartDate = d.WeekStartDate,
+        WeekEndDate = d.WeekEndDate,
+        WeeklyTargetKcal = d.WeeklyTargetKcal,
+        WeeklyActualToDateKcal = d.WeeklyActualToDateKcal,
+        WeeklyExpectedToDateKcal = d.WeeklyExpectedToDateKcal,
+        WeeklyDifferenceKcal = d.WeeklyDifferenceKcal,
+        WeeklyRemainingTargetKcal = d.WeeklyRemainingTargetKcal,
     };
 }

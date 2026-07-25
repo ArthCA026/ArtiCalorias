@@ -1,100 +1,145 @@
-﻿import { useState } from "react";
-import type { FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
-import { useTranslation } from "react-i18next";
-import { useAuth } from "@/hooks/useAuth";
-import { authService } from "@/services/authService";
-import { extractApiError } from "@/utils/apiError";
-import AuthCard from "@/components/auth/AuthCard";
-import AlertBanner from "@/components/auth/AlertBanner";
-import FormField from "@/components/auth/FormField";
-import SubmitButton from "@/components/auth/SubmitButton";
+import { useState, type FormEvent } from 'react';
+import { Link, useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
+import { AxiosError } from 'axios';
+import { Card } from '@/components/ui/Card';
+import { Field, PasswordField } from '@/components/ui/Field';
+import { Button, IconButton } from '@/components/ui/Button';
+import { InlineError } from '@/components/ui/States';
+import { Icon } from '@/components/ui/Icon';
+import { useAuth } from '@/hooks/useAuth';
+import { authService } from '@/services/authService';
+import { extractApiError } from '@/utils/apiError';
+
+interface FieldErrors {
+  usernameOrEmail?: string;
+  password?: string;
+}
 
 export default function LoginPage() {
   const { t } = useTranslation();
-  const { login, sessionExpired, clearSessionExpired } = useAuth();
   const navigate = useNavigate();
+  const { login, sessionExpired, clearSessionExpired } = useAuth();
 
-  const [usernameOrEmail, setUsernameOrEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [serverError, setServerError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [touched, setTouched] = useState<{ usernameOrEmail: boolean; password: boolean }>({ usernameOrEmail: false, password: false });
+  const [usernameOrEmail, setUsernameOrEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
-  const usernameOrEmailError = !usernameOrEmail.trim() ? t('auth.login.username_error') : null;
-  const passwordError = !password.trim() ? t('auth.login.password_error') : null;
-
-  async function handleSubmit(e: FormEvent) {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (loading) return;
-    setSubmitted(true);
-    setServerError(null);
-    clearSessionExpired();
-
-    if (usernameOrEmailError || passwordError) return;
-
-    setLoading(true);
-    try {
-      const { data } = await authService.login({ usernameOrEmail, password });
-      login(data);
-      navigate("/today", { replace: true });
-    } catch (err) {
-      setServerError(extractApiError(err, t('auth.login.server_error')));
-    } finally {
-      setLoading(false);
+    const errors: FieldErrors = {};
+    if (!usernameOrEmail.trim()) {
+      errors.usernameOrEmail = t('auth.login.error_empty_username', 'Enter your username or email.');
     }
-  }
+    if (!password) {
+      errors.password = t('auth.login.error_empty_password', 'Enter your password.');
+    }
+    setFieldErrors(errors);
+    if (errors.usernameOrEmail || errors.password) return;
+
+    setApiError(null);
+    setPending(true);
+    try {
+      const data = await authService
+        .login({ usernameOrEmail: usernameOrEmail.trim(), password })
+        .then((r) => r.data);
+      login(data);
+      navigate('/today', { replace: true });
+    } catch (err) {
+      if (err instanceof AxiosError && err.response?.status === 401) {
+        setApiError(
+          t('auth.login.error_credentials', 'Wrong username or password. Check your details and try again.'),
+        );
+      } else {
+        setApiError(
+          extractApiError(
+            err,
+            t('auth.login.error_fallback', 'Could not sign you in. Check your connection and try again.'),
+          ),
+        );
+      }
+      setPending(false);
+    }
+  };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4" noValidate aria-busy={loading}>
-      <AuthCard
-        title={t('auth.login.title')}
-        subtitle={t('auth.login.subtitle')}
-        alerts={<>
-          {sessionExpired && (
-            <AlertBanner variant="warning">{t('auth.login.session_expired')}</AlertBanner>
-          )}
-          {serverError && <AlertBanner>{serverError}</AlertBanner>}
-        </>}
-      >
-        <FormField
-          id="login-username"
-          label={t('auth.login.username_label')}
-          autoComplete="username"
-          value={usernameOrEmail}
-          onChange={setUsernameOrEmail}
-          onBlur={() => setTouched((t) => ({ ...t, usernameOrEmail: true }))}
-          error={usernameOrEmailError}
-          showError={!!(usernameOrEmailError && (submitted || touched.usernameOrEmail))}
-        />
+    <div className="space-y-4">
+      {sessionExpired && (
+        <Card variant="soft" padded={false} role="status" className="flex items-center gap-2.5 p-3 pl-4">
+          <Icon name="info" size={19} className="text-primary-soft-ink shrink-0" />
+          <p className="flex-1 text-[13px] font-medium text-primary-soft-ink leading-snug">
+            {t('auth.login.session_expired', 'You were signed out for security. Sign in again.')}
+          </p>
+          <IconButton
+            icon="close"
+            label={t('auth.login.dismiss', 'Dismiss')}
+            size={36}
+            iconSize={16}
+            className="text-primary-soft-ink"
+            onClick={clearSessionExpired}
+          />
+        </Card>
+      )}
 
-        <FormField
-          id="login-password"
-          label={t('auth.login.password_label')}
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={setPassword}
-          onBlur={() => setTouched((t) => ({ ...t, password: true }))}
-          error={passwordError}
-          showError={!!(passwordError && (submitted || touched.password))}
-          showPasswordToggle
-          labelRight={
-            <Link to="/forgot-password" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 rounded-sm px-0.5">
-              {t('auth.login.forgot_password')}
-            </Link>
-          }
-        />
+      <Card>
+        <h2 className="text-lg font-bold text-ink mb-4">{t('auth.login.title', 'Welcome back')}</h2>
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          <Field
+            id="login-username"
+            name="username"
+            label={t('auth.login.username_label', 'Username or email')}
+            type="text"
+            autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            value={usernameOrEmail}
+            onChange={(e) => {
+              setUsernameOrEmail(e.target.value);
+              setFieldErrors((prev) => ({ ...prev, usernameOrEmail: undefined }));
+              setApiError(null);
+            }}
+            error={fieldErrors.usernameOrEmail}
+          />
+          <PasswordField
+            id="login-password"
+            name="password"
+            label={t('auth.login.password_label', 'Password')}
+            autoComplete="current-password"
+            showLabel={t('auth.common.show_password', 'Show password')}
+            hideLabel={t('auth.common.hide_password', 'Hide password')}
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setFieldErrors((prev) => ({ ...prev, password: undefined }));
+              setApiError(null);
+            }}
+            error={fieldErrors.password}
+          />
+          <div className="pt-1">
+            {apiError && <InlineError message={apiError} className="mb-3" />}
+            <Button type="submit" variant="primary" size="lg" fullWidth loading={pending}>
+              {t('auth.login.submit', 'Sign in')}
+            </Button>
+          </div>
+        </form>
+      </Card>
 
-        <SubmitButton loading={loading} text={t('auth.login.submit')} loadingText={t('auth.login.submitting')} />
-      </AuthCard>
-
-      <p className="text-center text-sm text-gray-500 dark:text-gray-400">
-        {t('auth.login.no_account')}{" "}
-        <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">{t('auth.login.create_account')}</Link>
-      </p>
-      <p className="text-center text-xs text-gray-300 dark:text-gray-600">v1.1.0</p>
-    </form>
+      <div className="text-center space-y-2.5 pt-1">
+        <p className="text-sm">
+          <Link to="/forgot-password" className="text-primary-soft-ink font-semibold">
+            {t('auth.login.forgot_link', 'Forgot your password?')}
+          </Link>
+        </p>
+        <p className="text-sm text-ink-2">
+          {t('auth.login.register_prompt', 'New here?')}{' '}
+          <Link to="/register" className="text-primary-soft-ink font-semibold">
+            {t('auth.login.register_link', 'Create an account')}
+          </Link>
+        </p>
+      </div>
+    </div>
   );
 }

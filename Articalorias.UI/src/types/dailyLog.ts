@@ -16,6 +16,7 @@ export interface DailyLogResponse {
   suggestedDailyAverageRemainingKcal: number;
 
   snapshotProteinGoalGrams: number;
+  snapshotDailyBaseGoalKcal: number;
   hasCalorieBudgetEstimate: boolean;
 }
 
@@ -31,4 +32,21 @@ export interface DailyDashboardResponse extends DailyLogResponse {
   hasCalorieBudgetEstimate: boolean;
   hasCalorieEstimate: boolean;
   hasProteinGoal: boolean;
+
+  // Macro split and expenditure detail (populated by the dashboard mapper)
+  totalFatGrams: number;
+  totalCarbsGrams: number;
+  totalAlcoholGrams: number;
+  totalActivityCaloriesKcal: number;
+  tefKcal: number;
+  netBalanceKcal: number;
+
+  // Weekly context (Monday-based week, populated by the dashboard mapper)
+  weekStartDate: string;
+  weekEndDate: string;
+  weeklyTargetKcal: number;
+  weeklyActualToDateKcal: number;
+  weeklyExpectedToDateKcal: number;
+  weeklyDifferenceKcal: number;
+  weeklyRemainingTargetKcal: number;
 }

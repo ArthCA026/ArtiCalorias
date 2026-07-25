@@ -1,68 +1,74 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from 'react';
 
-export type Theme = "system" | "light" | "dark";
+export type Theme = 'system' | 'light' | 'dark';
 
-const STORAGE_KEY = "ac-theme";
+const STORAGE_KEY = 'ac-theme';
 
 interface ThemeContextValue {
   theme: Theme;
+  /** The mode actually rendered right now */
+  resolved: 'light' | 'dark';
   setTheme: (theme: Theme) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
+function prefersDark(): boolean {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function resolve(theme: Theme): 'light' | 'dark' {
+  if (theme === 'system') return prefersDark() ? 'dark' : 'light';
+  return theme;
+}
+
 function applyTheme(theme: Theme) {
-  const root = document.documentElement;
-  if (theme === "dark") {
-    root.classList.add("dark");
-  } else if (theme === "light") {
-    root.classList.remove("dark");
-  } else {
-    // system: follow OS preference
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    root.classList.toggle("dark", prefersDark);
-  }
+  document.documentElement.classList.toggle('dark', resolve(theme) === 'dark');
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored === "light" || stored === "dark" || stored === "system") return stored;
-    } catch (_) {}
-    return "system";
+      if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
+    } catch {
+      /* storage unavailable */
+    }
+    return 'system';
   });
+  const [resolved, setResolved] = useState<'light' | 'dark'>(() => resolve(theme));
 
-  // Apply immediately when theme state changes
   useEffect(() => {
     applyTheme(theme);
+    setResolved(resolve(theme));
     try {
       localStorage.setItem(STORAGE_KEY, theme);
-    } catch (_) {}
+    } catch {
+      /* storage unavailable */
+    }
   }, [theme]);
 
-  // When theme is "system", re-apply whenever the OS preference changes
   useEffect(() => {
-    if (theme !== "system") return;
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => applyTheme("system");
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
+    if (theme !== 'system') return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = () => {
+      applyTheme('system');
+      setResolved(resolve('system'));
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
   }, [theme]);
-
-  function setTheme(next: Theme) {
-    setThemeState(next);
-  }
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, resolved, setTheme: setThemeState }}>
       {children}
     </ThemeContext.Provider>
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- provider + hook belong together
 export function useTheme(): ThemeContextValue {
   const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error("useTheme must be used inside ThemeProvider");
+  if (!ctx) throw new Error('useTheme must be used inside ThemeProvider');
   return ctx;
 }
