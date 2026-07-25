@@ -23,6 +23,11 @@ bld/
 [Ll]og/
 [Ll]ogs/
 
+# The React app's logging feature folder is source code, not build logs.
+# Un-ignore it from the [Ll]og/ rule above.
+!Articalorias.UI/src/components/log/
+!Articalorias.UI/src/components/log/**
+
 # .NET Core
 project.lock.json
 project.fragment.lock.json
@@ -56,3 +61,5 @@ nunit-*.xml
 
 # Secrets – never commit real credentials
 Articalorias/appsettings.json
+Articalorias/Articalorias.csproj.user
+Articalorias/Properties/PublishProfiles/Articalorias-API - Web Deploy1.pubxml.user
