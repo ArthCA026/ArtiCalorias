@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { ActionSheet, ConfirmSheet } from '@/components/ui/ActionSheet';
+import { ItemRow, ItemMeta } from '@/components/ui/ItemRow';
 import { Fab } from '@/components/ui/Fab';
 import { useToast } from '@/components/ui/Toast';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
@@ -14,7 +15,6 @@ import { queryKeys } from '@/lib/queryKeys';
 import { fmt, toDateString } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 import type { FavoriteRoutineResponse } from '@/types';
-import { TemplateRow } from './TemplateRow';
 import { RoutineSheet } from './RoutineSheet';
 
 const routineKcal = (routine: FavoriteRoutineResponse): number =>
@@ -115,27 +115,33 @@ export function Routines() {
         <Card padded={false} className="overflow-hidden">
           <div className="divide-y divide-hairline/50">
             {routines.map((routine) => (
-              <TemplateRow
+              <ItemRow
                 key={routine.favoriteRoutineId}
                 title={routine.routineName}
-                subtitle={t('templates.routine_meta', '{{n}} items, ~{{kcal}} kcal', {
-                  n: routine.items.length,
+                value={t('templates.routine_kcal', '~{{kcal}} kcal', {
                   kcal: fmt(routineKcal(routine)),
                 })}
                 ariaLabel={t('templates.row_aria', '{{name}}, open options', { name: routine.routineName })}
                 onOpen={() => setSelected(routine)}
                 trailing={
-                  <Button
+                  <IconButton
+                    icon="plus"
+                    label={t('templates.add_all', 'Add all to today')}
+                    size={36}
+                    iconSize={18}
                     variant="primary"
-                    size="sm"
-                    loading={
+                    className="disabled:opacity-50 disabled:pointer-events-none"
+                    disabled={
                       addAll.isPending &&
                       addAll.variables?.favoriteRoutineId === routine.favoriteRoutineId
                     }
                     onClick={() => addAll.mutate(routine)}
-                  >
-                    {t('templates.add_all', 'Add all to today')}
-                  </Button>
+                  />
+                }
+                meta={
+                  <ItemMeta>
+                    {t('templates.routine_count', '{{n}} items', { n: routine.items.length })}
+                  </ItemMeta>
                 }
               />
             ))}

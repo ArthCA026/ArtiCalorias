@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Sheet } from '@/components/ui/Sheet';
-import { MiniTable } from '@/components/ui/MiniTable';
+import { MacroStrip } from '@/components/ui/MacroStrip';
 import { WeekStrip } from './WeekStrip';
 import { budgetFor } from './CalorieHero';
 import { useUnits } from '@/hooks/useUnits';
@@ -15,8 +15,6 @@ interface DayDetailsSheetProps {
   mode: CalorieMode;
   date: string;
 }
-
-const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /**
  * The numbers behind the ring, one tap away: eaten / budget / burned,
@@ -63,12 +61,11 @@ export function DayDetailsSheet({ open, onClose, dash, mode, date }: DayDetailsS
           <p className="text-[13px] font-bold text-ink-2 uppercase tracking-wide mb-2">
             {t('today.macro_totals', 'Macros so far')}
           </p>
-          <MiniTable
-            cols={[
-              { label: t('today.col_prot', 'Prot'), value: `${round1(dash.totalProteinGrams)}g` },
-              { label: t('today.col_fat', 'Fat'), value: `${round1(dash.totalFatGrams)}g` },
-              { label: t('today.col_carbs', 'Carbs'), value: `${round1(dash.totalCarbsGrams)}g` },
-            ]}
+          <MacroStrip
+            unit
+            protein={dash.totalProteinGrams}
+            fat={dash.totalFatGrams}
+            carbs={dash.totalCarbsGrams}
           />
         </div>
 

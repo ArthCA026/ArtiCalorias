@@ -11,7 +11,7 @@ import { foodTemplateService } from '@/services/foodTemplateService';
 import { activityService } from '@/services/activityService';
 import { foodService } from '@/services/foodService';
 import { queryKeys } from '@/lib/queryKeys';
-import { fmt } from '@/utils/format';
+import { fmt, round1, qtyStr } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 import type { ActivityTemplateResponse, FoodTemplateResponse } from '@/types';
 import type { LogTab } from './LogSheetContext';
@@ -23,8 +23,6 @@ interface TemplateQuickPickProps {
   onBack: () => void;
   onAdded: (date: string) => void;
 }
-
-const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /**
  * One-tap logging from saved templates. Stays open so several
@@ -161,12 +159,28 @@ export function TemplateQuickPick({ tab, date: targetDate, onBack, onAdded }: Te
             const id = isFood
               ? (tpl as FoodTemplateResponse).foodTemplateId
               : (tpl as ActivityTemplateResponse).activityTemplateId;
+            // Same amount language as the Templates screen: "2 · 1 cup · 320 kcal"
             const meta = isFood
-              ? `${fmt((tpl as FoodTemplateResponse).caloriesKcal * (tpl as FoodTemplateResponse).defaultQuantity)} kcal`
-              : t('log.duration_met', '{{min}} min, MET {{met}}', {
-                  min: fmt((tpl as ActivityTemplateResponse).defaultDurationMinutes ?? 0),
-                  met: (tpl as ActivityTemplateResponse).defaultMET ?? 0,
-                });
+              ? [
+                  t('templates.amount_meta', '{{qty}} · {{portion}}', {
+                    qty: qtyStr((tpl as FoodTemplateResponse).defaultQuantity),
+                    portion: (tpl as FoodTemplateResponse).portionDescription,
+                  }),
+                  t('templates.kcal_value', '{{kcal}} kcal', {
+                    kcal: fmt(
+                      (tpl as FoodTemplateResponse).caloriesKcal *
+                        (tpl as FoodTemplateResponse).defaultQuantity,
+                    ),
+                  }),
+                ].join(' · ')
+              : [
+                  t('templates.duration_meta', '{{min}} min', {
+                    min: qtyStr((tpl as ActivityTemplateResponse).defaultDurationMinutes ?? 0),
+                  }),
+                  t('log.met_value', 'MET {{met}}', {
+                    met: (tpl as ActivityTemplateResponse).defaultMET ?? 0,
+                  }),
+                ].join(' · ');
             const pending =
               (isFood && addFood.isPending && addFood.variables?.foodTemplateId === id) ||
               (!isFood && addActivity.isPending && addActivity.variables?.activityTemplateId === id);

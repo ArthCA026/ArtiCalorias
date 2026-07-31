@@ -15,7 +15,13 @@
     "add": "Añadir",
     "decrease": "Reducir",
     "increase": "Aumentar",
-    "amount": "Cantidad"
+    "amount": "Cantidad",
+    "min_suffix": "min"
+  },
+  "macros": {
+    "prot": "Prot",
+    "fat": "Grasa",
+    "carbs": "Carbs"
   },
   "tabs": {
     "today": "Hoy",
@@ -87,7 +93,7 @@
     "estimate_met": "Estimar la intensidad por mí",
     "estimate_error": "No se pudo estimar la intensidad. Puedes escribir un MET tú mismo: caminar es 3, correr unos 9.",
     "added_name": "{{name}} añadido",
-    "duration_met": "{{min}} min, MET {{met}}",
+    "met_value": "MET {{met}}",
     "templates_error_title": "No se pudieron cargar las plantillas",
     "templates_error_body": "Revisa tu conexión y reintenta, o vuelve atrás y escribe tu registro.",
     "no_templates_title": "Aún no hay plantillas",
@@ -146,9 +152,8 @@
     "details_aria": "Abrir detalles del día: comido, presupuesto, quemado y tu semana",
     "details_title": "Detalles del día",
     "macro_totals": "Macros hasta ahora",
-    "col_prot": "Prot",
-    "col_fat": "Grasa",
-    "col_carbs": "Carbs",
+    "kcal_value": "{{kcal}} kcal",
+    "duration_meta": "{{min}} min",
     "change_qty_aria": "Cambiar cantidad de {{name}}",
     "change_duration_aria": "Cambiar duración de {{name}}",
     "list_switch": "Comidas o actividades"
@@ -485,7 +490,9 @@
     "saved": "Guardado",
     "deleted": "Eliminado",
     "row_aria": "{{name}}, abrir opciones",
-    "meal_meta": "{{qty}} x {{portion}}, {{kcal}} kcal",
+    "kcal_value": "{{kcal}} kcal",
+    "amount_meta": "{{qty}} · {{portion}}",
+    "duration_meta": "{{min}} min",
     "no_meals_title": "Aún no hay plantillas de comida",
     "no_meals_body": "Guarda comidas que comes a menudo y regístralas en dos toques. También puedes guardar cualquier comida registrada como plantilla desde Hoy.",
     "create_one": "Crear una",
@@ -512,7 +519,6 @@
     "delete_template_title": "¿Eliminar plantilla?",
     "delete_template_body": "Esto elimina la plantilla. Lo que ya registraste se mantiene.",
     "delete_used_in": "También se quitará de: {{names}}",
-    "duration_met": "{{min}} min, MET {{met}}",
     "no_activities_title": "Aún no hay plantillas de actividad",
     "no_activities_body": "Guarda actividades que haces a menudo y regístralas en dos toques. También puedes guardar cualquier actividad registrada como plantilla desde Hoy.",
     "new_activity": "Nueva plantilla de actividad",
@@ -522,7 +528,8 @@
     "met": "Intensidad (MET)",
     "met_hint": "Qué tan intensa es. Caminar ronda 3.5.",
     "estimate_met": "Estimar la intensidad por mí",
-    "routine_meta": "{{n}} elementos, ~{{kcal}} kcal",
+    "routine_kcal": "~{{kcal}} kcal",
+    "routine_count": "{{n}} elementos",
     "add_all": "Añadir todo a hoy",
     "routine_added": "{{n}} elementos añadidos",
     "routine_skipped": "{{k}} omitidos (plantilla eliminada)",
@@ -538,14 +545,6 @@
     "delete_routine_title": "¿Eliminar rutina?",
     "delete_routine_body": "Esto elimina la rutina. Las plantillas que contiene se conservan.",
     "fab_new": "Nuevo",
-    "amount_chip": "{{qty}} - {{portion}}",
-    "qty_chip_aria": "Cambiar la cantidad por defecto",
-    "duration_chip": "({{min}} min)",
-    "duration_chip_aria": "Cambiar la duración",
-    "min_suffix": "min",
-    "col_kcal": "KCAL",
-    "col_protein": "PROT",
-    "col_fat": "GRASA",
-    "col_carbs": "CARBS"
+    "min_suffix": "min"
   }
 }

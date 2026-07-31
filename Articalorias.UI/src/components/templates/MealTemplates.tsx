@@ -4,25 +4,21 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { IconButton } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
-import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { ActionSheet, ConfirmSheet } from '@/components/ui/ActionSheet';
-import { MiniTable } from '@/components/ui/MiniTable';
-import { QuickAmountSheet } from '@/components/ui/QuantityField';
+import { MacroStrip } from '@/components/ui/MacroStrip';
+import { ItemRow, ItemMeta } from '@/components/ui/ItemRow';
 import { Fab } from '@/components/ui/Fab';
 import { useToast } from '@/components/ui/Toast';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import { foodTemplateService } from '@/services/foodTemplateService';
 import { foodService } from '@/services/foodService';
 import { queryKeys } from '@/lib/queryKeys';
-import { fmt, toDateString } from '@/utils/format';
+import { fmt, round1, qtyStr, toDateString } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 import type { FoodTemplateResponse } from '@/types';
-import { TemplateRow } from './TemplateRow';
 import { MealTemplateSheet } from './MealTemplateSheet';
-
-const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /** Meals tab: saved meal templates with one-tap logging to today. */
 export function MealTemplates() {
@@ -35,7 +31,6 @@ export function MealTemplates() {
   const [editing, setEditing] = useState<FoodTemplateResponse | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<FoodTemplateResponse | null>(null);
-  const [amountTarget, setAmountTarget] = useState<FoodTemplateResponse | null>(null);
   const [usedIn, setUsedIn] = useState<string[]>([]);
 
   const query = useQuery({
@@ -74,29 +69,6 @@ export function MealTemplates() {
       queryClient.invalidateQueries({ queryKey: queryKeys.historyAll() });
       queryClient.invalidateQueries({ queryKey: queryKeys.streak() });
       toast('success', t('templates.added_to_today', '{{name}} added to today', { name }));
-    },
-    onError: (err) =>
-      toast('error', extractApiError(err, t('templates.save_error', 'Could not save. Check your connection and try again.'))),
-  });
-
-  const updateQty = useMutation({
-    mutationFn: ({ tpl, qty }: { tpl: FoodTemplateResponse; qty: number }) =>
-      foodTemplateService.update(tpl.foodTemplateId, {
-        templateName: tpl.templateName,
-        portionDescription: tpl.portionDescription,
-        defaultQuantity: qty,
-        caloriesKcal: tpl.caloriesKcal,
-        proteinGrams: tpl.proteinGrams,
-        fatGrams: tpl.fatGrams,
-        carbsGrams: tpl.carbsGrams,
-        alcoholGrams: tpl.alcoholGrams,
-        autoAddToNewDay: tpl.autoAddToNewDay,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.foodTemplates() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.routines() });
-      setAmountTarget(null);
-      toast('success', t('templates.saved', 'Saved'));
     },
     onError: (err) =>
       toast('error', extractApiError(err, t('templates.save_error', 'Could not save. Check your connection and try again.'))),
@@ -170,9 +142,12 @@ export function MealTemplates() {
         <Card padded={false} className="overflow-hidden">
           <div className="divide-y divide-hairline/50">
             {items.map((tpl) => (
-              <TemplateRow
+              <ItemRow
                 key={tpl.foodTemplateId}
                 title={tpl.templateName}
+                value={t('templates.kcal_value', '{{kcal}} kcal', {
+                  kcal: fmt(tpl.caloriesKcal * tpl.defaultQuantity),
+                })}
                 ariaLabel={t('templates.row_aria', '{{name}}, open options', { name: tpl.templateName })}
                 autoBadge={tpl.autoAddToNewDay}
                 onOpen={() => setSelected(tpl)}
@@ -188,47 +163,19 @@ export function MealTemplates() {
                     onClick={() => quickAdd.mutate(tpl)}
                   />
                 }
-                chip={
-                  <button
-                    type="button"
-                    aria-label={t('templates.qty_chip_aria', 'Change default quantity')}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onPointerUp={(e) => e.stopPropagation()}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setAmountTarget(tpl);
-                    }}
-                    className="pressable inline-flex items-center gap-1 bg-inset rounded-lg px-2 py-1 text-[13px] font-medium text-ink-2"
-                  >
-                    <span className="truncate">
-                      {t('templates.amount_chip', '{{qty}} - {{portion}}', {
-                        qty: tpl.defaultQuantity,
-                        portion: tpl.portionDescription,
-                      })}
-                    </span>
-                    <Icon name="chevronDown" size={13} className="text-ink-3 shrink-0" />
-                  </button>
+                meta={
+                  <ItemMeta>
+                    {t('templates.amount_meta', '{{qty}} · {{portion}}', {
+                      qty: qtyStr(tpl.defaultQuantity),
+                      portion: tpl.portionDescription,
+                    })}
+                  </ItemMeta>
                 }
                 footer={
-                  <MiniTable
-                    cols={[
-                      {
-                        label: t('templates.col_kcal', 'KCAL'),
-                        value: fmt(tpl.caloriesKcal * tpl.defaultQuantity),
-                      },
-                      {
-                        label: t('templates.col_protein', 'PROT'),
-                        value: String(round1(tpl.proteinGrams * tpl.defaultQuantity)),
-                      },
-                      {
-                        label: t('templates.col_fat', 'FAT'),
-                        value: String(round1(tpl.fatGrams * tpl.defaultQuantity)),
-                      },
-                      {
-                        label: t('templates.col_carbs', 'CARBS'),
-                        value: String(round1(tpl.carbsGrams * tpl.defaultQuantity)),
-                      },
-                    ]}
+                  <MacroStrip
+                    protein={tpl.proteinGrams * tpl.defaultQuantity}
+                    fat={tpl.fatGrams * tpl.defaultQuantity}
+                    carbs={tpl.carbsGrams * tpl.defaultQuantity}
                   />
                 }
               />
@@ -275,18 +222,6 @@ export function MealTemplates() {
         cancelLabel={t('common.cancel', 'Cancel')}
         loading={del.isPending}
         onConfirm={() => deleteTarget && del.mutate(deleteTarget)}
-      />
-
-      <QuickAmountSheet
-        open={amountTarget !== null}
-        onClose={() => setAmountTarget(null)}
-        title={t('templates.default_quantity', 'Default quantity')}
-        subtitle={amountTarget?.templateName}
-        value={amountTarget?.defaultQuantity ?? 1}
-        min={0.25}
-        step={(amountTarget?.defaultQuantity ?? 1) >= 1 ? 1 : 0.5}
-        saving={updateQty.isPending}
-        onSave={(next) => amountTarget && updateQty.mutate({ tpl: amountTarget, qty: next })}
       />
 
       {editing && <MealTemplateSheet template={editing} onClose={() => setEditing(null)} />}

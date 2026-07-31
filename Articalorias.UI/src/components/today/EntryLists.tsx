@@ -7,32 +7,23 @@ import { ActionSheet } from '@/components/ui/ActionSheet';
 import { Button } from '@/components/ui/Button';
 import { Field, DecimalField } from '@/components/ui/Field';
 import { QuantityField, QuickAmountSheet } from '@/components/ui/QuantityField';
-import { MiniTable } from '@/components/ui/MiniTable';
+import { MacroStrip } from '@/components/ui/MacroStrip';
+import { ItemRow, ItemMeta } from '@/components/ui/ItemRow';
+import { AmountChip } from '@/components/ui/AmountChip';
 import { Icon } from '@/components/ui/Icon';
 import { EmptyState, InlineError } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
-import { useLongPress } from '@/hooks/useLongPress';
 import { useLogSheet } from '@/components/log/LogSheetContext';
 import { foodService } from '@/services/foodService';
 import { activityService } from '@/services/activityService';
 import { foodTemplateService } from '@/services/foodTemplateService';
 import { extractApiError } from '@/utils/apiError';
-import { fmt } from '@/utils/format';
+import { fmt, round1, qtyStr } from '@/utils/format';
 import type { ActivityEntryResponse, FoodEntryResponse, UpdateFoodEntryRequest } from '@/types';
 
-const round1 = (n: number) => Math.round(n * 10) / 10;
-/** "18.9", "14", "1.2": one decimal max, no trailing zero */
-const g = (n: number) => String(round1(n));
-const qtyStr = (n: number) => String(Math.round(n * 1000) / 1000);
 const num = (raw: string): number => {
   const n = Number(raw.replace(',', '.'));
   return Number.isFinite(n) ? n : 0;
-};
-
-/** Stops a nested control from triggering the row's tap/long-press */
-const isolate = {
-  onPointerDown: (e: React.PointerEvent) => e.stopPropagation(),
-  onPointerUp: (e: React.PointerEvent) => e.stopPropagation(),
 };
 
 /* ------------------------------------------------------------------ */
@@ -55,48 +46,40 @@ function MealRow({
   onQty: () => void;
 }) {
   const { t } = useTranslation();
-  const handlers = useLongPress({ onLongPress: onOpen, onTap: onOpen });
   const qty = entry.quantity && entry.quantity > 0 ? entry.quantity : 1;
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={t('today.entry_aria', '{{name}}, open options', { name: entry.foodName })}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') onOpen();
-      }}
-      {...handlers}
-      className="pressable px-4 py-3 active:bg-press cursor-pointer"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-[15px] font-bold text-ink truncate flex-1">{entry.foodName}</p>
-        <p className="text-[15px] font-extrabold text-ink tabular-nums shrink-0">
-          {fmt(entry.caloriesKcal)} kcal
-        </p>
-      </div>
-      <button
-        type="button"
-        {...isolate}
-        onClick={(e) => {
-          e.stopPropagation();
-          onQty();
-        }}
-        aria-label={t('today.change_qty_aria', 'Change quantity of {{name}}', { name: entry.foodName })}
-        className="pressable mt-1.5 inline-flex items-center gap-1 rounded-lg bg-inset active:bg-press px-2 py-1 text-[13px] font-semibold text-ink-2"
-      >
-        {qtyStr(qty)}
-        {entry.portionDescription ? ` - ${entry.portionDescription}` : ''}
-        <Icon name="chevronDown" size={13} />
-      </button>
-      <MiniTable
-        className="mt-2"
-        cols={[
-          { label: t('today.col_prot', 'Prot'), value: g(entry.proteinGrams) },
-          { label: t('today.col_fat', 'Fat'), value: g(entry.fatGrams) },
-          { label: t('today.col_carbs', 'Carbs'), value: g(entry.carbsGrams) },
-        ]}
-      />
-    </div>
+    <ItemRow
+      title={entry.foodName}
+      value={t('today.kcal_value', '{{kcal}} kcal', { kcal: fmt(entry.caloriesKcal) })}
+      ariaLabel={t('today.entry_aria', '{{name}}, open options', { name: entry.foodName })}
+      onOpen={onOpen}
+      meta={
+        <>
+          <AmountChip
+            label={qtyStr(qty)}
+            ariaLabel={t('today.change_qty_aria', 'Change quantity of {{name}}', {
+              name: entry.foodName,
+            })}
+            onEdit={onQty}
+          />
+          {entry.portionDescription && (
+            <>
+              <span className="text-ink-3 shrink-0" aria-hidden="true">
+                &middot;
+              </span>
+              <ItemMeta>{entry.portionDescription}</ItemMeta>
+            </>
+          )}
+        </>
+      }
+      footer={
+        <MacroStrip
+          protein={entry.proteinGrams}
+          fat={entry.fatGrams}
+          carbs={entry.carbsGrams}
+        />
+      }
+    />
   );
 }
 
@@ -365,38 +348,34 @@ function ActivityRow({
   onDuration: () => void;
 }) {
   const { t } = useTranslation();
-  const handlers = useLongPress({ onLongPress: onOpen, onTap: onOpen });
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={t('today.entry_aria', '{{name}}, open options', { name: entry.activityName })}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') onOpen();
-      }}
-      {...handlers}
-      className="pressable px-4 py-3 active:bg-press cursor-pointer"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-[15px] font-bold text-ink truncate flex-1">{entry.activityName}</p>
-        <p className="text-[15px] font-extrabold text-ink tabular-nums shrink-0">
-          {hasCalorieEstimate ? `${fmt(entry.calculatedCaloriesKcal)} kcal` : '–'}
-        </p>
-      </div>
-      <button
-        type="button"
-        {...isolate}
-        onClick={(e) => {
-          e.stopPropagation();
-          onDuration();
-        }}
-        aria-label={t('today.change_duration_aria', 'Change duration of {{name}}', { name: entry.activityName })}
-        className="pressable mt-1.5 inline-flex items-center gap-1 rounded-lg bg-inset active:bg-press px-2 py-1 text-[13px] font-semibold text-ink-2"
-      >
-        ({qtyStr(entry.durationMinutes ?? 0)} min)
-        <Icon name="chevronDown" size={13} />
-      </button>
-    </div>
+    <ItemRow
+      title={entry.activityName}
+      value={
+        hasCalorieEstimate ? (
+          // The flame marks this as burned, so it is never read as calories eaten
+          <span className="inline-flex items-center gap-1">
+            <Icon name="flame" size={14} className="text-ink-3" />
+            {t('today.kcal_value', '{{kcal}} kcal', { kcal: fmt(entry.calculatedCaloriesKcal) })}
+          </span>
+        ) : (
+          '–'
+        )
+      }
+      ariaLabel={t('today.entry_aria', '{{name}}, open options', { name: entry.activityName })}
+      onOpen={onOpen}
+      meta={
+        <AmountChip
+          label={t('today.duration_meta', '{{min}} min', {
+            min: qtyStr(entry.durationMinutes ?? 0),
+          })}
+          ariaLabel={t('today.change_duration_aria', 'Change duration of {{name}}', {
+            name: entry.activityName,
+          })}
+          onEdit={onDuration}
+        />
+      }
+    />
   );
 }
 
@@ -508,7 +487,7 @@ export function ActivitiesList({ date, entries, hasCalorieEstimate, onChanged }:
           min={1}
           max={1440}
           step={5}
-          suffix="min"
+          suffix={t('common.min_suffix', 'min')}
           saving={quickDuration.isPending}
           onSave={(minutes) => quickDuration.mutate({ entry: durationTarget, minutes })}
         />
@@ -575,7 +554,7 @@ function EditActivitySheet({ date, entry, onClose, onChanged }: EditActivityShee
             min={1}
             max={1440}
             step={5}
-            suffix="min"
+            suffix={t('common.min_suffix', 'min')}
             onCommit={setDuration}
           />
         </div>
