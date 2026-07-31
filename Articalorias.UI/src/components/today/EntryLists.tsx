@@ -33,6 +33,8 @@ const num = (raw: string): number => {
 interface MealsListProps {
   date: string;
   entries: FoodEntryResponse[];
+  /** Drives the empty state tense: still open today, closed on a past day */
+  isToday: boolean;
   onChanged: () => void;
 }
 
@@ -83,7 +85,7 @@ function MealRow({
   );
 }
 
-export function MealsList({ date, entries, onChanged }: MealsListProps) {
+export function MealsList({ date, entries, isToday, onChanged }: MealsListProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { openLog } = useLogSheet();
@@ -164,7 +166,11 @@ export function MealsList({ date, entries, onChanged }: MealsListProps) {
         {entries.length === 0 ? (
           <EmptyState
             icon="meal"
-            title={t('today.no_meals_title', 'Nothing logged yet')}
+            title={
+              isToday
+                ? t('today.no_meals_title', 'Nothing logged yet')
+                : t('day.no_meals_title', 'No meals logged that day')
+            }
             body={t('today.no_meals_body', 'Describe your meal in plain words and the AI fills in the macros for you.')}
             actionLabel={t('today.log_first_meal', 'Log a meal')}
             onAction={() => openLog('meal', date)}
@@ -333,6 +339,8 @@ interface ActivitiesListProps {
   date: string;
   entries: ActivityEntryResponse[];
   hasCalorieEstimate: boolean;
+  /** Drives the empty state tense: still open today, closed on a past day */
+  isToday: boolean;
   onChanged: () => void;
 }
 
@@ -379,7 +387,7 @@ function ActivityRow({
   );
 }
 
-export function ActivitiesList({ date, entries, hasCalorieEstimate, onChanged }: ActivitiesListProps) {
+export function ActivitiesList({ date, entries, hasCalorieEstimate, isToday, onChanged }: ActivitiesListProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { openLog } = useLogSheet();
@@ -433,7 +441,11 @@ export function ActivitiesList({ date, entries, hasCalorieEstimate, onChanged }:
         {entries.length === 0 ? (
           <EmptyState
             icon="activity"
-            title={t('today.no_activities_title', 'No activity yet')}
+            title={
+              isToday
+                ? t('today.no_activities_title', 'No activity yet')
+                : t('day.no_activities_title', 'No activity logged that day')
+            }
             body={t('today.no_activities_body', 'Moving raises your budget. Log a walk, a workout, anything that got you moving.')}
             actionLabel={t('today.log_activity', 'Log activity')}
             onAction={() => openLog('activity', date)}

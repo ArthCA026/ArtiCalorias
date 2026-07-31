@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { historyService } from '@/services/historyService';
 import { queryKeys } from '@/lib/queryKeys';
-import { addDays, mondayOf, parseDate } from '@/utils/format';
+import { addDays, mondayOf, parseDate, toDateString } from '@/utils/format';
 import { cn } from '@/utils/cn';
 import type { DailyLogResponse } from '@/types';
 
@@ -27,6 +27,9 @@ export function WeekStrip({ date, baseGoalKcal, inset }: WeekStripProps) {
   const { t, i18n } = useTranslation();
   const monday = mondayOf(date);
   const sunday = addDays(monday, 6);
+  // A past day inside the running week still belongs to "this week",
+  // so the tense follows the week, not the viewed day.
+  const isCurrentWeek = monday === mondayOf(toDateString());
 
   const { data: days } = useQuery({
     queryKey: queryKeys.history(monday, sunday),
@@ -64,18 +67,24 @@ export function WeekStrip({ date, baseGoalKcal, inset }: WeekStripProps) {
 
   let summary: string;
   if (loggedCount === 0) {
-    summary = t('today.week_fresh', 'A fresh week. Every logged day counts.');
+    summary = isCurrentWeek
+      ? t('today.week_fresh', 'A fresh week. Every logged day counts.')
+      : t('day.week_none', 'Nothing was logged that week.');
   } else if (favorable) {
-    summary = t('today.week_ahead', 'You are on plan this week. Keep it rolling.');
+    summary = isCurrentWeek
+      ? t('today.week_ahead', 'You are on plan this week. Keep it rolling.')
+      : t('day.week_ok', 'That week landed on plan.');
   } else {
-    summary = t('today.week_adjusts', 'Slightly over so far. Your daily target already absorbs it, just keep logging.');
+    summary = isCurrentWeek
+      ? t('today.week_adjusts', 'Slightly over so far. Your daily target already absorbs it, just keep logging.')
+      : t('day.week_over', 'That week ran slightly over. Your targets already absorbed it.');
   }
 
   return (
     <Card variant={inset ? 'inset' : 'card'}>
       <div className="flex items-center justify-between mb-3">
         <p className="text-[13px] font-bold text-ink-2 uppercase tracking-wide">
-          {t('today.this_week', 'This week')}
+          {isCurrentWeek ? t('today.this_week', 'This week') : t('day.that_week', 'That week')}
         </p>
         <p className="text-[13px] font-semibold text-ink-2 tabular-nums">
           {t('today.days_logged', '{{n}} of 7 logged', { n: loggedCount })}

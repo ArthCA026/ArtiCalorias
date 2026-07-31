@@ -93,7 +93,12 @@ export function DayView({ date, isToday }: DayViewProps) {
             </Card>
           )}
 
-          <CalorieHero dash={dash} mode={mode} onOpenDetails={() => setDetailsOpen(true)} />
+          <CalorieHero
+            dash={dash}
+            mode={mode}
+            isToday={isToday}
+            onOpenDetails={() => setDetailsOpen(true)}
+          />
 
           {isToday && dash.foodEntries.length === 0 && (
             <ChecklistCard hasGoal={dash.hasCalorieBudgetEstimate} />
@@ -118,12 +123,18 @@ export function DayView({ date, isToday }: DayViewProps) {
           />
 
           {listTab === 'meals' ? (
-            <MealsList date={date} entries={dash.foodEntries} onChanged={onChanged} />
+            <MealsList
+              date={date}
+              entries={dash.foodEntries}
+              isToday={isToday}
+              onChanged={onChanged}
+            />
           ) : (
             <ActivitiesList
               date={date}
               entries={dash.activityEntries}
               hasCalorieEstimate={dash.hasCalorieEstimate}
+              isToday={isToday}
               onChanged={onChanged}
             />
           )}
@@ -134,6 +145,7 @@ export function DayView({ date, isToday }: DayViewProps) {
             dash={dash}
             mode={mode}
             date={date}
+            isToday={isToday}
           />
         </>
       )}

@@ -11,6 +11,8 @@ import type { DailyDashboardResponse } from '@/types';
 interface CalorieHeroProps {
   dash: DailyDashboardResponse;
   mode: CalorieMode;
+  /** Today gets present tense and nudges; a past day reads as a closed record */
+  isToday: boolean;
   /** Opens the day details sheet (stats, totals, week) */
   onOpenDetails: () => void;
 }
@@ -34,7 +36,7 @@ export function budgetFor(dash: DailyDashboardResponse, mode: CalorieMode): numb
  * Deliberately short so the meal list is visible without scrolling;
  * the numbers behind it live in the details sheet, one tap away.
  */
-export function CalorieHero({ dash, mode, onOpenDetails }: CalorieHeroProps) {
+export function CalorieHero({ dash, mode, isToday, onOpenDetails }: CalorieHeroProps) {
   const { t } = useTranslation();
   const { energyUnit } = useUnits();
 
@@ -52,28 +54,44 @@ export function CalorieHero({ dash, mode, onOpenDetails }: CalorieHeroProps) {
   const meaningfullyOver = over && Math.abs(remaining) > budget * 0.05;
   const ringColor = !isSurplusGoal && meaningfullyOver ? 'var(--t-warning)' : undefined;
 
+  // A past day is a closed record: past tense, and no 'push' tone, since its
+  // celebrate animation nudges an action that is no longer possible.
   let statusText: string;
   let statusTone: 'ok' | 'push' | 'calm' = 'calm';
   if (!dash.hasCalorieBudgetEstimate) {
     statusText = t('today.no_budget', 'Add weight and height to unlock your budget');
   } else if (isSurplusGoal) {
     if (remaining > 0) {
-      statusText = t('today.surplus_left', '{{kcal}} {{unit}} still to eat for your surplus', { kcal: e(remaining), unit });
-      statusTone = nearGoal ? 'push' : 'calm';
+      statusText = isToday
+        ? t('today.surplus_left', '{{kcal}} {{unit}} still to eat for your surplus', { kcal: e(remaining), unit })
+        : t('day.surplus_left', 'Finished {{kcal}} {{unit}} short of your surplus', { kcal: e(remaining), unit });
+      statusTone = isToday && nearGoal ? 'push' : 'calm';
     } else {
       statusText = t('today.surplus_hit', 'Surplus target reached. Well done!');
       statusTone = 'ok';
     }
   } else if (!over) {
-    statusText = nearGoal
-      ? t('today.almost_there', 'Almost there: {{kcal}} {{unit}} to go', { kcal: e(remaining), unit })
-      : t('today.left_today', '{{kcal}} {{unit}} left today', { kcal: e(remaining), unit });
-    statusTone = nearGoal ? 'push' : 'calm';
+    if (isToday) {
+      statusText = nearGoal
+        ? t('today.almost_there', 'Almost there: {{kcal}} {{unit}} to go', { kcal: e(remaining), unit })
+        : t('today.left_today', '{{kcal}} {{unit}} left today', { kcal: e(remaining), unit });
+      statusTone = nearGoal ? 'push' : 'calm';
+    } else {
+      statusText = nearGoal
+        ? t('day.just_under', 'Closed the day {{kcal}} {{unit}} under. Nicely done.', { kcal: e(remaining), unit })
+        : t('day.under_budget', 'Finished {{kcal}} {{unit}} under budget', { kcal: e(remaining), unit });
+      // Landing just under budget is the best a finished day can do
+      statusTone = nearGoal ? 'ok' : 'calm';
+    }
   } else if (!meaningfullyOver) {
-    statusText = t('today.on_target', 'Right at your target. Well done!');
+    statusText = isToday
+      ? t('today.on_target', 'Right at your target. Well done!')
+      : t('day.on_target', 'Landed right on your target. Well done!');
     statusTone = 'ok';
   } else {
-    statusText = t('today.over_recover', 'Over by {{kcal}} {{unit}}. One day never ruins a week: tomorrow adjusts automatically.', { kcal: e(remaining), unit });
+    statusText = isToday
+      ? t('today.over_recover', 'Over by {{kcal}} {{unit}}. One day never ruins a week: tomorrow adjusts automatically.', { kcal: e(remaining), unit })
+      : t('day.over_recover', 'Over by {{kcal}} {{unit}} that day. One day never ruins a week.', { kcal: e(remaining), unit });
   }
 
   const protein = dash.totalProteinGrams;
@@ -109,7 +127,9 @@ export function CalorieHero({ dash, mode, onOpenDetails }: CalorieHeroProps) {
             {dash.hasCalorieBudgetEstimate
               ? over
                 ? t('today.ring_over', '{{unit}} over', { unit })
-                : t('today.ring_left', '{{unit}} left', { unit })
+                : isToday
+                  ? t('today.ring_left', '{{unit}} left', { unit })
+                  : t('day.ring_under', '{{unit}} under', { unit })
               : t('today.ring_eaten', '{{unit}} eaten', { unit })}
           </span>
         </ProgressRing>

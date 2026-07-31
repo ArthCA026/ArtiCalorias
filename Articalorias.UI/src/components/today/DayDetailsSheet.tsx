@@ -14,13 +14,15 @@ interface DayDetailsSheetProps {
   dash: DailyDashboardResponse;
   mode: CalorieMode;
   date: string;
+  /** Today is still running; a past day is closed */
+  isToday: boolean;
 }
 
 /**
  * The numbers behind the ring, one tap away: eaten / budget / burned,
  * macro totals, and the week at a glance. Keeps the main screen short.
  */
-export function DayDetailsSheet({ open, onClose, dash, mode, date }: DayDetailsSheetProps) {
+export function DayDetailsSheet({ open, onClose, dash, mode, date, isToday }: DayDetailsSheetProps) {
   const { t } = useTranslation();
   const { energyUnit } = useUnits();
   const e = (kcal: number) => Math.round(kcalToDisplay(kcal, energyUnit)).toLocaleString();
@@ -59,7 +61,9 @@ export function DayDetailsSheet({ open, onClose, dash, mode, date }: DayDetailsS
 
         <div className="rounded-card bg-inset px-4 py-3">
           <p className="text-[13px] font-bold text-ink-2 uppercase tracking-wide mb-2">
-            {t('today.macro_totals', 'Macros so far')}
+            {isToday
+              ? t('today.macro_totals', 'Macros so far')
+              : t('day.macro_totals', 'Macros for the day')}
           </p>
           <MacroStrip
             unit

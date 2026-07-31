@@ -12,19 +12,13 @@ import { useToast } from '@/components/ui/Toast';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import { foodTemplateService } from '@/services/foodTemplateService';
 import { queryKeys } from '@/lib/queryKeys';
-import { fmt, toDateString } from '@/utils/format';
+import { toDateString } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 import type { FavoriteRoutineResponse } from '@/types';
 import { RoutineSheet } from './RoutineSheet';
 
-const routineKcal = (routine: FavoriteRoutineResponse): number =>
-  routine.items.reduce(
-    (sum, item) =>
-      item.itemType === 'food' && item.foodTemplate
-        ? sum + item.foodTemplate.caloriesKcal * item.foodTemplate.defaultQuantity
-        : sum,
-    0,
-  );
+const countOf = (routine: FavoriteRoutineResponse, type: 'food' | 'activity'): number =>
+  routine.items.filter((item) => item.itemType === type).length;
 
 /** Routines tab: bundles of templates added to today in one tap. */
 export function Routines() {
@@ -79,6 +73,28 @@ export function Routines() {
 
   const routines = query.data ?? [];
 
+  /** "4 meals · 2 activities", dropping whichever side the routine has none of */
+  const contents = (routine: FavoriteRoutineResponse): string => {
+    const meals = countOf(routine, 'food');
+    const activities = countOf(routine, 'activity');
+    const parts: string[] = [];
+    if (meals > 0) {
+      parts.push(
+        meals === 1
+          ? t('templates.routine_meal_one', '1 meal')
+          : t('templates.routine_meals', '{{n}} meals', { n: meals }),
+      );
+    }
+    if (activities > 0) {
+      parts.push(
+        activities === 1
+          ? t('templates.routine_activity_one', '1 activity')
+          : t('templates.routine_activities', '{{n}} activities', { n: activities }),
+      );
+    }
+    return parts.join(' · ');
+  };
+
   return (
     <div className="space-y-3">
       {showSkeleton && (
@@ -114,37 +130,33 @@ export function Routines() {
       {routines.length > 0 && (
         <Card padded={false} className="overflow-hidden">
           <div className="divide-y divide-hairline/50">
-            {routines.map((routine) => (
-              <ItemRow
-                key={routine.favoriteRoutineId}
-                title={routine.routineName}
-                value={t('templates.routine_kcal', '~{{kcal}} kcal', {
-                  kcal: fmt(routineKcal(routine)),
-                })}
-                ariaLabel={t('templates.row_aria', '{{name}}, open options', { name: routine.routineName })}
-                onOpen={() => setSelected(routine)}
-                trailing={
-                  <IconButton
-                    icon="plus"
-                    label={t('templates.add_all', 'Add all to today')}
-                    size={36}
-                    iconSize={18}
-                    variant="primary"
-                    className="disabled:opacity-50 disabled:pointer-events-none"
-                    disabled={
-                      addAll.isPending &&
-                      addAll.variables?.favoriteRoutineId === routine.favoriteRoutineId
-                    }
-                    onClick={() => addAll.mutate(routine)}
-                  />
-                }
-                meta={
-                  <ItemMeta>
-                    {t('templates.routine_count', '{{n}} items', { n: routine.items.length })}
-                  </ItemMeta>
-                }
-              />
-            ))}
+            {routines.map((routine) => {
+              const summary = contents(routine);
+              return (
+                <ItemRow
+                  key={routine.favoriteRoutineId}
+                  title={routine.routineName}
+                  ariaLabel={t('templates.row_aria', '{{name}}, open options', { name: routine.routineName })}
+                  onOpen={() => setSelected(routine)}
+                  trailing={
+                    <IconButton
+                      icon="plus"
+                      label={t('templates.add_all', 'Add all to today')}
+                      size={36}
+                      iconSize={18}
+                      variant="primary"
+                      className="disabled:opacity-50 disabled:pointer-events-none"
+                      disabled={
+                        addAll.isPending &&
+                        addAll.variables?.favoriteRoutineId === routine.favoriteRoutineId
+                      }
+                      onClick={() => addAll.mutate(routine)}
+                    />
+                  }
+                  meta={summary ? <ItemMeta>{summary}</ItemMeta> : undefined}
+                />
+              );
+            })}
           </div>
         </Card>
       )}
