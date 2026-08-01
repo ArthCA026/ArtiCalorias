@@ -67,6 +67,12 @@
   --t-ring-to: #0ba06b;
   --t-ring-track: #dde1e8;
 
+  /* Floating readout (chart popover): inverted so it reads as a layer
+     above the card in both themes, which --t-inset cannot do. */
+  --t-tip: #22272f;
+  --t-tip-ink: #f2f4f7;
+  --t-tip-ink-2: #a9b3c0;
+
   /* Focus */
   --t-focus: rgb(11 160 107 / 0.35);
 }
@@ -115,6 +121,11 @@
   --t-ring-from: #2fdb96;
   --t-ring-to: #16a374;
   --t-ring-track: #20242c;
+
+  /* Floating readout (chart popover) */
+  --t-tip: #4a5464;
+  --t-tip-ink: #f2f4f7;
+  --t-tip-ink-2: #c3ccd8;
 
   /* Focus */
   --t-focus: rgb(34 198 138 / 0.4);

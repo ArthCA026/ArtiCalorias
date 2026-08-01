@@ -14,8 +14,10 @@ export function ProgressSkeleton() {
         <Skeleton className="mt-3 h-4 w-2/3" />
       </div>
       <div className="rounded-card bg-card p-4">
-        <Skeleton className="h-4 w-32 mb-3" />
-        <Skeleton className="h-[190px] w-full" />
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="mt-2 h-3 w-44" />
+        <Skeleton className="mt-3 h-57 w-full" />
+        <Skeleton className="mt-3 h-3 w-3/4" />
       </div>
       <div className="rounded-card bg-card p-4 space-y-3">
         <Skeleton className="h-4 w-28" />
