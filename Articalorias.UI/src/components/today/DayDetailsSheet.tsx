@@ -2,9 +2,10 @@ import { useTranslation } from 'react-i18next';
 import { Sheet } from '@/components/ui/Sheet';
 import { MacroStrip } from '@/components/ui/MacroStrip';
 import { WeekStrip } from './WeekStrip';
-import { budgetFor } from './CalorieHero';
+import { CalorieModeTag } from '@/components/ui/CalorieModeTag';
 import { useUnits } from '@/hooks/useUnits';
 import { kcalToDisplay } from '@/utils/units';
+import { budgetFor } from '@/utils/calorieMath';
 import type { CalorieMode } from '@/hooks/useCalorieMode';
 import type { DailyDashboardResponse } from '@/types';
 
@@ -59,6 +60,14 @@ export function DayDetailsSheet({ open, onClose, dash, mode, date, isToday }: Da
           </div>
         </div>
 
+        {/* Only the middle tile moves with the mode, so name it right under. */}
+        <div className="flex items-center justify-center gap-2 -mt-1">
+          <span className="text-[12px] text-ink-3">
+            {t('today.budget_mode', 'Budget shown as')}
+          </span>
+          <CalorieModeTag />
+        </div>
+
         <div className="rounded-card bg-inset px-4 py-3">
           <p className="text-[13px] font-bold text-ink-2 uppercase tracking-wide mb-2">
             {isToday
@@ -73,7 +82,12 @@ export function DayDetailsSheet({ open, onClose, dash, mode, date, isToday }: Da
           />
         </div>
 
-        <WeekStrip date={date} baseGoalKcal={dash.snapshotDailyBaseGoalKcal} inset />
+        <WeekStrip
+          date={date}
+          baseGoalKcal={dash.snapshotDailyBaseGoalKcal}
+          mode={mode}
+          inset
+        />
       </div>
     </Sheet>
   );

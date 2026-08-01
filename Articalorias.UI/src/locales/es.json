@@ -16,7 +16,9 @@
     "decrease": "Reducir",
     "increase": "Aumentar",
     "amount": "Cantidad",
-    "min_suffix": "min"
+    "min_suffix": "min",
+    "calorie_mode_aria": "Vista de calorías: {{mode}}. Toca para cambiar.",
+    "calorie_mode_changed": "Vista de calorías actualizada"
   },
   "macros": {
     "prot": "Prot",
@@ -115,6 +117,7 @@
     "surplus_hit": "Objetivo de superávit conseguido. ¡Bien hecho!",
     "eaten": "Comido",
     "budget": "Presupuesto",
+    "budget_mode": "Presupuesto mostrado como",
     "burned": "Quemado",
     "protein": "Proteína",
     "protein_aria": "Progreso de proteína",
@@ -276,6 +279,7 @@
     "protein_custom_link": "Definir gramos personalizados",
     "protein_custom_label": "Gramos al día",
     "mode_title": "Vista de calorías",
+    "mode_intro": "Este es el número con el que cada pantalla compara tu día, en Hoy y en todo Progreso.",
     "mode_adjusted": "Ajuste semanal",
     "mode_adjusted_desc": "Tu presupuesto diario se reequilibra a lo largo de la semana. Un día fuerte solo reduce un poco los siguientes. Recomendado.",
     "mode_goal": "Objetivo diario fijo",
@@ -449,7 +453,7 @@
     "summary_title": "Tu semana",
     "days_of_week": "{{n}} de 7",
     "days_logged": "Días registrados",
-    "avg_eaten": "Promedio {{unit}}",
+    "avg_eaten": "Promedio {{unit}} consumidas",
     "vs_plan": "vs plan",
     "week_on_plan": "En plan esta semana. Firme y constante.",
     "week_over_plan": "Un poco por encima del plan. Nada que una semana normal no pueda absorber.",

@@ -8,14 +8,18 @@ import { usePremium } from '@/hooks/usePremium';
 import { useUnits } from '@/hooks/useUnits';
 import { energyLabel, kcalToDisplay } from '@/utils/units';
 import { parseDate } from '@/utils/format';
+import { deltaFor, hasComparablePlan } from '@/utils/calorieMath';
 import { isLoggedDay, longestLoggedRun } from './weekMath';
 import { FEATURES } from '@/config/features';
+import type { CalorieMode } from '@/hooks/useCalorieMode';
 import type { DailyLogResponse } from '@/types';
 
 interface PremiumInsightCardProps {
   /** Monday of the shown week, yyyy-MM-dd */
   monday: string;
   days: DailyLogResponse[];
+  /** Active calorie display mode, so "most on-plan" means the same as elsewhere */
+  mode: CalorieMode;
 }
 
 /**
@@ -23,7 +27,7 @@ interface PremiumInsightCardProps {
  * insight computed from their own week, plus a gentle loss-aversion nudge
  * to keep the feature. Premium users get the full pair of insights.
  */
-export function PremiumInsightCard({ monday, days }: PremiumInsightCardProps) {
+export function PremiumInsightCard({ monday, days, mode }: PremiumInsightCardProps) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { energyUnit } = useUnits();
@@ -40,10 +44,12 @@ export function PremiumInsightCard({ monday, days }: PremiumInsightCardProps) {
     const logged = days.filter(isLoggedDay);
     const list: string[] = [];
 
-    // Most consistent / best on-plan day: smallest distance to the plan.
-    if (logged.length > 0) {
-      const closest = logged.reduce((a, b) =>
-        Math.abs(b.dailyGoalDeltaKcal) < Math.abs(a.dailyGoalDeltaKcal) ? b : a,
+    // Most consistent / best on-plan day: smallest distance to the plan,
+    // measured against the same budget every other screen uses.
+    const comparable = days.filter(hasComparablePlan);
+    if (comparable.length > 0) {
+      const closest = comparable.reduce((a, b) =>
+        Math.abs(deltaFor(b, mode)) < Math.abs(deltaFor(a, mode)) ? b : a,
       );
       list.push(
         t('progress.insight_consistent', '{{day}} was your most on-plan day.', {
@@ -99,7 +105,7 @@ export function PremiumInsightCard({ monday, days }: PremiumInsightCardProps) {
       );
     }
     return list;
-  }, [days, monday, i18n.language, energyUnit, t]);
+  }, [days, monday, i18n.language, energyUnit, mode, t]);
 
   // Hidden entirely while the subscription is disabled in development
   if (!FEATURES.premium) return null;

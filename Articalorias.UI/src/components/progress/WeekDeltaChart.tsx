@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
+import { CalorieModeTag } from '@/components/ui/CalorieModeTag';
+import { calorieModeShortLabel } from '@/components/ui/calorieModeLabels';
 import { useUnits } from '@/hooks/useUnits';
 import { useHaptics } from '@/hooks/useHaptics';
 import { energyLabel, kcalToDisplay } from '@/utils/units';
 import { addDays, parseDate, toDateString } from '@/utils/format';
+import { deltaFor, hasComparablePlan, isFavorableFor, isSurplusGoalDay } from '@/utils/calorieMath';
 import { cn } from '@/utils/cn';
-import { isFavorableDelta, isLoggedDay, isSurplusGoalDay } from './weekMath';
 import {
   BAR_W,
   DOMAIN_FLOOR_KCAL,
@@ -18,12 +20,15 @@ import {
   buildDomain,
 } from './deltaScale';
 import { DayDeltaPopover, type DayTipModel } from './DayDeltaPopover';
+import type { CalorieMode } from '@/hooks/useCalorieMode';
 import type { DailyLogResponse } from '@/types';
 
 interface WeekDeltaChartProps {
   /** Monday of the shown week, yyyy-MM-dd */
   monday: string;
   days: DailyLogResponse[];
+  /** Active calorie display mode, so the bars match the ring on Today */
+  mode: CalorieMode;
 }
 
 interface Slot {
@@ -59,7 +64,7 @@ interface Slot {
  * each bar's accessible name, and in the Days list under this card. Do not
  * remove those without restating the colors.
  */
-export function WeekDeltaChart({ monday, days }: WeekDeltaChartProps) {
+export function WeekDeltaChart({ monday, days, mode }: WeekDeltaChartProps) {
   const { t, i18n } = useTranslation();
   const { energyUnit } = useUnits();
   const haptics = useHaptics();
@@ -86,20 +91,21 @@ export function WeekDeltaChart({ monday, days }: WeekDeltaChartProps) {
     return Array.from({ length: 7 }, (_, i) => {
       const date = addDays(monday, i);
       const row = byDate.get(date) ?? null;
-      // A row can exist with no food on it. That is not a logged day and it
-      // must not draw a bar: its delta is the whole day's plan, which on a
-      // deficit day would render as a full height favorable bar.
-      const log = row && isLoggedDay(row) ? row : null;
+      // A row can exist with no food on it, and a profile with no weight or
+      // height gets zeroed budget fields. Neither may draw a bar: the delta
+      // would be the whole day's plan, which on a deficit day renders as a
+      // full height favorable bar.
+      const log = row && hasComparablePlan(row) ? row : null;
       return {
         date,
         log,
-        value: log ? Math.round(kcalToDisplay(log.dailyGoalDeltaKcal, energyUnit)) : null,
-        favorable: log ? isFavorableDelta(log) : false,
+        value: log ? Math.round(kcalToDisplay(deltaFor(log, mode), energyUnit)) : null,
+        favorable: log ? isFavorableFor(log, mode) : false,
         isFuture: date > today,
         letter: narrow.format(parseDate(date)),
       };
     });
-  }, [days, monday, energyUnit, i18n.language]);
+  }, [days, monday, energyUnit, i18n.language, mode]);
 
   const domain = useMemo(() => {
     const values = slots.map((s) => s.value).filter((v): v is number => v !== null);
@@ -196,9 +202,13 @@ export function WeekDeltaChart({ monday, days }: WeekDeltaChartProps) {
           value: `${Math.round(s.log.totalProteinGrams)} g`,
         },
       ],
-      goalType: isSurplusGoalDay(s.log)
-        ? t('progress.chart_surplus_day', 'Surplus day')
-        : t('progress.chart_deficit_day', 'Deficit day'),
+      // Names both the color rule and the budget the value was measured
+      // against, since the readout is the one place a bar becomes a number.
+      goalType: `${
+        isSurplusGoalDay(s.log)
+          ? t('progress.chart_surplus_day', 'Surplus day')
+          : t('progress.chart_deficit_day', 'Deficit day')
+      } · ${calorieModeShortLabel(t, mode)}`,
       below: s.value >= 0,
     };
   };
@@ -226,9 +236,12 @@ export function WeekDeltaChart({ monday, days }: WeekDeltaChartProps) {
 
   return (
     <Card>
-      <p className="text-[13px] font-bold text-ink-2 uppercase tracking-wide">
-        {t('progress.chart_title', 'Day by day')}
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[13px] font-bold text-ink-2 uppercase tracking-wide">
+          {t('progress.chart_title', 'Day by day')}
+        </p>
+        <CalorieModeTag />
+      </div>
       <p className="mt-0.5 text-[13px] text-ink-2">
         {t('progress.chart_subtitle', 'Distance from your plan, in {{unit}}', {
           unit: energyLabel(energyUnit),

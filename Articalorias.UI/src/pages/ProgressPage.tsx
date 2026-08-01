@@ -6,20 +6,24 @@ import { Card } from '@/components/ui/Card';
 import { IconButton } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { EmptyState, ErrorState } from '@/components/ui/States';
+import { CalorieModeTag } from '@/components/ui/CalorieModeTag';
 import { WeekDeltaChart } from '@/components/progress/WeekDeltaChart';
 import { PremiumInsightCard } from '@/components/progress/PremiumInsightCard';
 import { StreakCard } from '@/components/progress/StreakCard';
 import { ProgressSkeleton } from '@/components/progress/ProgressSkeleton';
+import { isLoggedDay } from '@/components/progress/weekMath';
 import {
-  isFavorableDelta,
-  isLoggedDay,
+  deltaFor,
+  hasComparablePlan,
+  isFavorableFor,
   isSurplusGoalDay,
-} from '@/components/progress/weekMath';
+} from '@/utils/calorieMath';
 import { historyService } from '@/services/historyService';
 import { queryKeys } from '@/lib/queryKeys';
 import { addDays, mondayOf, parseDate, toDateString } from '@/utils/format';
 import { energyLabel, kcalToDisplay } from '@/utils/units';
 import { useUnits } from '@/hooks/useUnits';
+import { useCalorieMode } from '@/hooks/useCalorieMode';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import { cn } from '@/utils/cn';
 
@@ -31,6 +35,7 @@ import { cn } from '@/utils/cn';
 export default function ProgressPage() {
   const { t, i18n } = useTranslation();
   const { energyUnit } = useUnits();
+  const { mode } = useCalorieMode();
   const navigate = useNavigate();
 
   const today = toDateString();
@@ -88,12 +93,19 @@ export default function ProgressPage() {
       loggedCount > 0
         ? logged.reduce((s, d) => s + d.totalFoodCaloriesKcal, 0) / loggedCount
         : 0;
-    const deltaSumKcal = days.reduce((s, d) => s + d.dailyGoalDeltaKcal, 0);
+    // Distance from plan under the active display mode, over the days that
+    // actually have a plan to compare against. A row can exist with no food on
+    // it, and without weight and height the budget fields come back zeroed;
+    // either would contribute a whole day's plan as if it were real. Summing
+    // the same days the chart draws keeps this total equal to its bars.
+    const deltaSumKcal = days
+      .filter(hasComparablePlan)
+      .reduce((s, d) => s + deltaFor(d, mode), 0);
     // Week direction follows the dominant goal type across its days.
     const surplusWeek = days.filter(isSurplusGoalDay).length > days.length / 2;
     const favorable = surplusWeek ? deltaSumKcal >= 0 : deltaSumKcal <= 0;
     return { loggedCount, avgEatenKcal, deltaSumKcal, favorable };
-  }, [days]);
+  }, [days, mode]);
 
   // Weekly thinking beats daily perfection: never guilt, always absorbable.
   const weekLine = summary
@@ -163,9 +175,12 @@ export default function ProgressPage() {
       {days && summary && (
         <>
           <Card>
-            <p className="text-[13px] font-bold text-ink-2 uppercase tracking-wide">
-              {t('progress.summary_title', 'Your week')}
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[13px] font-bold text-ink-2 uppercase tracking-wide">
+                {t('progress.summary_title', 'Your week')}
+              </p>
+              <CalorieModeTag />
+            </div>
             <div className="mt-3 grid grid-cols-3 gap-2">
               <div className="rounded-card bg-inset px-2 py-2.5 text-center">
                 <p className="text-[17px] font-extrabold text-ink tabular-nums">
@@ -203,17 +218,31 @@ export default function ProgressPage() {
             </p>
           </Card>
 
-          <PremiumInsightCard monday={monday} days={days} />
+          <PremiumInsightCard monday={monday} days={days} mode={mode} />
 
-          <WeekDeltaChart monday={monday} days={days} />
+          <WeekDeltaChart monday={monday} days={days} mode={mode} />
         </>
       )}
 
       {days && (
         <Card padded={false} className="overflow-hidden">
-          <p className="px-4 pt-4 pb-1.5 text-[13px] font-bold text-ink-2 uppercase tracking-wide">
-            {t('progress.days_title', 'Days')}
-          </p>
+          <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-1.5">
+            <p className="text-[13px] font-bold text-ink-2 uppercase tracking-wide">
+              {t('progress.days_title', 'Days')}
+            </p>
+            <CalorieModeTag />
+          </div>
+          {/* Two bare numbers per row need naming once, or the eaten total and
+              the distance from plan read as the same kind of figure. Skipped on
+              a week with nothing on it, where there are no columns to name. */}
+          {dayRows.some((r) => r.log) && (
+            <div className="flex items-center gap-2.5 px-4 pb-1.5 text-[11px] font-semibold text-ink-3">
+              <span className="flex-1" />
+              <span>{t('progress.chart_col_eaten', 'Eaten')}</span>
+              <span className="min-w-13 text-center">{t('progress.vs_plan', 'vs plan')}</span>
+              <span className="w-4 shrink-0" />
+            </div>
+          )}
           {dayRows.map(({ date, log }, i) => {
             const border = i > 0 && 'border-t border-hairline/60';
 
@@ -235,16 +264,22 @@ export default function ProgressPage() {
                   <span className="text-[13px] text-ink-2 tabular-nums">
                     {energy(log.totalFoodCaloriesKcal)}
                   </span>
-                  <span
-                    className={cn(
-                      'rounded-full px-2 py-0.5 text-[12px] font-bold tabular-nums',
-                      isFavorableDelta(log)
-                        ? 'bg-success-soft text-success'
-                        : 'bg-warning-soft text-warning',
-                    )}
-                  >
-                    {signedEnergyValue(log.dailyGoalDeltaKcal)}
-                  </span>
+                  {hasComparablePlan(log) ? (
+                    <span
+                      className={cn(
+                        'min-w-13 text-center rounded-full px-2 py-0.5 text-[12px] font-bold tabular-nums',
+                        isFavorableFor(log, mode)
+                          ? 'bg-success-soft text-success'
+                          : 'bg-warning-soft text-warning',
+                      )}
+                    >
+                      {signedEnergyValue(deltaFor(log, mode))}
+                    </span>
+                  ) : (
+                    // No budget to compare against: show nothing rather than a
+                    // number invented from zeroed fields.
+                    <span className="min-w-13 text-center text-[12px] font-bold text-ink-3">–</span>
+                  )}
                   <Icon name="chevronRight" size={16} className="text-ink-3 shrink-0" />
                 </button>
               );

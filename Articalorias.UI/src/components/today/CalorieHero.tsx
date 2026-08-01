@@ -2,8 +2,10 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { ProgressRing, ProgressBar } from '@/components/ui/Progress';
 import { Icon } from '@/components/ui/Icon';
+import { CalorieModeTag } from '@/components/ui/CalorieModeTag';
 import { useUnits } from '@/hooks/useUnits';
 import { kcalToDisplay, energyLabel } from '@/utils/units';
+import { budgetFor } from '@/utils/calorieMath';
 import { cn } from '@/utils/cn';
 import type { CalorieMode } from '@/hooks/useCalorieMode';
 import type { DailyDashboardResponse } from '@/types';
@@ -15,20 +17,6 @@ interface CalorieHeroProps {
   isToday: boolean;
   /** Opens the day details sheet (stats, totals, week) */
   onOpenDetails: () => void;
-}
-
-/** Budget for the ring, depending on the selected calorie mode. */
-// eslint-disable-next-line react-refresh/only-export-components -- pure helper tied to this component
-export function budgetFor(dash: DailyDashboardResponse, mode: CalorieMode): number {
-  switch (mode) {
-    case 'net':
-      return dash.totalDailyExpenditureKcal;
-    case 'goal':
-      return dash.totalFoodCaloriesKcal + dash.caloriesRemainingToDailyTargetKcal;
-    case 'adjusted':
-    default:
-      return dash.totalDailyExpenditureKcal + dash.suggestedDailyAverageRemainingKcal;
-  }
 }
 
 /**
@@ -99,6 +87,10 @@ export function CalorieHero({ dash, mode, isToday, onOpenDetails }: CalorieHeroP
 
   return (
     <Card className="relative flex flex-col items-center pt-5 pb-4">
+      {/* Names the budget the ring is measured against. Sibling of the ring
+          button, never inside it: nested buttons are invalid. */}
+      <CalorieModeTag className="absolute top-3 left-3" />
+
       <button
         type="button"
         onClick={onOpenDetails}

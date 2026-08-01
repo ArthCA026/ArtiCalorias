@@ -11,11 +11,12 @@ import { Icon } from '@/components/ui/Icon';
 import { ErrorState } from '@/components/ui/States';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
+import { CalorieModeSheet } from '@/components/ui/CalorieModeSheet';
+import { calorieModeShortLabel } from '@/components/ui/calorieModeLabels';
 import {
   BodySheet,
   GoalSheet,
   ProteinSheet,
-  CalorieModeSheet,
   RemindersSheet,
 } from '@/components/profile/ProfileSheets';
 import { useAuth } from '@/hooks/useAuth';
@@ -215,13 +216,7 @@ export default function ProfilePage() {
               <ListRow
                 icon="chart"
                 title={t('profile.row_mode', 'Calorie display')}
-                right={
-                  mode === 'adjusted'
-                    ? t('profile.mode_adjusted_short', 'Weekly')
-                    : mode === 'goal'
-                      ? t('profile.mode_goal_short', 'Daily')
-                      : t('profile.mode_net_short', 'Net')
-                }
+                right={calorieModeShortLabel(t, mode)}
                 chevron
                 onClick={() => setSheet('mode')}
               />
