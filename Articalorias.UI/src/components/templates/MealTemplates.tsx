@@ -14,7 +14,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import { foodTemplateService } from '@/services/foodTemplateService';
 import { foodService } from '@/services/foodService';
-import { queryKeys } from '@/lib/queryKeys';
+import { queryKeys, invalidateDayData } from '@/lib/queryKeys';
 import { fmt, round1, qtyStr, toDateString } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 import type { FoodTemplateResponse } from '@/types';
@@ -64,10 +64,8 @@ export function MealTemplates() {
         })
         .then(() => ({ date, name: tpl.templateName }));
     },
-    onSuccess: ({ date, name }) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(date) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.historyAll() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.streak() });
+    onSuccess: ({ name }) => {
+      invalidateDayData(queryClient);
       toast('success', t('templates.added_to_today', '{{name}} added to today', { name }));
     },
     onError: (err) =>

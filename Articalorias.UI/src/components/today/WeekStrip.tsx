@@ -71,8 +71,11 @@ export function WeekStrip({ date, baseGoalKcal, mode, inset }: WeekStripProps) {
   const deltaSum = (days ?? [])
     .filter(hasComparablePlan)
     .reduce((sum, d) => sum + deltaFor(d, mode), 0);
-  const favorable = baseGoalKcal > 0 ? deltaSum >= 0 : deltaSum <= 0;
+  const surplusWeek = baseGoalKcal > 0;
+  const favorable = surplusWeek ? deltaSum >= 0 : deltaSum <= 0;
 
+  // The copy follows the week's goal direction: an unfavorable gaining week is
+  // under its surplus, an unfavorable cutting week is over its budget.
   let summary: string;
   if (loggedCount === 0) {
     summary = isCurrentWeek
@@ -80,8 +83,14 @@ export function WeekStrip({ date, baseGoalKcal, mode, inset }: WeekStripProps) {
       : t('day.week_none', 'Nothing was logged that week.');
   } else if (favorable) {
     summary = isCurrentWeek
-      ? t('today.week_ahead', 'You are on plan this week. Keep it rolling.')
+      ? surplusWeek
+        ? t('today.week_ahead_surplus', 'Feeding your surplus right on plan. Keep it rolling.')
+        : t('today.week_ahead', 'You are on plan this week. Keep it rolling.')
       : t('day.week_ok', 'That week landed on plan.');
+  } else if (surplusWeek) {
+    summary = isCurrentWeek
+      ? t('today.week_under_surplus', 'A bit under your surplus so far. Your daily target already makes room for it, just keep eating and logging.')
+      : t('day.week_under_surplus', 'That week fell a little short of its surplus. The next targets already adjusted.');
   } else {
     summary = isCurrentWeek
       ? t('today.week_adjusts', 'Slightly over so far. Your daily target already absorbs it, just keep logging.')

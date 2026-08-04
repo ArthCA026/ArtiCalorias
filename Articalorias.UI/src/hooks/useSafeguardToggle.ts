@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { profileService } from '@/services/profileService';
 import { dailyLogService } from '@/services/dailyLogService';
-import { queryKeys } from '@/lib/queryKeys';
+import { queryKeys, invalidateDayData } from '@/lib/queryKeys';
 import { toDateString } from '@/utils/format';
 import type { UserProfileResponse, UserProfileRequest } from '@/types';
 
@@ -67,7 +67,9 @@ export function useSafeguardToggle() {
       } catch {
         // Non-critical — dashboard will still refetch, just may show slightly stale data.
       }
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(today) });
+      // The safeguard changes the budget of every day, so all cached
+      // dashboards and week views are stale, not just today's.
+      invalidateDayData(queryClient);
     },
     onError: (_err, _newValue, ctx) => {
       if (ctx?.previous) {

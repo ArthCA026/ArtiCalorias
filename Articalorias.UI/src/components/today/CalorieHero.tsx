@@ -3,9 +3,7 @@ import { Card } from '@/components/ui/Card';
 import { ProgressRing, ProgressBar } from '@/components/ui/Progress';
 import { Icon } from '@/components/ui/Icon';
 import { CalorieModeTag } from '@/components/ui/CalorieModeTag';
-import { useUnits } from '@/hooks/useUnits';
-import { kcalToDisplay, energyLabel } from '@/utils/units';
-import { budgetFor } from '@/utils/calorieMath';
+import { budgetFor, isSurplusGoalDay } from '@/utils/calorieMath';
 import { cn } from '@/utils/cn';
 import type { CalorieMode } from '@/hooks/useCalorieMode';
 import type { DailyDashboardResponse } from '@/types';
@@ -23,24 +21,36 @@ interface CalorieHeroProps {
  * Compact day centerpiece: ring, status line and protein bar.
  * Deliberately short so the meal list is visible without scrolling;
  * the numbers behind it live in the details sheet, one tap away.
+ *
+ * The whole presentation flips with the day's goal direction. On a deficit or
+ * maintenance day, staying under budget is the win and going over warns. On a
+ * surplus (gaining) day, reaching the budget is the win: the ring turns green
+ * on arrival and going past it stays calm, never alarming.
  */
 export function CalorieHero({ dash, mode, isToday, onOpenDetails }: CalorieHeroProps) {
   const { t } = useTranslation();
-  const { energyUnit } = useUnits();
 
   const eaten = dash.totalFoodCaloriesKcal;
   const budget = Math.max(budgetFor(dash, mode), 1);
   const remaining = budget - eaten;
   const progress = eaten / budget;
-  const isSurplusGoal = dash.snapshotDailyBaseGoalKcal > 0;
+  const isSurplusGoal = isSurplusGoalDay(dash);
   const over = remaining < 0;
   const nearGoal = !over && progress >= 0.75 && remaining > 0;
 
-  const e = (kcal: number) => Math.round(kcalToDisplay(Math.abs(kcal), energyUnit)).toLocaleString();
-  const unit = energyLabel(energyUnit);
+  const e = (kcal: number) => Math.round(Math.abs(kcal)).toLocaleString();
+  const unit = 'kcal';
 
   const meaningfullyOver = over && Math.abs(remaining) > budget * 0.05;
-  const ringColor = !isSurplusGoal && meaningfullyOver ? 'var(--t-warning)' : undefined;
+  // Deficit day: warn once meaningfully over. Surplus day: reaching the
+  // target is success, so the full ring celebrates instead of warning.
+  const ringColor = isSurplusGoal
+    ? over
+      ? 'var(--t-success)'
+      : undefined
+    : meaningfullyOver
+      ? 'var(--t-warning)'
+      : undefined;
 
   // A past day is a closed record: past tense, and no 'push' tone, since its
   // celebrate animation nudges an action that is no longer possible.
@@ -54,9 +64,17 @@ export function CalorieHero({ dash, mode, isToday, onOpenDetails }: CalorieHeroP
         ? t('today.surplus_left', '{{kcal}} {{unit}} still to eat for your surplus', { kcal: e(remaining), unit })
         : t('day.surplus_left', 'Finished {{kcal}} {{unit}} short of your surplus', { kcal: e(remaining), unit });
       statusTone = isToday && nearGoal ? 'push' : 'calm';
-    } else {
-      statusText = t('today.surplus_hit', 'Surplus target reached. Well done!');
+    } else if (!meaningfullyOver) {
+      statusText = isToday
+        ? t('today.surplus_hit', 'Surplus target reached. Well done!')
+        : t('day.surplus_hit', 'Surplus target reached that day. Well done!');
       statusTone = 'ok';
+    } else {
+      // Well past the surplus: still a win, just steer gently back.
+      statusText = isToday
+        ? t('today.surplus_over', 'Target reached, plus {{kcal}} {{unit}} extra. Tomorrow rebalances it.', { kcal: e(remaining), unit })
+        : t('day.surplus_over', 'Went {{kcal}} {{unit}} past the surplus target that day.', { kcal: e(remaining), unit });
+      statusTone = isToday ? 'ok' : 'calm';
     }
   } else if (!over) {
     if (isToday) {
@@ -81,6 +99,20 @@ export function CalorieHero({ dash, mode, isToday, onOpenDetails }: CalorieHeroP
       ? t('today.over_recover', 'Over by {{kcal}} {{unit}}. One day never ruins a week: tomorrow adjusts automatically.', { kcal: e(remaining), unit })
       : t('day.over_recover', 'Over by {{kcal}} {{unit}} that day. One day never ruins a week.', { kcal: e(remaining), unit });
   }
+
+  // The word under the big number, adapted to the goal direction: "over" is a
+  // warning on a deficit day but "past goal" (an achievement) on a surplus day.
+  const ringSubLabel = !dash.hasCalorieBudgetEstimate
+    ? t('today.ring_eaten', '{{unit}} eaten', { unit })
+    : over
+      ? isSurplusGoal
+        ? t('today.ring_past_goal', '{{unit}} past goal', { unit })
+        : t('today.ring_over', '{{unit}} over', { unit })
+      : isToday
+        ? t('today.ring_left', '{{unit}} left', { unit })
+        : isSurplusGoal
+          ? t('day.ring_short', '{{unit}} short', { unit })
+          : t('day.ring_under', '{{unit}} under', { unit });
 
   const protein = dash.totalProteinGrams;
   const proteinGoal = dash.snapshotProteinGoalGrams;
@@ -115,15 +147,7 @@ export function CalorieHero({ dash, mode, isToday, onOpenDetails }: CalorieHeroP
           <span className="text-[32px] font-extrabold text-ink leading-none tabular-nums">
             {dash.hasCalorieBudgetEstimate ? e(remaining) : e(eaten)}
           </span>
-          <span className="text-[13px] font-medium text-ink-2 mt-1.5">
-            {dash.hasCalorieBudgetEstimate
-              ? over
-                ? t('today.ring_over', '{{unit}} over', { unit })
-                : isToday
-                  ? t('today.ring_left', '{{unit}} left', { unit })
-                  : t('day.ring_under', '{{unit}} under', { unit })
-              : t('today.ring_eaten', '{{unit}} eaten', { unit })}
-          </span>
+          <span className="text-[13px] font-medium text-ink-2 mt-1.5">{ringSubLabel}</span>
         </ProgressRing>
 
         <span

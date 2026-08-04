@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/Switch';
 import { Icon } from '@/components/ui/Icon';
 import { InlineError } from '@/components/ui/States';
 import { useUnits } from '@/hooks/useUnits';
-import { kgToDisplay, displayToKg, weightLabel } from '@/utils/units';
+import { kgToDisplay, displayToKg, weightLabel, cmToFtIn, ftInToCm } from '@/utils/units';
 import {
   GOAL_PRESETS,
   formatKgPerWeekShort,
@@ -44,24 +44,36 @@ const num = (raw: string): number | null => {
 
 export function BodySheet({ open, onClose, profile, onSave, saving }: EditSheetProps) {
   const { t } = useTranslation();
-  const { weightUnit } = useUnits();
+  const { system, weightUnit } = useUnits();
+  const imperial = system === 'imperial';
   const [weight, setWeight] = useState(
     profile.currentWeightKg !== null
       ? String(Math.round(kgToDisplay(profile.currentWeightKg, weightUnit) * 10) / 10)
       : '',
   );
   const [height, setHeight] = useState(profile.heightCm !== null ? String(profile.heightCm) : '');
+  const storedFtIn = profile.heightCm !== null ? cmToFtIn(profile.heightCm) : null;
+  const [heightFt, setHeightFt] = useState(storedFtIn ? String(storedFtIn.ft) : '');
+  const [heightIn, setHeightIn] = useState(storedFtIn ? String(storedFtIn.inch) : '');
   const [age, setAge] = useState(profile.age !== null ? String(profile.age) : '');
   const [sex, setSex] = useState<'M' | 'F' | ''>(
     profile.biologicalSex === 'M' || profile.biologicalSex === 'F' ? profile.biologicalSex : '',
   );
 
   const w = num(weight);
-  const h = num(height);
+  const ft = num(heightFt);
+  const inch = num(heightIn);
+  // Stored value is always cm, whichever way it was typed.
+  const h = imperial
+    ? ft === null && inch === null
+      ? null
+      : ftInToCm(ft ?? 0, inch ?? 0)
+    : num(height);
   const a = num(age);
   const valid =
     (w === null || (w > 0 && w < 1200)) &&
     (h === null || (h > 0 && h < 300)) &&
+    (inch === null || (inch >= 0 && inch < 12)) &&
     (a === null || (a >= 1 && a <= 150));
 
   return (
@@ -71,17 +83,43 @@ export function BodySheet({ open, onClose, profile, onSave, saving }: EditSheetP
           <DecimalField
             label={t('profile.weight', 'Weight')}
             suffix={weightLabel(weightUnit)}
-            placeholder="70"
+            placeholder={imperial ? '155' : '70'}
             value={weight}
             onValueChange={setWeight}
           />
-          <DecimalField
-            label={t('profile.height', 'Height')}
-            suffix="cm"
-            placeholder="175"
-            value={height}
-            onValueChange={setHeight}
-          />
+          {imperial ? (
+            <div>
+              <p className="text-[13px] font-semibold text-ink-2 mb-1.5">
+                {t('profile.height', 'Height')}
+              </p>
+              <div className="flex gap-2">
+                <DecimalField
+                  aria-label={t('profile.height_ft_aria', 'Height, feet')}
+                  suffix="ft"
+                  placeholder="5"
+                  value={heightFt}
+                  onValueChange={setHeightFt}
+                  containerClassName="flex-1"
+                />
+                <DecimalField
+                  aria-label={t('profile.height_in_aria', 'Height, inches')}
+                  suffix="in"
+                  placeholder="10"
+                  value={heightIn}
+                  onValueChange={setHeightIn}
+                  containerClassName="flex-1"
+                />
+              </div>
+            </div>
+          ) : (
+            <DecimalField
+              label={t('profile.height', 'Height')}
+              suffix="cm"
+              placeholder="175"
+              value={height}
+              onValueChange={setHeight}
+            />
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Field

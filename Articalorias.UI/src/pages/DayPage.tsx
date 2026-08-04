@@ -7,7 +7,7 @@ import { IconButton } from '@/components/ui/Button';
 import { ConfirmSheet } from '@/components/ui/ActionSheet';
 import { useToast } from '@/components/ui/Toast';
 import { dailyLogService } from '@/services/dailyLogService';
-import { queryKeys } from '@/lib/queryKeys';
+import { invalidateDayData } from '@/lib/queryKeys';
 import { toDateString, parseDate } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 
@@ -41,9 +41,7 @@ export default function DayPage() {
   const deleteDay = useMutation({
     mutationFn: () => dailyLogService.deleteDay(date!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.historyAll() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(date!) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.streak() });
+      invalidateDayData(queryClient);
       toast('success', t('day.deleted', 'Day deleted'));
       navigate('/progress', { replace: true });
     },

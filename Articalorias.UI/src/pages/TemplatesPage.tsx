@@ -1,16 +1,20 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { MealTemplates } from '@/components/templates/MealTemplates';
 import { ActivityTemplates } from '@/components/templates/ActivityTemplates';
 import { Routines } from '@/components/templates/Routines';
+import { usePersistedState } from '@/hooks/usePersistedState';
 
 type TemplatesTab = 'meals' | 'activities' | 'routines';
+
+const isTemplatesTab = (v: string): v is TemplatesTab =>
+  v === 'meals' || v === 'activities' || v === 'routines';
 
 /** Saved meals, activities and routines: create, edit and log them in one tap. */
 export default function TemplatesPage() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<TemplatesTab>('meals');
+  // Remembered across navigation: leaving and coming back keeps your tab.
+  const [tab, setTab] = usePersistedState<TemplatesTab>('ac-tab-templates', 'meals', isTemplatesTab);
 
   return (
     <div className="space-y-4">

@@ -12,7 +12,7 @@ import { Fab } from '@/components/ui/Fab';
 import { useToast } from '@/components/ui/Toast';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import { activityService } from '@/services/activityService';
-import { queryKeys } from '@/lib/queryKeys';
+import { queryKeys, invalidateDayData } from '@/lib/queryKeys';
 import { qtyStr, toDateString } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 import type { ActivityTemplateResponse } from '@/types';
@@ -57,10 +57,8 @@ export function ActivityTemplates() {
         })
         .then(() => ({ date, name: tpl.templateName }));
     },
-    onSuccess: ({ date, name }) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(date) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.historyAll() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.streak() });
+    onSuccess: ({ name }) => {
+      invalidateDayData(queryClient);
       toast('success', t('templates.added_to_today', '{{name}} added to today', { name }));
     },
     onError: (err) =>

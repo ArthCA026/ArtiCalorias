@@ -1,19 +1,26 @@
 /**
  * Unit conversion and formatting utilities.
  *
- * The backend always stores and receives SI values (kg, kcal).
+ * The user picks one unit system: metric (kg, cm) or imperial (lbs, ft/in).
+ * The backend always stores and receives SI values (kg, cm, kcal).
  * These helpers convert for display only — nothing here touches the API.
+ * Energy is always kcal; both systems use it.
  *
  * Conversion factors:
- *   1 kg  = 2.20462 lbs
- *   1 kcal = 4.184 kJ
+ *   1 kg = 2.20462 lbs
+ *   1 in = 2.54 cm, 1 ft = 12 in
  */
 
+export type UnitSystem = "metric" | "imperial";
 export type WeightUnit = "kg" | "lbs";
-export type EnergyUnit = "kcal" | "kJ";
 
 const KG_TO_LBS = 2.20462;
-const KCAL_TO_KJ = 4.184;
+const CM_PER_INCH = 2.54;
+
+/** The weight unit a system displays in. */
+export function weightUnitFor(system: UnitSystem): WeightUnit {
+  return system === "imperial" ? "lbs" : "kg";
+}
 
 // ─── Weight ───────────────────────────────────────────────────────────────────
 
@@ -38,7 +45,7 @@ export function formatWeight(kg: number, unit: WeightUnit, decimals = 1): string
  */
 export function formatWeightRate(kgPerWeek: number, unit: WeightUnit): string {
   const val = kgToDisplay(Math.abs(kgPerWeek), unit);
-  const sign = kgPerWeek > 0 ? "+" : kgPerWeek < 0 ? "\u2212" : "";
+  const sign = kgPerWeek > 0 ? "+" : kgPerWeek < 0 ? "−" : "";
   const label = unit === "lbs" ? "lbs/wk" : "kg/wk";
   return kgPerWeek === 0 ? `0 ${label}` : `${sign}${val.toFixed(2)} ${label}`;
 }
@@ -46,7 +53,7 @@ export function formatWeightRate(kgPerWeek: number, unit: WeightUnit): string {
 /** Long form rate: "−0.50 kg per week" | "−1.10 lbs per week" */
 export function formatWeightRateLong(kgPerWeek: number, unit: WeightUnit): string {
   const val = kgToDisplay(Math.abs(kgPerWeek), unit);
-  const sign = kgPerWeek > 0 ? "+" : kgPerWeek < 0 ? "\u2212" : "";
+  const sign = kgPerWeek > 0 ? "+" : kgPerWeek < 0 ? "−" : "";
   const label = unit === "lbs" ? "lbs per week" : "kg per week";
   return kgPerWeek === 0 ? `0 ${label}` : `${sign}${val.toFixed(2)} ${label}`;
 }
@@ -56,53 +63,31 @@ export function weightLabel(unit: WeightUnit): string {
   return unit;
 }
 
-// ─── Energy ───────────────────────────────────────────────────────────────────
+// ─── Height ───────────────────────────────────────────────────────────────────
 
-/** Convert a stored kcal value to the display unit. */
-export function kcalToDisplay(kcal: number, unit: EnergyUnit): number {
-  return unit === "kJ" ? kcal * KCAL_TO_KJ : kcal;
+/** Split a stored cm value into whole feet and rounded inches: 178 → 5 ft 10 in */
+export function cmToFtIn(cm: number): { ft: number; inch: number } {
+  const totalInches = Math.round(cm / CM_PER_INCH);
+  let ft = Math.floor(totalInches / 12);
+  let inch = totalInches % 12;
+  // Rounding can land on 12 in; carry it into a full foot.
+  if (inch === 12) {
+    ft += 1;
+    inch = 0;
+  }
+  return { ft, inch };
 }
 
-/** Convert a user-entered display value back to kcal for storage. */
-export function displayToKcal(value: number, unit: EnergyUnit): number {
-  return unit === "kJ" ? value / KCAL_TO_KJ : value;
+/** Convert user-entered feet + inches back to cm for storage. */
+export function ftInToCm(ft: number, inch: number): number {
+  return Math.round((ft * 12 + inch) * CM_PER_INCH * 10) / 10;
 }
 
-/**
- * Format a kcal value for display: "1,500 kcal" | "6,276 kJ"
- * Uses locale number formatting with thousand separators.
- */
-export function formatEnergy(kcal: number, unit: EnergyUnit, decimals = 0): string {
-  const val = kcalToDisplay(kcal, unit);
-  return `${val.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} ${energyLabel(unit)}`;
-}
-
-/** Format a kcal/day rate: "1,500 kcal/day" | "6,276 kJ/day" */
-export function formatEnergyRate(kcal: number, unit: EnergyUnit): string {
-  const val = kcalToDisplay(kcal, unit);
-  const label = unit === "kJ" ? "kJ/day" : "kcal/day";
-  return `${val.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${label}`;
-}
-
-/**
- * Format a kcal adjustment with sign, rounded to nearest 10.
- * "about +330 kcal/day" | "about +1,381 kJ/day"
- */
-export function formatEnergyAdjustment(kcal: number, unit: EnergyUnit): string {
-  if (kcal === 0) return unit === "kJ" ? "no energy adjustment" : "no calorie adjustment";
-  const displayVal = kcalToDisplay(kcal, unit);
-  const rounded = Math.round(displayVal / (unit === "kJ" ? 40 : 10)) * (unit === "kJ" ? 40 : 10);
-  const sign = rounded > 0 ? "+" : "\u2212";
-  const label = unit === "kJ" ? "kJ/day" : "kcal/day";
-  return `about ${sign}${Math.abs(rounded).toLocaleString()} ${label}`;
-}
-
-/** Bare unit label: "kcal" | "kJ" */
-export function energyLabel(unit: EnergyUnit): string {
-  return unit;
-}
-
-/** Rate label: "kcal/day" | "kJ/day" */
-export function energyRateLabel(unit: EnergyUnit): string {
-  return unit === "kJ" ? "kJ/day" : "kcal/day";
+/** Format a stored cm height for display: "178 cm" | "5 ft 10 in" */
+export function formatHeight(cm: number, system: UnitSystem): string {
+  if (system === "imperial") {
+    const { ft, inch } = cmToFtIn(cm);
+    return `${ft} ft ${inch} in`;
+  }
+  return `${Math.round(cm)} cm`;
 }

@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { AxiosError } from 'axios';
 import { Sheet } from '@/components/ui/Sheet';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Button, IconButton } from '@/components/ui/Button';
@@ -8,7 +9,7 @@ import { Icon } from '@/components/ui/Icon';
 import { InlineError } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
 import { dailyLogService } from '@/services/dailyLogService';
-import { queryKeys } from '@/lib/queryKeys';
+import { invalidateDayData } from '@/lib/queryKeys';
 import { extractApiError } from '@/utils/apiError';
 import { compressImage } from '@/utils/compressImage';
 import type {
@@ -66,19 +67,34 @@ export function LogSheet({ open, initialTab, targetDate, onClose }: LogSheetProp
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  // A picked photo is staged, not sent: the user can add text context
+  // (like in a chat) and then presses Add to send photo + text together.
+  const [pendingImage, setPendingImage] = useState<{ file: File; url: string } | null>(null);
+
+  const clearImage = () => {
+    setPendingImage((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return null;
+    });
+  };
+
+  // Release the preview object URL when the sheet unmounts mid-staging
+  useEffect(
+    () => () => {
+      setPendingImage((prev) => {
+        if (prev) URL.revokeObjectURL(prev.url);
+        return prev;
+      });
+    },
+    [],
+  );
 
   const cameraInput = useRef<HTMLInputElement>(null);
   const galleryInput = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const invalidateDay = (date: string) => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(date) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.historyAll() });
-    queryClient.invalidateQueries({ queryKey: queryKeys.streak() });
-  };
-
-  const onLogged = (date: string, count: number) => {
-    invalidateDay(date);
+  const onLogged = (_date: string, count: number) => {
+    invalidateDayData(queryClient);
     toast(
       'success',
       count === 1
@@ -131,9 +147,13 @@ export function LogSheet({ open, initialTab, targetDate, onClose }: LogSheetProp
         .then((r) => r.data);
       return saveFoods(date, items);
     },
-    onSuccess: ({ date, count }) => onLogged(date, count),
+    onSuccess: ({ date, count }) => {
+      clearImage();
+      onLogged(date, count);
+    },
+    // The staged photo stays on error, so retrying or adding context is one tap.
     onError: (err) =>
-      setError(extractApiError(err, t('log.image_error', 'Could not read that photo. Try a clearer shot, or describe the meal in words.'))),
+      setError(extractApiError(err, t('log.image_error', 'Could not read that photo. Try a clearer shot, or add a line of context below and press Add again.'))),
   });
 
   const addFromBarcode = useMutation({
@@ -143,23 +163,44 @@ export function LogSheet({ open, initialTab, targetDate, onClose }: LogSheetProp
       return saveFoods(date, items);
     },
     onSuccess: ({ date, count }) => onLogged(date, count),
-    onError: (err) =>
-      setError(extractApiError(err, t('log.barcode_error', 'Product not found. You can type the food instead.'))),
+    // Each failure mode gets its own words, so the user knows whether the
+    // product is missing, they scanned too fast, or the network dropped.
+    onError: (err) => {
+      if (err instanceof AxiosError && err.response?.status === 404) {
+        setError(t('log.barcode_not_found', 'Scanned fine, but this product is not in the food database yet. Snap a photo of it or type it instead.'));
+      } else if (err instanceof AxiosError && err.response?.status === 429) {
+        setError(t('log.barcode_cooldown', 'Two scans very close together. Give it a few seconds and scan again.'));
+      } else if (err instanceof AxiosError && !err.response) {
+        setError(t('log.barcode_offline', 'Could not reach the food database. Check your connection and try again.'));
+      } else {
+        setError(extractApiError(err, t('log.barcode_error', 'The lookup failed. You can type the food instead.')));
+      }
+    },
   });
 
   const busy = addFromText.isPending || addFromImage.isPending || addFromBarcode.isPending;
 
+  const canSubmit = pendingImage !== null || text.trim().length >= 2;
+
   const submit = () => {
-    const trimmed = text.trim();
-    if (trimmed.length < 2 || busy) return;
+    if (!canSubmit || busy) return;
     setError(null);
-    addFromText.mutate(trimmed);
+    // A staged photo wins: it goes out with whatever text was added as context.
+    if (pendingImage) {
+      addFromImage.mutate(pendingImage.file);
+      return;
+    }
+    addFromText.mutate(text.trim());
   };
 
   const onFile = (file: File | undefined) => {
     if (!file) return;
     setError(null);
-    addFromImage.mutate(file);
+    // Stage the photo; a second pick replaces the first.
+    setPendingImage((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return { file, url: URL.createObjectURL(file) };
+    });
   };
 
   const onBarcodeClick = () => {
@@ -194,6 +235,7 @@ export function LogSheet({ open, initialTab, targetDate, onClose }: LogSheetProp
                 setTab(v);
                 setText('');
                 setError(null);
+                clearImage();
               }}
             />
 
@@ -214,6 +256,26 @@ export function LogSheet({ open, initialTab, targetDate, onClose }: LogSheetProp
             ) : (
               <>
                 <div className="rounded-card bg-inset p-3">
+                  {pendingImage && (
+                    <div className="flex items-center gap-3 mb-2 rounded-xl bg-card p-2">
+                      <img
+                        src={pendingImage.url}
+                        alt={t('log.photo_preview_alt', 'Photo of your meal')}
+                        className="w-14 h-14 rounded-lg object-cover shrink-0"
+                      />
+                      <span className="flex-1 text-[13px] text-ink-2 leading-snug">
+                        {t('log.photo_attached', 'Photo attached. Add any detail that helps, then press Add.')}
+                      </span>
+                      <IconButton
+                        icon="close"
+                        label={t('log.remove_photo', 'Remove photo')}
+                        size={32}
+                        iconSize={16}
+                        variant="inset"
+                        onClick={clearImage}
+                      />
+                    </div>
+                  )}
                   <textarea
                     ref={textareaRef}
                     value={text}
@@ -227,7 +289,9 @@ export function LogSheet({ open, initialTab, targetDate, onClose }: LogSheetProp
                     enterKeyHint="send"
                     placeholder={
                       tab === 'meal'
-                        ? t('log.placeholder_meal', 'e.g. 2 eggs and toast with butter')
+                        ? pendingImage
+                          ? t('log.placeholder_photo_context', 'Optional: add context, like "the bowl is 500 ml"')
+                          : t('log.placeholder_meal', 'e.g. 2 eggs and toast with butter')
                         : t('log.placeholder_activity', 'e.g. 30 min easy run')
                     }
                     className="w-full bg-transparent resize-none text-base text-ink placeholder:text-ink-3 px-1.5 py-1 focus-visible:shadow-none"
@@ -266,7 +330,7 @@ export function LogSheet({ open, initialTab, targetDate, onClose }: LogSheetProp
                   size="lg"
                   fullWidth
                   icon="plus"
-                  disabled={text.trim().length < 2}
+                  disabled={!canSubmit}
                   onClick={submit}
                 >
                   {t('log.add', 'Add')}
@@ -315,7 +379,7 @@ export function LogSheet({ open, initialTab, targetDate, onClose }: LogSheetProp
             tab={tab}
             date={targetDate}
             onBack={() => setView('input')}
-            onAdded={(date) => invalidateDay(date)}
+            onAdded={() => invalidateDayData(queryClient)}
           />
         )}
 
@@ -349,10 +413,12 @@ export function LogSheet({ open, initialTab, targetDate, onClose }: LogSheetProp
             setScanning(false);
             addFromBarcode.mutate(code);
           }}
-          onClose={(cameraError) => {
+          onClose={(reason) => {
             setScanning(false);
-            if (cameraError) {
-              setError(t('log.camera_denied', 'Camera unavailable. Check camera permissions in your browser settings, or type the food instead.'));
+            if (reason === 'denied') {
+              setError(t('log.camera_denied', 'Camera access is blocked. Allow the camera for this site in your browser settings, or type the food instead.'));
+            } else if (reason === 'unavailable') {
+              setError(t('log.camera_unavailable', 'No usable camera was found on this device. Choose a photo from your gallery or type the food instead.'));
             }
           }}
         />

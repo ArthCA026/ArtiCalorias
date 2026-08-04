@@ -3,7 +3,7 @@
  * These are kept here so they can be imported by both GoalSelector sub-components
  * and any future pages that need to reason about goal values.
  */
-import { formatWeightRateLong, formatWeightRate, formatEnergyAdjustment, type WeightUnit, type EnergyUnit } from "@/utils/units";
+import { formatWeightRate, type WeightUnit } from "@/utils/units";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,19 +49,9 @@ export function kcalToKgPerWeek(kcal: number): string {
 
 // ─── Formatting helpers ────────────────────────────────────────────────────────
 
-/** Formats a kg/week value with the correct sign character (−, not hyphen). */
-export function formatKgPerWeek(kg: number, unit: WeightUnit = "kg"): string {
-  return formatWeightRateLong(kg, unit);
-}
-
 /** Compact kg/week format for mobile option cards (e.g. "−0.50 kg/wk"). */
 export function formatKgPerWeekShort(kg: number, unit: WeightUnit = "kg"): string {
   return formatWeightRate(kg, unit);
-}
-
-/** Formats a daily kcal adjustment rounded to the nearest 10. */
-export function formatKcalAdjustment(kcal: number, unit: EnergyUnit = "kcal"): string {
-  return formatEnergyAdjustment(kcal, unit);
 }
 
 // ─── Validation helpers ────────────────────────────────────────────────────────

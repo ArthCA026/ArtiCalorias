@@ -11,8 +11,7 @@ import { Fab } from '@/components/ui/Fab';
 import { useToast } from '@/components/ui/Toast';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import { foodTemplateService } from '@/services/foodTemplateService';
-import { queryKeys } from '@/lib/queryKeys';
-import { toDateString } from '@/utils/format';
+import { queryKeys, invalidateDayData } from '@/lib/queryKeys';
 import { extractApiError } from '@/utils/apiError';
 import type { FavoriteRoutineResponse } from '@/types';
 import { RoutineSheet } from './RoutineSheet';
@@ -42,9 +41,7 @@ export function Routines() {
     mutationFn: (routine: FavoriteRoutineResponse) =>
       foodTemplateService.addRoutineToToday(routine.favoriteRoutineId).then((r) => r.data),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(toDateString()) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.historyAll() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.streak() });
+      invalidateDayData(queryClient);
       toast('success', t('templates.routine_added', '{{n}} items added', { n: data.addedCount }));
       if (data.skippedItems.length > 0) {
         toast(

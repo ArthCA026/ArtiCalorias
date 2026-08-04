@@ -14,11 +14,14 @@ import { Icon } from '@/components/ui/Icon';
 import { Fab } from '@/components/ui/Fab';
 import { useLogSheet } from '@/components/log/LogSheetContext';
 import { dailyLogService } from '@/services/dailyLogService';
-import { queryKeys } from '@/lib/queryKeys';
+import { queryKeys, invalidateDayData } from '@/lib/queryKeys';
 import { useCalorieMode } from '@/hooks/useCalorieMode';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
+import { usePersistedState } from '@/hooks/usePersistedState';
 
 type ListTab = 'meals' | 'activities';
+
+const isListTab = (v: string): v is ListTab => v === 'meals' || v === 'activities';
 
 interface DayViewProps {
   /** yyyy-MM-dd, today or a past day */
@@ -38,7 +41,9 @@ export function DayView({ date, isToday }: DayViewProps) {
   const { mode } = useCalorieMode();
   const { openLog } = useLogSheet();
 
-  const [listTab, setListTab] = useState<ListTab>('meals');
+  // Remembered across navigation: coming back to a day view reopens the list
+  // (meals or activities) that was in front when you left.
+  const [listTab, setListTab] = usePersistedState<ListTab>('ac-tab-day', 'meals', isListTab);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   const query = useQuery({
@@ -49,11 +54,7 @@ export function DayView({ date, isToday }: DayViewProps) {
   const showSkeleton = useDelayedBoolean(query.isLoading, 300);
   const dash = query.data;
 
-  const onChanged = () => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(date) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.historyAll() });
-    queryClient.invalidateQueries({ queryKey: queryKeys.streak() });
-  };
+  const onChanged = () => invalidateDayData(queryClient);
 
   return (
     <div className="space-y-4">

@@ -8,6 +8,7 @@ import { Icon } from '@/components/ui/Icon';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { CalorieModeTag } from '@/components/ui/CalorieModeTag';
 import { WeekDeltaChart } from '@/components/progress/WeekDeltaChart';
+import { WeekPickerSheet } from '@/components/progress/WeekPickerSheet';
 import { PremiumInsightCard } from '@/components/progress/PremiumInsightCard';
 import { StreakCard } from '@/components/progress/StreakCard';
 import { ProgressSkeleton } from '@/components/progress/ProgressSkeleton';
@@ -21,11 +22,14 @@ import {
 import { historyService } from '@/services/historyService';
 import { queryKeys } from '@/lib/queryKeys';
 import { addDays, mondayOf, parseDate, toDateString } from '@/utils/format';
-import { energyLabel, kcalToDisplay } from '@/utils/units';
-import { useUnits } from '@/hooks/useUnits';
 import { useCalorieMode } from '@/hooks/useCalorieMode';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
+import { usePersistedState } from '@/hooks/usePersistedState';
 import { cn } from '@/utils/cn';
+
+/** A stored week is only reused when it is a real, non-future Monday. */
+const isValidMonday = (v: string): v is string =>
+  /^\d{4}-\d{2}-\d{2}$/.test(v) && mondayOf(v) === v && v <= mondayOf(toDateString());
 
 /**
  * Progress: weekly-first analytics. The week, not the day, is the unit of
@@ -34,13 +38,15 @@ import { cn } from '@/utils/cn';
  */
 export default function ProgressPage() {
   const { t, i18n } = useTranslation();
-  const { energyUnit } = useUnits();
   const { mode } = useCalorieMode();
   const navigate = useNavigate();
 
   const today = toDateString();
   const currentMonday = mondayOf(today);
-  const [monday, setMonday] = useState(currentMonday);
+  // Remembered across navigation: drilling into a day and coming back, or
+  // reloading, keeps the week you were reviewing.
+  const [monday, setMonday] = usePersistedState('ac-progress-week', currentMonday, isValidMonday);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const sunday = addDays(monday, 6);
   const isCurrentWeek = monday === currentMonday;
 
@@ -53,12 +59,11 @@ export default function ProgressPage() {
   const days = query.data;
 
   // ── Formatting helpers ────────────────────────────────────────────────────
-  const energy = (kcal: number) =>
-    `${Math.round(kcalToDisplay(kcal, energyUnit)).toLocaleString(i18n.language)} ${energyLabel(energyUnit)}`;
+  const energy = (kcal: number) => `${Math.round(kcal).toLocaleString(i18n.language)} kcal`;
 
-  /** Explicit sign, Unicode minus (never an em dash), display units, no label. */
+  /** Explicit sign, Unicode minus (never an em dash), no label. */
   const signedEnergyValue = (kcal: number) => {
-    const v = Math.round(kcalToDisplay(kcal, energyUnit));
+    const v = Math.round(kcal);
     if (v === 0) return '0';
     return `${v > 0 ? '+' : '−'}${Math.abs(v).toLocaleString(i18n.language)}`;
   };
@@ -104,16 +109,22 @@ export default function ProgressPage() {
     // Week direction follows the dominant goal type across its days.
     const surplusWeek = days.filter(isSurplusGoalDay).length > days.length / 2;
     const favorable = surplusWeek ? deltaSumKcal >= 0 : deltaSumKcal <= 0;
-    return { loggedCount, avgEatenKcal, deltaSumKcal, favorable };
+    return { loggedCount, avgEatenKcal, deltaSumKcal, surplusWeek, favorable };
   }, [days, mode]);
 
   // Weekly thinking beats daily perfection: never guilt, always absorbable.
+  // The copy follows the week's goal: on a gaining week, over plan is the win
+  // and falling short is the thing a normal week absorbs.
   const weekLine = summary
     ? summary.favorable
-      ? t('progress.week_on_plan', 'On plan this week. Nice and steady.')
-      : summary.deltaSumKcal > 0
-        ? t('progress.week_over_plan', 'A bit over plan. Nothing a normal week cannot absorb.')
-        : t('progress.week_under_plan', 'A bit under plan. Nothing a normal week cannot absorb.')
+      ? summary.surplusWeek
+        ? t('progress.week_on_plan_surplus', 'Feeding your surplus on plan. Nice and steady.')
+        : t('progress.week_on_plan', 'On plan this week. Nice and steady.')
+      : summary.surplusWeek
+        ? t('progress.week_under_surplus', 'A bit under your surplus. Nothing a normal week cannot absorb.')
+        : summary.deltaSumKcal > 0
+          ? t('progress.week_over_plan', 'A bit over plan. Nothing a normal week cannot absorb.')
+          : t('progress.week_under_plan', 'A bit under plan. Nothing a normal week cannot absorb.')
     : '';
 
   // All seven days of the week, Monday to Sunday, with their log when one exists.
@@ -140,7 +151,17 @@ export default function ProgressPage() {
           label={t('progress.prev_week', 'Previous week')}
           onClick={() => setMonday(addDays(monday, -7))}
         />
-        <p className="text-[15px] font-bold text-ink">{pagerLabel}</p>
+        {/* The label is the fast path: one tap opens the week jumper instead
+            of paging arrow by arrow to a months-old week. */}
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          aria-label={t('progress.week_picker_aria', 'Shown week: {{week}}. Tap to jump to another week.', { week: pagerLabel })}
+          className="pressable flex items-center gap-1 rounded-full active:bg-press px-3 py-1.5"
+        >
+          <span className="text-[15px] font-bold text-ink">{pagerLabel}</span>
+          <Icon name="chevronDown" size={15} className="text-ink-3" />
+        </button>
         <IconButton
           icon="chevronRight"
           label={t('progress.next_week', 'Next week')}
@@ -149,6 +170,13 @@ export default function ProgressPage() {
           onClick={() => setMonday(addDays(monday, 7))}
         />
       </Card>
+
+      <WeekPickerSheet
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        selected={monday}
+        onPick={setMonday}
+      />
 
       {query.isError && (
         <ErrorState
@@ -174,6 +202,9 @@ export default function ProgressPage() {
 
       {days && summary && (
         <>
+          {/* The verdict leads: one big signed number instead of three equal
+              tiles, so the week reads as an outcome, not a spreadsheet. The
+              counters that used to compete with it become support chips. */}
           <Card>
             <div className="flex items-center justify-between gap-2">
               <p className="text-[13px] font-bold text-ink-2 uppercase tracking-wide">
@@ -181,39 +212,39 @@ export default function ProgressPage() {
               </p>
               <CalorieModeTag />
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <div className="rounded-card bg-inset px-2 py-2.5 text-center">
-                <p className="text-[17px] font-extrabold text-ink tabular-nums">
-                  {t('progress.days_of_week', '{{n}} of 7', { n: summary.loggedCount })}
-                </p>
-                <p className="mt-0.5 text-[11px] font-semibold text-ink-3">
+            <div className="mt-3 flex items-baseline gap-1.5">
+              <span
+                className={cn(
+                  'text-[30px] font-extrabold tabular-nums leading-none',
+                  summary.favorable ? 'text-success' : 'text-warning',
+                )}
+              >
+                {signedEnergyValue(summary.deltaSumKcal)}
+              </span>
+              <span className="text-[13px] font-semibold text-ink-2">
+                {t('progress.hero_vs_plan', 'kcal vs plan')}
+              </span>
+            </div>
+            <p className="mt-2 text-[13px] text-ink-2 leading-relaxed">{weekLine}</p>
+            <div className="mt-3.5 grid grid-cols-2 gap-2">
+              <div className="rounded-card bg-inset px-3 py-2.5">
+                <p className="text-[11px] font-semibold text-ink-3">
                   {t('progress.days_logged', 'Days logged')}
                 </p>
-              </div>
-              <div className="rounded-card bg-inset px-2 py-2.5 text-center">
-                <p className="text-[17px] font-extrabold text-ink tabular-nums">
-                  {Math.round(kcalToDisplay(summary.avgEatenKcal, energyUnit)).toLocaleString(i18n.language)}
-                </p>
-                <p className="mt-0.5 text-[11px] font-semibold text-ink-3">
-                  {t('progress.avg_eaten', 'Avg {{unit}} eaten', { unit: energyLabel(energyUnit) })}
+                <p className="mt-0.5 text-[15px] font-extrabold text-ink tabular-nums">
+                  {t('progress.days_of_week', '{{n}} of 7', { n: summary.loggedCount })}
                 </p>
               </div>
-              <div className="rounded-card bg-inset px-2 py-2.5 text-center">
-                <p
-                  className={cn(
-                    'text-[17px] font-extrabold tabular-nums',
-                    summary.favorable ? 'text-success' : 'text-warning',
-                  )}
-                >
-                  {signedEnergyValue(summary.deltaSumKcal)}
+              <div className="rounded-card bg-inset px-3 py-2.5">
+                <p className="text-[11px] font-semibold text-ink-3">
+                  {t('progress.avg_eaten_label', 'Avg eaten per day')}
                 </p>
-                <p className="mt-0.5 text-[11px] font-semibold text-ink-3">
-                  {t('progress.vs_plan', 'vs plan')}
+                <p className="mt-0.5 text-[15px] font-extrabold text-ink tabular-nums">
+                  {energy(summary.avgEatenKcal)}
                 </p>
               </div>
             </div>
-            <p className="mt-3.5 text-[13px] text-ink-2 leading-relaxed">{weekLine}</p>
-            <p className="mt-1 text-[12px] text-ink-3">
+            <p className="mt-2.5 text-[12px] text-ink-3">
               {t('progress.week_motto', 'Weekly thinking beats daily perfection.')}
             </p>
           </Card>
@@ -226,45 +257,59 @@ export default function ProgressPage() {
 
       {days && (
         <Card padded={false} className="overflow-hidden">
-          <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-1.5">
-            <p className="text-[13px] font-bold text-ink-2 uppercase tracking-wide">
-              {t('progress.days_title', 'Days')}
-            </p>
+          <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
+            <div>
+              <p className="text-[13px] font-bold text-ink-2 uppercase tracking-wide">
+                {t('progress.days_title', 'Days')}
+              </p>
+              <p className="mt-0.5 text-[12px] text-ink-3">
+                {t('progress.days_subtitle', 'Tap any day to open and edit it')}
+              </p>
+            </div>
             <CalorieModeTag />
           </div>
-          {/* Two bare numbers per row need naming once, or the eaten total and
-              the distance from plan read as the same kind of figure. Skipped on
-              a week with nothing on it, where there are no columns to name. */}
-          {dayRows.some((r) => r.log) && (
-            <div className="flex items-center gap-2.5 px-4 pb-1.5 text-[11px] font-semibold text-ink-3">
-              <span className="flex-1" />
-              <span>{t('progress.chart_col_eaten', 'Eaten')}</span>
-              <span className="min-w-13 text-center">{t('progress.vs_plan', 'vs plan')}</span>
-              <span className="w-4 shrink-0" />
-            </div>
-          )}
           {dayRows.map(({ date, log }, i) => {
             const border = i > 0 && 'border-t border-hairline/60';
 
-            // Logged day: full stats, drills into the editable day view.
+            // Logged day: drills into the editable day view. Each row carries
+            // its own words ("kcal eaten", the signed pill), so the old
+            // floating column-header row is gone for good.
             if (log) {
+              const comparable = hasComparablePlan(log);
+              const eatenLabel = t('progress.eaten_meta', '{{kcal}} kcal eaten', {
+                kcal: Math.round(log.totalFoodCaloriesKcal).toLocaleString(i18n.language),
+              });
               return (
                 <button
                   key={date}
                   type="button"
                   onClick={() => navigate(`/day/${log.logDate}`)}
+                  aria-label={
+                    comparable
+                      ? t('progress.day_row_aria', '{{day}}: {{eaten}} kcal eaten, {{delta}} kcal from plan.', {
+                          day: weekdayLong.format(parseDate(date)),
+                          eaten: Math.round(log.totalFoodCaloriesKcal).toLocaleString(i18n.language),
+                          delta: signedEnergyValue(deltaFor(log, mode)),
+                        })
+                      : t('progress.day_row_aria_no_plan', '{{day}}: {{eaten}} kcal eaten.', {
+                          day: weekdayLong.format(parseDate(date)),
+                          eaten: Math.round(log.totalFoodCaloriesKcal).toLocaleString(i18n.language),
+                        })
+                  }
                   className={cn(
-                    'pressable w-full flex items-center gap-2.5 px-4 h-13 text-left active:bg-press',
+                    'pressable w-full flex items-center gap-3 px-4 py-2.5 text-left active:bg-press',
                     border,
                   )}
                 >
-                  <span className="flex-1 text-[15px] font-semibold text-ink capitalize truncate">
-                    {weekdayLong.format(parseDate(date))}
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[15px] font-semibold text-ink capitalize truncate">
+                      {weekdayLong.format(parseDate(date))}
+                    </span>
+                    <span className="block text-[12px] text-ink-2 tabular-nums mt-0.5">
+                      {eatenLabel}
+                    </span>
                   </span>
-                  <span className="text-[13px] text-ink-2 tabular-nums">
-                    {energy(log.totalFoodCaloriesKcal)}
-                  </span>
-                  {hasComparablePlan(log) ? (
+                  {comparable ? (
                     <span
                       className={cn(
                         'min-w-13 text-center rounded-full px-2 py-0.5 text-[12px] font-bold tabular-nums',

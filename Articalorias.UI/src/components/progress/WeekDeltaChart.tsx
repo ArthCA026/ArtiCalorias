@@ -3,9 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { CalorieModeTag } from '@/components/ui/CalorieModeTag';
 import { calorieModeShortLabel } from '@/components/ui/calorieModeLabels';
-import { useUnits } from '@/hooks/useUnits';
 import { useHaptics } from '@/hooks/useHaptics';
-import { energyLabel, kcalToDisplay } from '@/utils/units';
 import { addDays, parseDate, toDateString } from '@/utils/format';
 import { deltaFor, hasComparablePlan, isFavorableFor, isSurplusGoalDay } from '@/utils/calorieMath';
 import { cn } from '@/utils/cn';
@@ -66,7 +64,6 @@ interface Slot {
  */
 export function WeekDeltaChart({ monday, days, mode }: WeekDeltaChartProps) {
   const { t, i18n } = useTranslation();
-  const { energyUnit } = useUnits();
   const haptics = useHaptics();
   const rootRef = useRef<HTMLDivElement>(null);
   // The selection is stamped with the week it belongs to, so paging away
@@ -99,27 +96,22 @@ export function WeekDeltaChart({ monday, days, mode }: WeekDeltaChartProps) {
       return {
         date,
         log,
-        value: log ? Math.round(kcalToDisplay(deltaFor(log, mode), energyUnit)) : null,
+        value: log ? Math.round(deltaFor(log, mode)) : null,
         favorable: log ? isFavorableFor(log, mode) : false,
         isFuture: date > today,
         letter: narrow.format(parseDate(date)),
       };
     });
-  }, [days, monday, energyUnit, i18n.language, mode]);
+  }, [days, monday, i18n.language, mode]);
 
   const domain = useMemo(() => {
     const values = slots.map((s) => s.value).filter((v): v is number => v !== null);
-    return buildDomain(values, Math.round(kcalToDisplay(DOMAIN_FLOOR_KCAL, energyUnit)));
-  }, [slots, energyUnit]);
+    return buildDomain(values, DOMAIN_FLOOR_KCAL);
+  }, [slots]);
 
-  /** Compact ticks keep large kJ domains short. */
   const tick = useMemo(
-    () =>
-      new Intl.NumberFormat(i18n.language, {
-        notation: domain >= 10000 ? 'compact' : 'standard',
-        maximumFractionDigits: domain >= 10000 ? 1 : 0,
-      }),
-    [i18n.language, domain],
+    () => new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 0 }),
+    [i18n.language],
   );
   const tickLabel = (v: number) => `${v > 0 ? '+' : '−'}${tick.format(Math.abs(v))}`;
 
@@ -161,7 +153,7 @@ export function WeekDeltaChart({ monday, days, mode }: WeekDeltaChartProps) {
     };
   }, [selected]);
 
-  const energy = (kcal: number) => num.format(Math.round(kcalToDisplay(kcal, energyUnit)));
+  const energy = (kcal: number) => num.format(Math.round(kcal));
 
   /** The words that follow the number, on the chart and in the readout. */
   const caption = (v: number) =>
@@ -218,7 +210,7 @@ export function WeekDeltaChart({ monday, days, mode }: WeekDeltaChartProps) {
     const day = weekdayLong.format(parseDate(s.date));
     if (!s.log || s.value === null)
       return t('progress.chart_aria_empty', '{{day}}: nothing logged.', { day });
-    const unit = energyLabel(energyUnit);
+    const unit = 'kcal';
     const status = s.favorable
       ? t('progress.chart_legend_good', 'On plan')
       : t('progress.chart_legend_off', 'Off plan');
@@ -243,9 +235,7 @@ export function WeekDeltaChart({ monday, days, mode }: WeekDeltaChartProps) {
         <CalorieModeTag />
       </div>
       <p className="mt-0.5 text-[13px] text-ink-2">
-        {t('progress.chart_subtitle', 'Distance from your plan, in {{unit}}', {
-          unit: energyLabel(energyUnit),
-        })}
+        {t('progress.chart_subtitle', 'Distance from your plan, in {{unit}}', { unit: 'kcal' })}
       </p>
 
       {!hasAnyLog ? (

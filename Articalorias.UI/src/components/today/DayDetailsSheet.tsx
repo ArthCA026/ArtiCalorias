@@ -3,9 +3,8 @@ import { Sheet } from '@/components/ui/Sheet';
 import { MacroStrip } from '@/components/ui/MacroStrip';
 import { WeekStrip } from './WeekStrip';
 import { CalorieModeTag } from '@/components/ui/CalorieModeTag';
-import { useUnits } from '@/hooks/useUnits';
-import { kcalToDisplay } from '@/utils/units';
-import { budgetFor } from '@/utils/calorieMath';
+import { budgetFor, isSurplusGoalDay } from '@/utils/calorieMath';
+import { cn } from '@/utils/cn';
 import type { CalorieMode } from '@/hooks/useCalorieMode';
 import type { DailyDashboardResponse } from '@/types';
 
@@ -20,52 +19,86 @@ interface DayDetailsSheetProps {
 }
 
 /**
- * The numbers behind the ring, one tap away: eaten / budget / burned,
- * macro totals, and the week at a glance. Keeps the main screen short.
+ * The numbers behind the ring, one tap away: a small ledger that reads
+ * top to bottom (eaten, budget, burned) and resolves into one bottom line,
+ * plus macro totals and the week at a glance.
+ *
+ * The mode tag sits inline on the budget row: that is the only number the
+ * calorie display mode moves, so it is named exactly where it applies.
  */
 export function DayDetailsSheet({ open, onClose, dash, mode, date, isToday }: DayDetailsSheetProps) {
   const { t } = useTranslation();
-  const { energyUnit } = useUnits();
-  const e = (kcal: number) => Math.round(kcalToDisplay(kcal, energyUnit)).toLocaleString();
+  const e = (kcal: number) => Math.round(Math.abs(kcal)).toLocaleString();
 
   const budget = Math.max(budgetFor(dash, mode), 1);
+  const remaining = budget - dash.totalFoodCaloriesKcal;
+  const isSurplus = isSurplusGoalDay(dash);
+
+  // The bottom line follows the day's goal direction: on a surplus (gaining)
+  // day reaching the budget is the win, on a deficit day staying under is.
+  let resultLabel = '';
+  let resultClass = 'text-ink';
+  if (dash.hasCalorieBudgetEstimate) {
+    if (isSurplus) {
+      if (remaining > 0) {
+        resultLabel = isToday
+          ? t('today.result_to_surplus', 'To your surplus target')
+          : t('day.result_short', 'Short of the surplus target');
+        resultClass = isToday ? 'text-ink' : 'text-warning';
+      } else {
+        resultLabel = t('today.result_past_surplus', 'Past your surplus target');
+        resultClass = 'text-success';
+      }
+    } else {
+      if (remaining >= 0) {
+        resultLabel = isToday
+          ? t('today.result_left', 'Left today')
+          : t('day.result_under', 'Finished under');
+        resultClass = isToday ? 'text-ink' : 'text-success';
+      } else {
+        resultLabel = t('today.result_over', 'Over budget');
+        resultClass = 'text-warning';
+      }
+    }
+  }
 
   return (
     <Sheet open={open} onClose={onClose} title={t('today.details_title', 'Day details')}>
       <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-2xl bg-inset px-2 py-3 text-center">
-            <p className="text-[11px] font-semibold text-ink-3 uppercase tracking-wide">
+        <div className="rounded-card bg-inset px-4 py-1">
+          <div className="flex items-center justify-between h-11">
+            <span className="text-[14px] font-semibold text-ink-2">
               {t('today.eaten', 'Eaten')}
-            </p>
-            <p className="mt-1 text-[15px] font-bold text-ink tabular-nums">
-              {e(dash.totalFoodCaloriesKcal)}
-            </p>
+            </span>
+            <span className="text-[15px] font-bold text-ink tabular-nums">
+              {e(dash.totalFoodCaloriesKcal)} kcal
+            </span>
           </div>
-          <div className="rounded-2xl bg-inset px-2 py-3 text-center">
-            <p className="text-[11px] font-semibold text-ink-3 uppercase tracking-wide">
+          <div className="flex items-center justify-between h-11 border-t border-hairline/60">
+            <span className="flex items-center gap-2 text-[14px] font-semibold text-ink-2">
               {t('today.budget', 'Budget')}
-            </p>
-            <p className="mt-1 text-[15px] font-bold text-ink tabular-nums">
-              {dash.hasCalorieBudgetEstimate ? e(budget) : '–'}
-            </p>
+              <CalorieModeTag />
+            </span>
+            <span className="text-[15px] font-bold text-ink tabular-nums">
+              {dash.hasCalorieBudgetEstimate ? `${e(budget)} kcal` : '–'}
+            </span>
           </div>
-          <div className="rounded-2xl bg-inset px-2 py-3 text-center">
-            <p className="text-[11px] font-semibold text-ink-3 uppercase tracking-wide">
+          <div className="flex items-center justify-between h-11 border-t border-hairline/60">
+            <span className="text-[14px] font-semibold text-ink-2">
               {t('today.burned', 'Burned')}
-            </p>
-            <p className="mt-1 text-[15px] font-bold text-ink tabular-nums">
-              {dash.hasCalorieEstimate ? e(dash.totalDailyExpenditureKcal) : '–'}
-            </p>
+            </span>
+            <span className="text-[15px] font-bold text-ink tabular-nums">
+              {dash.hasCalorieEstimate ? `${e(dash.totalDailyExpenditureKcal)} kcal` : '–'}
+            </span>
           </div>
-        </div>
-
-        {/* Only the middle tile moves with the mode, so name it right under. */}
-        <div className="flex items-center justify-center gap-2 -mt-1">
-          <span className="text-[12px] text-ink-3">
-            {t('today.budget_mode', 'Budget shown as')}
-          </span>
-          <CalorieModeTag />
+          {dash.hasCalorieBudgetEstimate && (
+            <div className="flex items-center justify-between h-12 border-t-2 border-hairline">
+              <span className={cn('text-[14px] font-bold', resultClass)}>{resultLabel}</span>
+              <span className={cn('text-[17px] font-extrabold tabular-nums', resultClass)}>
+                {e(remaining)} kcal
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="rounded-card bg-inset px-4 py-3">

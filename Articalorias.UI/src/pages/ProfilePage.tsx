@@ -31,7 +31,7 @@ import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import { profileService } from '@/services/profileService';
 import { dailyLogService } from '@/services/dailyLogService';
 import { userService } from '@/services/userService';
-import { queryKeys } from '@/lib/queryKeys';
+import { queryKeys, invalidateDayData } from '@/lib/queryKeys';
 import { toDateString } from '@/utils/format';
 import { profileToRequest } from '@/utils/profile';
 import { extractApiError } from '@/utils/apiError';
@@ -51,7 +51,7 @@ export default function ProfilePage() {
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const { language, setLanguage } = useLanguage();
-  const { weightUnit, setWeightUnit, energyUnit, setEnergyUnit } = useUnits();
+  const { system, setSystem, weightUnit } = useUnits();
   const { mode, setMode } = useCalorieMode();
   const safeguard = useSafeguardToggle();
   const { data: streak } = useGetStreak();
@@ -83,8 +83,9 @@ export default function ProfilePage() {
       } catch {
         /* non-critical */
       }
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(today) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.historyAll() });
+      // A profile change (weight, goal, safeguard) moves the budget of every
+      // day, so every cached dashboard is stale, not just today's.
+      invalidateDayData(queryClient);
       dailyLogService
         .refreshStaleSnapshots()
         .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.historyAll() }))
@@ -258,35 +259,19 @@ export default function ProfilePage() {
                   onChange={setLanguage}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-[13px] font-semibold text-ink-2 mb-1.5">
-                    {t('profile.weight_unit', 'Weight')}
-                  </p>
-                  <SegmentedControl<'kg' | 'lbs'>
-                    aria-label={t('profile.weight_unit', 'Weight unit')}
-                    options={[
-                      { value: 'kg', label: 'kg' },
-                      { value: 'lbs', label: 'lbs' },
-                    ]}
-                    value={weightUnit}
-                    onChange={setWeightUnit}
-                  />
-                </div>
-                <div>
-                  <p className="text-[13px] font-semibold text-ink-2 mb-1.5">
-                    {t('profile.energy_unit', 'Energy')}
-                  </p>
-                  <SegmentedControl<'kcal' | 'kJ'>
-                    aria-label={t('profile.energy_unit', 'Energy unit')}
-                    options={[
-                      { value: 'kcal', label: 'kcal' },
-                      { value: 'kJ', label: 'kJ' },
-                    ]}
-                    value={energyUnit}
-                    onChange={setEnergyUnit}
-                  />
-                </div>
+              <div>
+                <p className="text-[13px] font-semibold text-ink-2 mb-1.5">
+                  {t('profile.units', 'Units')}
+                </p>
+                <SegmentedControl<'metric' | 'imperial'>
+                  aria-label={t('profile.units', 'Units')}
+                  options={[
+                    { value: 'metric', label: t('profile.units_metric', 'Metric (kg, cm)') },
+                    { value: 'imperial', label: t('profile.units_imperial', 'Imperial (lbs, ft)') },
+                  ]}
+                  value={system}
+                  onChange={setSystem}
+                />
               </div>
             </Card>
           </section>

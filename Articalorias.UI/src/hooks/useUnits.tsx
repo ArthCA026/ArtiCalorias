@@ -1,55 +1,51 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import type { WeightUnit, EnergyUnit } from "@/utils/units";
+import { weightUnitFor, type UnitSystem, type WeightUnit } from "@/utils/units";
 
-const WEIGHT_KEY = "ac-weight-unit";
-const ENERGY_KEY = "ac-energy-unit";
+const SYSTEM_KEY = "ac-unit-system";
+/** Pre-2026-08 key, migrated once: users who displayed lbs get imperial. */
+const LEGACY_WEIGHT_KEY = "ac-weight-unit";
+const LEGACY_ENERGY_KEY = "ac-energy-unit";
 
 interface UnitsContextValue {
+  system: UnitSystem;
+  setSystem: (system: UnitSystem) => void;
+  /** Derived weight unit for the active system: kg (metric) | lbs (imperial) */
   weightUnit: WeightUnit;
-  setWeightUnit: (unit: WeightUnit) => void;
-  energyUnit: EnergyUnit;
-  setEnergyUnit: (unit: EnergyUnit) => void;
 }
 
 const UnitsContext = createContext<UnitsContextValue | null>(null);
 
-function readWeightUnit(): WeightUnit {
+function readSystem(): UnitSystem {
   try {
-    const stored = localStorage.getItem(WEIGHT_KEY);
-    if (stored === "kg" || stored === "lbs") return stored;
+    const stored = localStorage.getItem(SYSTEM_KEY);
+    if (stored === "metric" || stored === "imperial") return stored;
+    // One-time migration from the old per-unit preferences.
+    if (localStorage.getItem(LEGACY_WEIGHT_KEY) === "lbs") return "imperial";
   } catch {
     /* storage unavailable */
   }
-  return "kg";
-}
-
-function readEnergyUnit(): EnergyUnit {
-  try {
-    const stored = localStorage.getItem(ENERGY_KEY);
-    if (stored === "kcal" || stored === "kJ") return stored;
-  } catch {
-    /* storage unavailable */
-  }
-  return "kcal";
+  return "metric";
 }
 
 export function UnitsProvider({ children }: { children: React.ReactNode }) {
-  const [weightUnit, setWeightUnitState] = useState<WeightUnit>(readWeightUnit);
-  const [energyUnit, setEnergyUnitState] = useState<EnergyUnit>(readEnergyUnit);
+  const [system, setSystemState] = useState<UnitSystem>(readSystem);
 
   useEffect(() => {
-    try { localStorage.setItem(WEIGHT_KEY, weightUnit); } catch { /* storage unavailable */ }
-  }, [weightUnit]);
+    try {
+      localStorage.setItem(SYSTEM_KEY, system);
+      localStorage.removeItem(LEGACY_WEIGHT_KEY);
+      localStorage.removeItem(LEGACY_ENERGY_KEY);
+    } catch {
+      /* storage unavailable */
+    }
+  }, [system]);
 
-  useEffect(() => {
-    try { localStorage.setItem(ENERGY_KEY, energyUnit); } catch { /* storage unavailable */ }
-  }, [energyUnit]);
-
-  function setWeightUnit(unit: WeightUnit) { setWeightUnitState(unit); }
-  function setEnergyUnit(unit: EnergyUnit) { setEnergyUnitState(unit); }
+  function setSystem(next: UnitSystem) {
+    setSystemState(next);
+  }
 
   return (
-    <UnitsContext.Provider value={{ weightUnit, setWeightUnit, energyUnit, setEnergyUnit }}>
+    <UnitsContext.Provider value={{ system, setSystem, weightUnit: weightUnitFor(system) }}>
       {children}
     </UnitsContext.Provider>
   );

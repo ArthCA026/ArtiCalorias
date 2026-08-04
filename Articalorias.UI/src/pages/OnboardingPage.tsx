@@ -13,7 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUnits } from '@/hooks/useUnits';
 import { profileService } from '@/services/profileService';
 import { queryKeys } from '@/lib/queryKeys';
-import { displayToKg, weightLabel, kgToDisplay } from '@/utils/units';
+import { displayToKg, weightLabel, kgToDisplay, ftInToCm } from '@/utils/units';
 import {
   GOAL_PRESETS,
   formatKgPerWeekShort,
@@ -44,11 +44,14 @@ export default function OnboardingPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { logout } = useAuth();
-  const { weightUnit } = useUnits();
+  const { system, setSystem, weightUnit } = useUnits();
+  const imperial = system === 'imperial';
 
   const [step, setStep] = useState(0); // 0=body, 1=goal, 2=protein, 3=summary
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
+  const [heightFt, setHeightFt] = useState('');
+  const [heightIn, setHeightIn] = useState('');
   const [age, setAge] = useState('');
   const [sex, setSex] = useState<'M' | 'F' | ''>('');
   const [goalKey, setGoalKey] = useState<GoalPresetKey>('lose-moderate');
@@ -56,7 +59,14 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
 
   const w = num(weight);
-  const h = num(height);
+  const ft = num(heightFt);
+  const inch = num(heightIn);
+  // Stored value is always cm, whichever way it was typed.
+  const h = imperial
+    ? ft === null && inch === null
+      ? null
+      : ftInToCm(ft ?? 0, inch ?? 0)
+    : num(height);
   const a = num(age);
   const weightKg = w !== null ? Math.round(displayToKg(w, weightUnit) * 10) / 10 : null;
 
@@ -111,6 +121,7 @@ export default function OnboardingPage() {
     step !== 0 ||
     ((w === null || (w > 0 && w < 1200)) &&
       (h === null || (h > 0 && h < 300)) &&
+      (inch === null || (inch >= 0 && inch < 12)) &&
       (a === null || (a >= 1 && a <= 150)));
 
   const progress = (step + 1) / (TOTAL_STEPS + 1);
@@ -154,6 +165,15 @@ export default function OnboardingPage() {
               </p>
             </div>
             <Card className="space-y-3.5">
+              <SegmentedControl<'metric' | 'imperial'>
+                aria-label={t('profile.units', 'Units')}
+                options={[
+                  { value: 'metric', label: t('profile.units_metric', 'Metric (kg, cm)') },
+                  { value: 'imperial', label: t('profile.units_imperial', 'Imperial (lbs, ft)') },
+                ]}
+                value={system}
+                onChange={setSystem}
+              />
               <div className="grid grid-cols-2 gap-3">
                 <DecimalField
                   label={t('profile.weight', 'Weight')}
@@ -162,13 +182,39 @@ export default function OnboardingPage() {
                   value={weight}
                   onValueChange={setWeight}
                 />
-                <DecimalField
-                  label={t('profile.height', 'Height')}
-                  suffix="cm"
-                  placeholder="175"
-                  value={height}
-                  onValueChange={setHeight}
-                />
+                {imperial ? (
+                  <div>
+                    <p className="text-[13px] font-semibold text-ink-2 mb-1.5">
+                      {t('profile.height', 'Height')}
+                    </p>
+                    <div className="flex gap-2">
+                      <DecimalField
+                        aria-label={t('profile.height_ft_aria', 'Height, feet')}
+                        suffix="ft"
+                        placeholder="5"
+                        value={heightFt}
+                        onValueChange={setHeightFt}
+                        containerClassName="flex-1"
+                      />
+                      <DecimalField
+                        aria-label={t('profile.height_in_aria', 'Height, inches')}
+                        suffix="in"
+                        placeholder="10"
+                        value={heightIn}
+                        onValueChange={setHeightIn}
+                        containerClassName="flex-1"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <DecimalField
+                    label={t('profile.height', 'Height')}
+                    suffix="cm"
+                    placeholder="175"
+                    value={height}
+                    onValueChange={setHeight}
+                  />
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Field

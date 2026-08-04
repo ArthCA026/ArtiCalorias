@@ -3,13 +3,17 @@ import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { Icon } from '@/components/ui/Icon';
 
+/** Why the scanner closed itself; undefined means the user cancelled. */
+export type ScannerCloseReason = 'denied' | 'unavailable';
+
 interface BarcodeScannerProps {
   onDetected: (barcode: string) => void;
-  /** cameraError true when closing due to a permission or hardware error */
-  onClose: (cameraError?: boolean) => void;
+  onClose: (reason?: ScannerCloseReason) => void;
 }
 
 const ZONE = 260;
+/** After this long without a detection, the hint escalates with real advice. */
+const STRUGGLE_MS = 8000;
 
 /** True when the native BarcodeDetector API is available (Chrome on Android). */
 // eslint-disable-next-line react-refresh/only-export-components -- feature detection helper
@@ -21,7 +25,7 @@ export function barcodeSupported(): boolean {
 export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [status, setStatus] = useState<'starting' | 'scanning'>('starting');
+  const [status, setStatus] = useState<'starting' | 'scanning' | 'struggling'>('starting');
 
   const onDetectedRef = useRef(onDetected);
   const onCloseRef = useRef(onClose);
@@ -34,6 +38,7 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
     let cancelled = false;
     let stream: MediaStream | null = null;
     let intervalId: ReturnType<typeof setInterval> | null = null;
+    let struggleId: ReturnType<typeof setTimeout> | null = null;
     let fired = false;
     const video = videoRef.current;
 
@@ -52,6 +57,11 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
         if (cancelled) return;
 
         setStatus('scanning');
+        // The camera works but nothing is being recognized: after a while,
+        // swap the hint for advice instead of leaving the user guessing.
+        struggleId = setTimeout(() => {
+          if (!cancelled && !fired) setStatus('struggling');
+        }, STRUGGLE_MS);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const BarcodeDetectorAPI = (window as any).BarcodeDetector;
@@ -74,8 +84,9 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
         }, 300);
       } catch (err: unknown) {
         if (!cancelled) {
+          // Permission and hardware problems get different guidance upstream.
           const name = (err as { name?: string })?.name;
-          onCloseRef.current(name === 'NotAllowedError' || name === 'NotFoundError');
+          onCloseRef.current(name === 'NotAllowedError' ? 'denied' : 'unavailable');
         }
       }
     }
@@ -85,6 +96,7 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
     return () => {
       cancelled = true;
       if (intervalId) clearInterval(intervalId);
+      if (struggleId) clearTimeout(struggleId);
       if (stream) stream.getTracks().forEach((tr) => tr.stop());
       if (video) video.srcObject = null;
     };
@@ -119,7 +131,7 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
           <span className="absolute top-0 right-0 w-7 h-7 border-t-2 border-r-2 border-white/90 rounded-tr-sm" />
           <span className="absolute bottom-0 left-0 w-7 h-7 border-b-2 border-l-2 border-white/90 rounded-bl-sm" />
           <span className="absolute bottom-0 right-0 w-7 h-7 border-b-2 border-r-2 border-white/90 rounded-br-sm" />
-          {status === 'scanning' && (
+          {status !== 'starting' && (
             <div
               className="scan-line absolute left-2 right-2 top-3 h-px rounded-full"
               style={{
@@ -132,7 +144,9 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
         <p className="text-sm font-medium tracking-wide text-white/85 text-center px-8">
           {status === 'starting'
             ? t('log.barcode_starting', 'Starting camera')
-            : t('log.barcode_hint', 'Line up the barcode inside the frame')}
+            : status === 'struggling'
+              ? t('log.barcode_struggling', 'No barcode recognized yet. Fill the frame with the code, add light, and hold steady.')
+              : t('log.barcode_hint', 'Line up the barcode inside the frame')}
         </p>
       </div>
     </div>,

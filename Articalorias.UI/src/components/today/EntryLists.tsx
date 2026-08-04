@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Sheet } from '@/components/ui/Sheet';
@@ -17,6 +17,7 @@ import { useLogSheet } from '@/components/log/LogSheetContext';
 import { foodService } from '@/services/foodService';
 import { activityService } from '@/services/activityService';
 import { foodTemplateService } from '@/services/foodTemplateService';
+import { queryKeys } from '@/lib/queryKeys';
 import { extractApiError } from '@/utils/apiError';
 import { fmt, round1, qtyStr } from '@/utils/format';
 import type { ActivityEntryResponse, FoodEntryResponse, UpdateFoodEntryRequest } from '@/types';
@@ -89,6 +90,7 @@ export function MealsList({ date, entries, isToday, onChanged }: MealsListProps)
   const { t } = useTranslation();
   const { toast } = useToast();
   const { openLog } = useLogSheet();
+  const queryClient = useQueryClient();
   const [selected, setSelected] = useState<FoodEntryResponse | null>(null);
   const [editing, setEditing] = useState<FoodEntryResponse | null>(null);
   const [qtyTarget, setQtyTarget] = useState<FoodEntryResponse | null>(null);
@@ -119,7 +121,11 @@ export function MealsList({ date, entries, isToday, onChanged }: MealsListProps)
         autoAddToNewDay: false,
       });
     },
-    onSuccess: () => toast('success', t('today.saved_as_template', 'Saved to Templates')),
+    onSuccess: () => {
+      // The Templates screen must show the new template without a reload
+      queryClient.invalidateQueries({ queryKey: queryKeys.foodTemplates() });
+      toast('success', t('today.saved_as_template', 'Saved to Templates'));
+    },
     onError: (err) => toast('error', extractApiError(err, saveError())),
   });
 
@@ -391,6 +397,7 @@ export function ActivitiesList({ date, entries, hasCalorieEstimate, isToday, onC
   const { t } = useTranslation();
   const { toast } = useToast();
   const { openLog } = useLogSheet();
+  const queryClient = useQueryClient();
   const [selected, setSelected] = useState<ActivityEntryResponse | null>(null);
   const [editing, setEditing] = useState<ActivityEntryResponse | null>(null);
   const [durationTarget, setDurationTarget] = useState<ActivityEntryResponse | null>(null);
@@ -415,7 +422,11 @@ export function ActivitiesList({ date, entries, hasCalorieEstimate, isToday, onC
         defaultDurationMinutes: entry.durationMinutes ?? 30,
         defaultMET: entry.metValue ?? 3.5,
       }),
-    onSuccess: () => toast('success', t('today.saved_as_template', 'Saved to Templates')),
+    onSuccess: () => {
+      // The Templates screen must show the new template without a reload
+      queryClient.invalidateQueries({ queryKey: queryKeys.activityTemplates() });
+      toast('success', t('today.saved_as_template', 'Saved to Templates'));
+    },
     onError: (err) => toast('error', extractApiError(err, saveError())),
   });
 

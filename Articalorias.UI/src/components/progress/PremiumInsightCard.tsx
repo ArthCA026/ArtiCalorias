@@ -5,8 +5,6 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { usePremium } from '@/hooks/usePremium';
-import { useUnits } from '@/hooks/useUnits';
-import { energyLabel, kcalToDisplay } from '@/utils/units';
 import { parseDate } from '@/utils/format';
 import { deltaFor, hasComparablePlan } from '@/utils/calorieMath';
 import { isLoggedDay, longestLoggedRun } from './weekMath';
@@ -30,7 +28,6 @@ interface PremiumInsightCardProps {
 export function PremiumInsightCard({ monday, days, mode }: PremiumInsightCardProps) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { energyUnit } = useUnits();
   const { isPremium, claimGift } = usePremium();
 
   // Reciprocity: the free preview counts as the one-time gift.
@@ -81,9 +78,7 @@ export function PremiumInsightCard({ monday, days, mode }: PremiumInsightCardPro
       const top = withBurn.reduce((a, b) =>
         b.totalDailyExpenditureKcal > a.totalDailyExpenditureKcal ? b : a,
       );
-      const energy = `${Math.round(
-        kcalToDisplay(top.totalDailyExpenditureKcal, energyUnit),
-      ).toLocaleString(i18n.language)} ${energyLabel(energyUnit)}`;
+      const energy = `${Math.round(top.totalDailyExpenditureKcal).toLocaleString(i18n.language)} kcal`;
       list.push(
         t('progress.insight_burn', 'Your biggest burn day was {{day}} at {{energy}}.', {
           day: dayName(top),
@@ -105,7 +100,7 @@ export function PremiumInsightCard({ monday, days, mode }: PremiumInsightCardPro
       );
     }
     return list;
-  }, [days, monday, i18n.language, energyUnit, mode, t]);
+  }, [days, monday, i18n.language, mode, t]);
 
   // Hidden entirely while the subscription is disabled in development
   if (!FEATURES.premium) return null;
