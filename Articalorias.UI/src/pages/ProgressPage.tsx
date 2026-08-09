@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { IconButton } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { EmptyState, ErrorState } from '@/components/ui/States';
+import { CalorieModeTag } from '@/components/ui/CalorieModeTag';
 import { WeekDeltaChart } from '@/components/progress/WeekDeltaChart';
 import { WeekPickerSheet } from '@/components/progress/WeekPickerSheet';
 import { WeekDetailsSheet } from '@/components/progress/WeekDetailsSheet';
@@ -22,7 +23,7 @@ import {
 import { historyService } from '@/services/historyService';
 import { queryKeys } from '@/lib/queryKeys';
 import { addDays, mondayOf, parseDate, toDateString } from '@/utils/format';
-import type { CalorieMode } from '@/hooks/useCalorieMode';
+import { useCalorieMode } from '@/hooks/useCalorieMode';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { cn } from '@/utils/cn';
@@ -40,12 +41,13 @@ export default function ProgressPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
 
-  // Progress always compares against the FIXED daily goal, never the calorie
-  // display mode. Weekly-adjusted budgets already absorb earlier days'
-  // deviations, so summing "vs adjusted" across a week double-counts them and
-  // contradicts the weekly budget shown on Today. The fixed goal is the only
-  // comparison whose weekly sum equals the week's real distance from plan.
-  const mode: CalorieMode = 'goal';
+  // Two comparisons live on this page, on purpose. The "Your week" verdict is
+  // ALWAYS measured against the fixed daily goal: weekly-adjusted budgets
+  // absorb earlier days' deviations, so summing "vs adjusted" across a week
+  // double-counts them and produces a nonsense total. The day-by-day chart and
+  // the Days table, however, follow the user's calorie display mode, because
+  // each single day against its own budget is a real, meaningful question.
+  const { mode } = useCalorieMode();
 
   const today = toDateString();
   const currentMonday = mondayOf(today);
@@ -105,19 +107,21 @@ export default function ProgressPage() {
       loggedCount > 0
         ? logged.reduce((s, d) => s + d.totalFoodCaloriesKcal, 0) / loggedCount
         : 0;
-    // Distance from plan under the active display mode, over the days that
-    // actually have a plan to compare against. A row can exist with no food on
-    // it, and without weight and height the budget fields come back zeroed;
-    // either would contribute a whole day's plan as if it were real. Summing
-    // the same days the chart draws keeps this total equal to its bars.
+    // The verdict is pinned to the FIXED daily goal (never the display mode),
+    // over the days that actually have a plan to compare against. A row can
+    // exist with no food on it, and without weight and height the budget
+    // fields come back zeroed; either would contribute a whole day's plan as
+    // if it were real. The chart's bars may differ from this total when the
+    // display mode is not "Daily": that is expected, the bars answer a
+    // per-day question while this number is the week's true distance.
     const deltaSumKcal = days
       .filter(hasComparablePlan)
-      .reduce((s, d) => s + deltaFor(d, mode), 0);
+      .reduce((s, d) => s + deltaFor(d, 'goal'), 0);
     // Week direction follows the dominant goal type across its days.
     const surplusWeek = days.filter(isSurplusGoalDay).length > days.length / 2;
     const favorable = surplusWeek ? deltaSumKcal >= 0 : deltaSumKcal <= 0;
     return { loggedCount, avgEatenKcal, deltaSumKcal, surplusWeek, favorable };
-  }, [days, mode]);
+  }, [days]);
 
   // Weekly thinking beats daily perfection: never guilt, always absorbable.
   // The copy follows the week's goal: on a gaining week, over plan is the win
@@ -292,12 +296,9 @@ export default function ProgressPage() {
                 {t('progress.days_subtitle', 'Tap any day to open and edit it')}
               </p>
             </div>
-            {/* Static label, not the mode switcher: Progress always compares
-                against the fixed daily goal, on purpose. */}
-            <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-inset px-2 py-1 text-[11px] font-semibold text-ink-3">
-              <Icon name="target" size={12} className="shrink-0" />
-              {t('progress.vs_fixed_goal', 'vs daily goal')}
-            </span>
+            {/* Per-day comparisons follow the display mode, so the switcher
+                lives here; only the week verdict above is pinned to the goal. */}
+            <CalorieModeTag />
           </div>
           {dayRows.map(({ date, log }, i) => {
             const border = i > 0 && 'border-t border-hairline/60';
@@ -399,7 +400,9 @@ export default function ProgressPage() {
         </Card>
       )}
 
-      {days && <StreakCard />}
+      {/* The streak describes NOW, not the shown week. On a past week it would
+          read as that week's streak, so it only accompanies the current one. */}
+      {days && isCurrentWeek && <StreakCard />}
     </div>
   );
 }
