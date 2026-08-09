@@ -379,15 +379,18 @@ function ActivityRow({
       ariaLabel={t('today.entry_aria', '{{name}}, open options', { name: entry.activityName })}
       onOpen={onOpen}
       meta={
-        <AmountChip
-          label={t('today.duration_meta', '{{min}} min', {
-            min: qtyStr(entry.durationMinutes ?? 0),
-          })}
-          ariaLabel={t('today.change_duration_aria', 'Change duration of {{name}}', {
-            name: entry.activityName,
-          })}
-          onEdit={onDuration}
-        />
+        // A watch import without duration has no minutes to show or edit.
+        entry.durationMinutes !== null ? (
+          <AmountChip
+            label={t('today.duration_meta', '{{min}} min', {
+              min: qtyStr(entry.durationMinutes),
+            })}
+            ariaLabel={t('today.change_duration_aria', 'Change duration of {{name}}', {
+              name: entry.activityName,
+            })}
+            onEdit={onDuration}
+          />
+        ) : undefined
       }
     />
   );
@@ -476,6 +479,16 @@ export function ActivitiesList({ date, entries, hasCalorieEstimate, isToday, onC
         )}
       </Card>
 
+      {entries.length > 0 && hasCalorieEstimate && (
+        // Names what the numbers are so they are never misread as "extra"
+        // calories: each figure is the total burn of that timeframe, resting
+        // burn included, exactly like a smart watch reports it.
+        <p className="mt-2 flex items-start gap-1.5 px-1 text-[12px] text-ink-3 leading-relaxed">
+          <Icon name="info" size={13} className="shrink-0 mt-0.5" />
+          {t('today.activities_gross_note', 'Each burn is the total for that activity, resting calories included, like a watch shows it.')}
+        </p>
+      )}
+
       <ActionSheet
         open={selected !== null}
         onClose={() => setSelected(null)}
@@ -538,9 +551,16 @@ interface EditActivitySheetProps {
 function EditActivitySheet({ date, entry, onClose, onChanged }: EditActivitySheetProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  // A watch import can have no MET at all; its stored calories are the truth.
+  const isFlatBurn = entry.metValue === null;
   const [name, setName] = useState(entry.activityName);
   const [duration, setDuration] = useState(entry.durationMinutes ?? 30);
   const [met, setMet] = useState(String(entry.metValue ?? 3.5));
+  const [kcal, setKcal] = useState(String(Math.round(entry.calculatedCaloriesKcal)));
+  // Only an explicit calorie edit overrides; otherwise the server recalculates
+  // from MET x weight x duration as usual. Flat-burn entries always send their
+  // calories so a name edit can never silently rewrite the watch's number.
+  const [kcalDirty, setKcalDirty] = useState(isFlatBurn);
   const [error, setError] = useState<string | null>(null);
 
   const save = useMutation({
@@ -548,7 +568,10 @@ function EditActivitySheet({ date, entry, onClose, onChanged }: EditActivityShee
       activityService.update(date, entry.activityEntryId, {
         activityName: name.trim(),
         durationMinutes: duration,
-        metValue: num(met),
+        // Out-of-range MET is omitted rather than rejected: on the calorie
+        // path the server derives the real one from kcal and duration.
+        metValue: num(met) >= 0.5 && num(met) <= 50 ? num(met) : null,
+        caloriesKcal: kcalDirty ? num(kcal) : null,
       }),
     onSuccess: () => {
       onChanged();
@@ -559,7 +582,11 @@ function EditActivitySheet({ date, entry, onClose, onChanged }: EditActivityShee
   });
 
   const m = num(met);
-  const valid = name.trim().length > 0 && duration > 0 && m >= 0.5 && m <= 50;
+  const kc = num(kcal);
+  const valid =
+    name.trim().length > 0 &&
+    duration > 0 &&
+    (kcalDirty ? kc > 0 : m >= 0.5 && m <= 50);
 
   return (
     <Sheet open onClose={onClose} title={t('today.edit_activity', 'Edit activity')}>
@@ -585,7 +612,21 @@ function EditActivitySheet({ date, entry, onClose, onChanged }: EditActivityShee
           label={t('log.met', 'Intensity (MET)')}
           hint={t('log.met_hint', 'How intense it is. A walk is about 3.5.')}
           value={met}
-          onValueChange={setMet}
+          onValueChange={(v) => {
+            setMet(v);
+            // Editing intensity hands the math back to the server.
+            if (!isFlatBurn) setKcalDirty(false);
+          }}
+        />
+        <DecimalField
+          label={t('log.kcal_burned', 'Calories burned')}
+          suffix="kcal"
+          hint={t('log.kcal_burned_edit_hint', 'Total burn, resting included. Edit it to match your watch and the intensity adjusts.')}
+          value={kcal}
+          onValueChange={(v) => {
+            setKcal(v);
+            setKcalDirty(true);
+          }}
         />
         {error && <InlineError message={error} />}
         <Button

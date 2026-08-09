@@ -62,10 +62,16 @@ export function useNotificationSettings() {
     mutation.mutate(updated);
   }
 
+  /** Saves a full schedule list in one write (used by onboarding's enable-all). */
+  function replaceAll(updated: LocalSchedule[]) {
+    mutation.mutate(updated);
+  }
+
   return {
     schedules,
     isLoading,
     updateSchedule,
+    replaceAll,
     isSaving: mutation.isPending,
   };
 }

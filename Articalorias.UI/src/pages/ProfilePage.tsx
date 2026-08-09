@@ -18,6 +18,7 @@ import {
   GoalSheet,
   ProteinSheet,
   RemindersSheet,
+  SleepNeatSheet,
 } from '@/components/profile/ProfileSheets';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme, type Theme } from '@/hooks/useTheme';
@@ -32,7 +33,7 @@ import { profileService } from '@/services/profileService';
 import { dailyLogService } from '@/services/dailyLogService';
 import { userService } from '@/services/userService';
 import { queryKeys, invalidateDayData } from '@/lib/queryKeys';
-import { toDateString } from '@/utils/format';
+import { toDateString, qtyStr } from '@/utils/format';
 import { profileToRequest } from '@/utils/profile';
 import { extractApiError } from '@/utils/apiError';
 import { formatWeight } from '@/utils/units';
@@ -40,7 +41,7 @@ import { matchPreset, GOAL_PRESETS } from '@/utils/goalUtils';
 import { FEATURES } from '@/config/features';
 import type { UserProfileRequest } from '@/types';
 
-type OpenSheet = 'body' | 'goal' | 'protein' | 'mode' | 'reminders' | null;
+type OpenSheet = 'body' | 'goal' | 'protein' | 'mode' | 'reminders' | 'sleep-neat' | null;
 type ConfirmKind = 'streak-reset' | 'clear-history' | 'delete-account' | null;
 
 export default function ProfilePage() {
@@ -215,6 +216,16 @@ export default function ProfilePage() {
                 onClick={() => setSheet('body')}
               />
               <ListRow
+                icon="moon"
+                title={t('profile.row_sleep_neat', 'Sleep & daily movement')}
+                right={t('profile.sleep_neat_value', '{{sleep}} h · {{neat}} h', {
+                  sleep: qtyStr(profile.sleepHours),
+                  neat: qtyStr(profile.neatHours),
+                })}
+                chevron
+                onClick={() => setSheet('sleep-neat')}
+              />
+              <ListRow
                 icon="chart"
                 title={t('profile.row_mode', 'Calorie display')}
                 right={calorieModeShortLabel(t, mode)}
@@ -372,6 +383,13 @@ export default function ProfilePage() {
           />
           <ProteinSheet
             open={sheet === 'protein'}
+            onClose={() => setSheet(null)}
+            profile={profile}
+            onSave={(patch) => save.mutate(patch)}
+            saving={save.isPending}
+          />
+          <SleepNeatSheet
+            open={sheet === 'sleep-neat'}
             onClose={() => setSheet(null)}
             profile={profile}
             onSave={(patch) => save.mutate(patch)}

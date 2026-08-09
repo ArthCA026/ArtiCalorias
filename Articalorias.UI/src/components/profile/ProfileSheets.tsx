@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { DecimalField, Field } from '@/components/ui/Field';
+import { QuantityField } from '@/components/ui/QuantityField';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Switch } from '@/components/ui/Switch';
 import { Icon } from '@/components/ui/Icon';
@@ -385,6 +386,77 @@ export function ProteinSheet({ open, onClose, profile, onSave, saving }: EditShe
       <Button variant="primary" size="lg" fullWidth className="mt-4" loading={saving} onClick={save}>
         {t('common.save', 'Save')}
       </Button>
+    </Sheet>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Sleep & daily movement (NEAT)                                       */
+/* ------------------------------------------------------------------ */
+
+export function SleepNeatSheet({ open, onClose, profile, onSave, saving }: EditSheetProps) {
+  const { t } = useTranslation();
+  const [sleep, setSleep] = useState(profile.sleepHours);
+  const [neat, setNeat] = useState(profile.neatHours);
+
+  // Backend rule: at least 1 hour of the day must stay unreserved.
+  const total = sleep + neat;
+  const valid = total <= 23;
+
+  return (
+    <Sheet open={open} onClose={onClose} title={t('profile.sleep_neat_title', 'Sleep & daily movement')}>
+      <div className="space-y-4">
+        <div>
+          <p className="text-[13px] font-semibold text-ink-2 mb-1.5">
+            {t('profile.sleep_hours', 'Sleep per night')}
+          </p>
+          <QuantityField
+            value={sleep}
+            min={0}
+            max={16}
+            step={0.5}
+            suffix={t('common.hour_suffix', 'h')}
+            onCommit={setSleep}
+          />
+        </div>
+        <div>
+          <p className="text-[13px] font-semibold text-ink-2 mb-1.5">
+            {t('profile.neat_hours', 'Everyday movement')}
+          </p>
+          <QuantityField
+            value={neat}
+            min={0}
+            max={16}
+            step={0.5}
+            suffix={t('common.hour_suffix', 'h')}
+            onCommit={setNeat}
+          />
+          <p className="mt-1.5 text-[13px] text-ink-3 leading-relaxed">
+            {t('profile.neat_hint', 'Hours you spend up and moving outside workouts: chores, cooking, walking around.')}
+          </p>
+        </div>
+
+        {!valid && (
+          <InlineError
+            message={t('profile.sleep_neat_error', 'Sleep plus movement cannot exceed 23 hours. At least 1 hour must remain for everything else.')}
+          />
+        )}
+
+        <p className="text-[13px] text-ink-3 leading-relaxed">
+          {t('profile.sleep_neat_effect', 'These hours shape your estimated daily burn. Changes apply from today; past days keep the numbers they were logged with.')}
+        </p>
+
+        <Button
+          variant="primary"
+          size="lg"
+          fullWidth
+          loading={saving}
+          disabled={!valid}
+          onClick={() => onSave({ sleepHours: sleep, neatHours: neat })}
+        >
+          {t('common.save', 'Save')}
+        </Button>
+      </div>
     </Sheet>
   );
 }

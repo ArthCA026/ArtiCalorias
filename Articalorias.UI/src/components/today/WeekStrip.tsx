@@ -8,7 +8,6 @@ import { queryKeys } from '@/lib/queryKeys';
 import { addDays, mondayOf, parseDate, toDateString } from '@/utils/format';
 import { deltaFor, hasComparablePlan } from '@/utils/calorieMath';
 import { cn } from '@/utils/cn';
-import type { CalorieMode } from '@/hooks/useCalorieMode';
 import type { DailyLogResponse } from '@/types';
 
 interface WeekStripProps {
@@ -16,8 +15,6 @@ interface WeekStripProps {
   date: string;
   /** Positive base goal means a surplus (bulking) goal */
   baseGoalKcal: number;
-  /** Active calorie display mode, so the summary agrees with the ring above it */
-  mode: CalorieMode;
   /** Render on the inset surface (when shown inside a sheet) */
   inset?: boolean;
 }
@@ -27,7 +24,7 @@ interface WeekStripProps {
  * Filled dots reward consistency (completion bias); the copy keeps the
  * focus on the week, not on any single imperfect day.
  */
-export function WeekStrip({ date, baseGoalKcal, mode, inset }: WeekStripProps) {
+export function WeekStrip({ date, baseGoalKcal, inset }: WeekStripProps) {
   const { t, i18n } = useTranslation();
   const monday = mondayOf(date);
   const sunday = addDays(monday, 6);
@@ -63,14 +60,15 @@ export function WeekStrip({ date, baseGoalKcal, mode, inset }: WeekStripProps) {
 
   const loggedCount = dots.filter((d) => d.logged).length;
 
-  // Weekly deviation vs the plan, under the active display mode so this line
-  // never contradicts the ring. Days with nothing on them, or with no budget
-  // to compare against, contribute nothing rather than a fabricated delta.
-  // For deficit/maintenance goals a negative sum is favorable;
-  // for surplus goals a positive sum is favorable.
+  // Weekly deviation vs the FIXED daily goal, matching the Progress page.
+  // Week-level sums never use the adjusted budget: it already absorbs earlier
+  // days' deviations, so summing against it double-counts them. Days with
+  // nothing on them, or with no budget to compare against, contribute nothing
+  // rather than a fabricated delta. For deficit/maintenance goals a negative
+  // sum is favorable; for surplus goals a positive sum is favorable.
   const deltaSum = (days ?? [])
     .filter(hasComparablePlan)
-    .reduce((sum, d) => sum + deltaFor(d, mode), 0);
+    .reduce((sum, d) => sum + deltaFor(d, 'goal'), 0);
   const surplusWeek = baseGoalKcal > 0;
   const favorable = surplusWeek ? deltaSum >= 0 : deltaSum <= 0;
 

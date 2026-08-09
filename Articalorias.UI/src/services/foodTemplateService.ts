@@ -64,7 +64,11 @@ export const foodTemplateService = {
     return api.delete(`/favorites/routines/${id}`);
   },
 
-  addRoutineToToday(id: number) {
-    return api.post<AddRoutineToTodayResponse>(`/favorites/routines/${id}/add-to-today`);
+  addRoutineToToday(id: number, date: string) {
+    // The device's local date travels with the request: the server must never
+    // guess "today" from UTC (in Costa Rica that is tomorrow after 6 pm).
+    return api.post<AddRoutineToTodayResponse>(`/favorites/routines/${id}/add-to-today`, null, {
+      params: { date },
+    });
   },
 };

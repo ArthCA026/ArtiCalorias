@@ -44,11 +44,28 @@ const toFoodRequest = (item: ParsedFoodItem): CreateFoodEntryRequest => ({
   alcoholGrams: item.alcoholGrams,
 });
 
-const toActivityRequest = (item: ParsedActivityItem): CreateActivityEntryRequest => ({
-  activityName: item.activityName,
-  durationMinutes: item.durationMinutes && item.durationMinutes > 0 ? item.durationMinutes : 30,
-  metValue: item.metValue && item.metValue >= 0.5 ? item.metValue : 3.5,
-});
+const toActivityRequest = (item: ParsedActivityItem, genericName: string): CreateActivityEntryRequest => {
+  // The parser leaves the name empty on inputs like "200 kcal in 20 min".
+  const activityName = item.activityName.trim() || genericName;
+
+  if (item.caloriesKcal && item.caloriesKcal > 0) {
+    // Smart-watch path: send exactly what the user said, nulls included. The
+    // backend owns the math (MET from calories + duration, or duration from
+    // calories + MET), so nothing gets defaulted into fake data here.
+    return {
+      activityName,
+      durationMinutes: item.durationMinutes && item.durationMinutes > 0 ? item.durationMinutes : null,
+      metValue: item.metValue && item.metValue >= 0.5 ? item.metValue : null,
+      caloriesKcal: item.caloriesKcal,
+    };
+  }
+
+  return {
+    activityName,
+    durationMinutes: item.durationMinutes && item.durationMinutes > 0 ? item.durationMinutes : 30,
+    metValue: item.metValue && item.metValue >= 0.5 ? item.metValue : 3.5,
+  };
+};
 
 /**
  * The one place to log anything: AI text, photo, barcode, templates,
@@ -118,7 +135,7 @@ export function LogSheet({ open, initialTab, targetDate, onClose }: LogSheetProp
       }
       const items = await dailyLogService.parseActivity(date, { freeText }).then((r) => r.data);
       await dailyLogService.confirmParsedActivities(date, {
-        items: items.map(toActivityRequest),
+        items: items.map((i) => toActivityRequest(i, t('log.generic_exercise', 'Exercise'))),
       });
       return { date, count: items.length };
     },
@@ -292,7 +309,7 @@ export function LogSheet({ open, initialTab, targetDate, onClose }: LogSheetProp
                         ? pendingImage
                           ? t('log.placeholder_photo_context', 'Optional: add context, like "the bowl is 500 ml"')
                           : t('log.placeholder_meal', 'e.g. 2 eggs and toast with butter')
-                        : t('log.placeholder_activity', 'e.g. 30 min easy run')
+                        : t('log.placeholder_activity', 'e.g. 30 min easy run, or 200 kcal from your watch')
                     }
                     className="w-full bg-transparent resize-none text-base text-ink placeholder:text-ink-3 px-1.5 py-1 focus-visible:shadow-none"
                   />

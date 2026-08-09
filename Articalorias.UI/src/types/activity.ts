@@ -13,12 +13,19 @@ export interface CreateActivityEntryRequest {
   activityName: string;
   durationMinutes?: number | null;
   metValue?: number | null;
+  /**
+   * Burned calories the user stated directly (smart watch). When set, the
+   * backend stores it as-is and derives the missing MET or duration from it.
+   */
+  caloriesKcal?: number | null;
 }
 
 export interface UpdateActivityEntryRequest {
   activityName: string;
   durationMinutes?: number | null;
   metValue?: number | null;
+  /** Burned calories override; when set the backend re-derives the MET from it. */
+  caloriesKcal?: number | null;
 }
 
 export interface ActivityTemplateResponse {
@@ -47,6 +54,8 @@ export interface ParsedActivityItem {
   activityName: string;
   durationMinutes: number | null;
   metValue: number | null;
+  /** Calories the user explicitly stated; the parser never computes this. */
+  caloriesKcal: number | null;
 }
 
 export interface ConfirmParsedActivitiesRequest {

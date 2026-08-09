@@ -118,7 +118,6 @@ export function DayDetailsSheet({ open, onClose, dash, mode, date, isToday }: Da
         <WeekStrip
           date={date}
           baseGoalKcal={dash.snapshotDailyBaseGoalKcal}
-          mode={mode}
           inset
         />
       </div>

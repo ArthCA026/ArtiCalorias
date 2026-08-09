@@ -28,12 +28,13 @@ public class ActivityService : IActivityService
             .ToListAsync();
     }
 
-    public async Task<ActivityEntry> CreateEntryAsync(ActivityEntry entry)
+    public async Task<ActivityEntry> CreateEntryAsync(ActivityEntry entry, decimal? providedCaloriesKcal = null)
     {
         var dailyLog = await _db.DailyLogs.FindAsync(entry.DailyLogId)
             ?? throw new InvalidOperationException("DailyLog not found.");
 
-        CalculateActivityCalories(entry, dailyLog.SnapshotWeightKg ?? 0m);
+        ValidateEntryInput(entry, providedCaloriesKcal);
+        ActivityCalorieMath.Apply(entry, dailyLog.SnapshotWeightKg ?? 0m, providedCaloriesKcal);
 
         // Validate available-time cap: 24h minus reserved sleep & NEAT hours
         var reservedMinutes = ((dailyLog.SnapshotSleepHours ?? 0m) + (dailyLog.SnapshotNeatHours ?? 0m)) * 60m;
@@ -60,7 +61,7 @@ public class ActivityService : IActivityService
         return entry;
     }
 
-    public async Task<ActivityEntry> UpdateEntryAsync(ActivityEntry entry)
+    public async Task<ActivityEntry> UpdateEntryAsync(ActivityEntry entry, decimal? providedCaloriesKcal = null)
     {
         var existing = await _db.ActivityEntries
             .Include(a => a.ActivityTemplate)
@@ -70,12 +71,14 @@ public class ActivityService : IActivityService
         var dailyLog = await _db.DailyLogs.FindAsync(existing.DailyLogId)
             ?? throw new InvalidOperationException("DailyLog not found.");
 
+        ValidateEntryInput(entry, providedCaloriesKcal);
+
         existing.ActivityName = entry.ActivityName;
         existing.DurationMinutes = entry.DurationMinutes;
         existing.METValue = entry.METValue;
 
         existing.UpdatedAtUtc = DateTime.UtcNow;
-        CalculateActivityCalories(existing, dailyLog.SnapshotWeightKg ?? 0m);
+        ActivityCalorieMath.Apply(existing, dailyLog.SnapshotWeightKg ?? 0m, providedCaloriesKcal);
 
         // Validate available-time cap: 24h minus reserved sleep & NEAT hours
         var reservedMinutes = ((dailyLog.SnapshotSleepHours ?? 0m) + (dailyLog.SnapshotNeatHours ?? 0m)) * 60m;
@@ -159,18 +162,20 @@ public class ActivityService : IActivityService
         return true;
     }
 
-    // ── Calculation logic ──
+    // ── Validation ──
 
-    private static void CalculateActivityCalories(ActivityEntry entry, decimal weightKg)
+    /// <summary>
+    /// An entry is computable when it carries MET + duration (classic path) or a
+    /// directly provided calorie burn (smart-watch path). Anything else would
+    /// persist a permanent 0 kcal row, so it is rejected with a clear message.
+    /// </summary>
+    private static void ValidateEntryInput(ActivityEntry entry, decimal? providedCaloriesKcal)
     {
-        // Formula: Calories = (MET - 1) × weight(kg) × duration(hours)
-        // We subtract 1 MET because BMR (≈ 1 MET) is already accounted for
-        // separately in the total daily expenditure calculation.
-        if (entry.METValue.HasValue && entry.DurationMinutes.HasValue)
-        {
-            var netMet = entry.METValue.Value - 1m;
-            entry.CalculatedCaloriesKcal =
-                netMet * weightKg * (entry.DurationMinutes.Value / 60m);
-        }
+        var hasMetAndDuration = entry.METValue is > 0m && entry.DurationMinutes is > 0m;
+        var hasCalories = providedCaloriesKcal is > 0m;
+
+        if (!hasMetAndDuration && !hasCalories)
+            throw new ApiException(ErrorCodes.InvalidInput,
+                "Provide either a duration and intensity (MET), or the calories burned.");
     }
 }

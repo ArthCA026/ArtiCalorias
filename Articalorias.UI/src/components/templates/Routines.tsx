@@ -13,6 +13,7 @@ import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import { foodTemplateService } from '@/services/foodTemplateService';
 import { queryKeys, invalidateDayData } from '@/lib/queryKeys';
 import { extractApiError } from '@/utils/apiError';
+import { toDateString } from '@/utils/format';
 import type { FavoriteRoutineResponse } from '@/types';
 import { RoutineSheet } from './RoutineSheet';
 
@@ -39,7 +40,7 @@ export function Routines() {
 
   const addAll = useMutation({
     mutationFn: (routine: FavoriteRoutineResponse) =>
-      foodTemplateService.addRoutineToToday(routine.favoriteRoutineId).then((r) => r.data),
+      foodTemplateService.addRoutineToToday(routine.favoriteRoutineId, toDateString()).then((r) => r.data),
     onSuccess: (data) => {
       invalidateDayData(queryClient);
       toast('success', t('templates.routine_added', '{{n}} items added', { n: data.addedCount }));

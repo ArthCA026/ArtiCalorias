@@ -6,9 +6,9 @@ import { Card } from '@/components/ui/Card';
 import { IconButton } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { EmptyState, ErrorState } from '@/components/ui/States';
-import { CalorieModeTag } from '@/components/ui/CalorieModeTag';
 import { WeekDeltaChart } from '@/components/progress/WeekDeltaChart';
 import { WeekPickerSheet } from '@/components/progress/WeekPickerSheet';
+import { WeekDetailsSheet } from '@/components/progress/WeekDetailsSheet';
 import { PremiumInsightCard } from '@/components/progress/PremiumInsightCard';
 import { StreakCard } from '@/components/progress/StreakCard';
 import { ProgressSkeleton } from '@/components/progress/ProgressSkeleton';
@@ -22,7 +22,7 @@ import {
 import { historyService } from '@/services/historyService';
 import { queryKeys } from '@/lib/queryKeys';
 import { addDays, mondayOf, parseDate, toDateString } from '@/utils/format';
-import { useCalorieMode } from '@/hooks/useCalorieMode';
+import type { CalorieMode } from '@/hooks/useCalorieMode';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { cn } from '@/utils/cn';
@@ -38,8 +38,14 @@ const isValidMonday = (v: string): v is string =>
  */
 export default function ProgressPage() {
   const { t, i18n } = useTranslation();
-  const { mode } = useCalorieMode();
   const navigate = useNavigate();
+
+  // Progress always compares against the FIXED daily goal, never the calorie
+  // display mode. Weekly-adjusted budgets already absorb earlier days'
+  // deviations, so summing "vs adjusted" across a week double-counts them and
+  // contradicts the weekly budget shown on Today. The fixed goal is the only
+  // comparison whose weekly sum equals the week's real distance from plan.
+  const mode: CalorieMode = 'goal';
 
   const today = toDateString();
   const currentMonday = mondayOf(today);
@@ -47,6 +53,7 @@ export default function ProgressPage() {
   // reloading, keeps the week you were reviewing.
   const [monday, setMonday] = usePersistedState('ac-progress-week', currentMonday, isValidMonday);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [weekDetailsOpen, setWeekDetailsOpen] = useState(false);
   const sunday = addDays(monday, 6);
   const isCurrentWeek = monday === currentMonday;
 
@@ -204,50 +211,69 @@ export default function ProgressPage() {
         <>
           {/* The verdict leads: one big signed number instead of three equal
               tiles, so the week reads as an outcome, not a spreadsheet. The
-              counters that used to compete with it become support chips. */}
-          <Card>
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[13px] font-bold text-ink-2 uppercase tracking-wide">
-                {t('progress.summary_title', 'Your week')}
-              </p>
-              <CalorieModeTag />
-            </div>
-            <div className="mt-3 flex items-baseline gap-1.5">
-              <span
-                className={cn(
-                  'text-[30px] font-extrabold tabular-nums leading-none',
-                  summary.favorable ? 'text-success' : 'text-warning',
-                )}
-              >
-                {signedEnergyValue(summary.deltaSumKcal)}
+              counters that used to compete with it become support chips.
+              The whole card opens the week details (weight estimate), the same
+              gesture as tapping the calorie ring on Today. */}
+          <Card padded={false}>
+            <button
+              type="button"
+              onClick={() => setWeekDetailsOpen(true)}
+              aria-label={t('progress.week_details_aria', 'Open week details: estimated weight change and averages')}
+              className="pressable w-full p-4 text-left active:bg-press"
+            >
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-[13px] font-bold text-ink-2 uppercase tracking-wide">
+                  {t('progress.summary_title', 'Your week')}
+                </span>
+                <span className="flex items-center gap-0.5 rounded-full bg-inset px-2.5 py-1.5 text-[12px] font-semibold text-ink-2">
+                  {t('today.details', 'Details')}
+                  <Icon name="chevronRight" size={13} />
+                </span>
               </span>
-              <span className="text-[13px] font-semibold text-ink-2">
-                {t('progress.hero_vs_plan', 'kcal vs plan')}
+              <span className="mt-3 flex items-baseline gap-1.5">
+                <span
+                  className={cn(
+                    'text-[30px] font-extrabold tabular-nums leading-none',
+                    summary.favorable ? 'text-success' : 'text-warning',
+                  )}
+                >
+                  {signedEnergyValue(summary.deltaSumKcal)}
+                </span>
+                <span className="text-[13px] font-semibold text-ink-2">
+                  {t('progress.hero_vs_plan', 'kcal vs your daily goal')}
+                </span>
               </span>
-            </div>
-            <p className="mt-2 text-[13px] text-ink-2 leading-relaxed">{weekLine}</p>
-            <div className="mt-3.5 grid grid-cols-2 gap-2">
-              <div className="rounded-card bg-inset px-3 py-2.5">
-                <p className="text-[11px] font-semibold text-ink-3">
-                  {t('progress.days_logged', 'Days logged')}
-                </p>
-                <p className="mt-0.5 text-[15px] font-extrabold text-ink tabular-nums">
-                  {t('progress.days_of_week', '{{n}} of 7', { n: summary.loggedCount })}
-                </p>
-              </div>
-              <div className="rounded-card bg-inset px-3 py-2.5">
-                <p className="text-[11px] font-semibold text-ink-3">
-                  {t('progress.avg_eaten_label', 'Avg eaten per day')}
-                </p>
-                <p className="mt-0.5 text-[15px] font-extrabold text-ink tabular-nums">
-                  {energy(summary.avgEatenKcal)}
-                </p>
-              </div>
-            </div>
-            <p className="mt-2.5 text-[12px] text-ink-3">
-              {t('progress.week_motto', 'Weekly thinking beats daily perfection.')}
-            </p>
+              <span className="block mt-2 text-[13px] text-ink-2 leading-relaxed">{weekLine}</span>
+              <span className="mt-3.5 grid grid-cols-2 gap-2">
+                <span className="block rounded-card bg-inset px-3 py-2.5">
+                  <span className="block text-[11px] font-semibold text-ink-3">
+                    {t('progress.days_logged', 'Days logged')}
+                  </span>
+                  <span className="block mt-0.5 text-[15px] font-extrabold text-ink tabular-nums">
+                    {t('progress.days_of_week', '{{n}} of 7', { n: summary.loggedCount })}
+                  </span>
+                </span>
+                <span className="block rounded-card bg-inset px-3 py-2.5">
+                  <span className="block text-[11px] font-semibold text-ink-3">
+                    {t('progress.avg_eaten_label', 'Avg eaten per day')}
+                  </span>
+                  <span className="block mt-0.5 text-[15px] font-extrabold text-ink tabular-nums">
+                    {energy(summary.avgEatenKcal)}
+                  </span>
+                </span>
+              </span>
+              <span className="block mt-2.5 text-[12px] text-ink-3">
+                {t('progress.week_motto', 'Weekly thinking beats daily perfection.')}
+              </span>
+            </button>
           </Card>
+
+          <WeekDetailsSheet
+            open={weekDetailsOpen}
+            onClose={() => setWeekDetailsOpen(false)}
+            days={days}
+            isCurrentWeek={isCurrentWeek}
+          />
 
           <PremiumInsightCard monday={monday} days={days} mode={mode} />
 
@@ -266,7 +292,12 @@ export default function ProgressPage() {
                 {t('progress.days_subtitle', 'Tap any day to open and edit it')}
               </p>
             </div>
-            <CalorieModeTag />
+            {/* Static label, not the mode switcher: Progress always compares
+                against the fixed daily goal, on purpose. */}
+            <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-inset px-2 py-1 text-[11px] font-semibold text-ink-3">
+              <Icon name="target" size={12} className="shrink-0" />
+              {t('progress.vs_fixed_goal', 'vs daily goal')}
+            </span>
           </div>
           {dayRows.map(({ date, log }, i) => {
             const border = i > 0 && 'border-t border-hairline/60';

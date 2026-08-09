@@ -147,12 +147,19 @@ export function ManualFood({ date, onBack, onDone }: ManualProps) {
   );
 }
 
-/** Manual activity entry with optional AI intensity estimate. */
+/**
+ * Manual activity entry with optional AI intensity estimate, plus the
+ * smart-watch path: type the calories your device reported and the missing
+ * intensity or duration is worked out server-side. Progressive disclosure
+ * keeps the watch field out of the way until it is wanted.
+ */
 export function ManualActivity({ date, onBack, onDone }: ManualProps) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [duration, setDuration] = useState('30');
   const [met, setMet] = useState('');
+  const [showKcal, setShowKcal] = useState(false);
+  const [kcal, setKcal] = useState('');
   const [metExplanation, setMetExplanation] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -170,13 +177,28 @@ export function ManualActivity({ date, onBack, onDone }: ManualProps) {
       setError(extractApiError(err, t('log.estimate_error', 'Could not estimate intensity. You can type a MET value yourself: walking is about 3, running about 9.'))),
   });
 
+  const d = num(duration);
+  const m = num(met);
+  const kc = showKcal ? num(kcal) : null;
+  const hasKcal = kc !== null && kc > 0;
+  const metOk = m !== null && m >= 0.5 && m <= 50;
+
+  // Classic path needs name + duration + MET. The watch path needs the
+  // calories plus at least one of duration or MET so the backend has
+  // something to derive the other from (a bare calorie total also works,
+  // it just stores a flat burn).
+  const valid = hasKcal
+    ? (m === null || metOk) && (d === null || d > 0)
+    : name.trim().length > 0 && d !== null && d > 0 && metOk;
+
   const save = useMutation({
     mutationFn: () => {
       return activityService
         .create(date, {
-          activityName: name.trim(),
-          durationMinutes: num(duration),
-          metValue: num(met),
+          activityName: name.trim() || t('log.generic_exercise', 'Exercise'),
+          durationMinutes: d !== null && d > 0 ? d : null,
+          metValue: metOk ? m : null,
+          caloriesKcal: hasKcal ? kc : null,
         })
         .then(() => date);
     },
@@ -184,10 +206,6 @@ export function ManualActivity({ date, onBack, onDone }: ManualProps) {
     onError: (err) =>
       setError(extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
   });
-
-  const d = num(duration);
-  const m = num(met);
-  const valid = name.trim().length > 0 && d !== null && d > 0 && m !== null && m >= 0.5 && m <= 50;
 
   return (
     <form
@@ -204,7 +222,7 @@ export function ManualActivity({ date, onBack, onDone }: ManualProps) {
         onChange={(e) => setName(e.target.value)}
         autoComplete="off"
         enterKeyHint="next"
-        required
+        required={!hasKcal}
       />
       <div className="grid grid-cols-2 gap-3">
         <DecimalField
@@ -237,6 +255,30 @@ export function ManualActivity({ date, onBack, onDone }: ManualProps) {
         {t('log.estimate_met', 'Estimate intensity for me')}
       </Button>
       {metExplanation && <p className="text-[13px] text-ink-2 leading-relaxed">{metExplanation}</p>}
+
+      <button
+        type="button"
+        aria-expanded={showKcal}
+        className="pressable flex items-center gap-1 text-sm font-semibold text-primary-soft-ink py-1"
+        onClick={() => setShowKcal((v) => !v)}
+      >
+        <Icon name={showKcal ? 'chevronUp' : 'chevronDown'} size={16} />
+        {t('log.know_kcal', 'I know the calories I burned')}
+      </button>
+      {showKcal && (
+        <div className="space-y-1.5">
+          <DecimalField
+            label={t('log.kcal_burned', 'Calories burned')}
+            placeholder="200"
+            suffix="kcal"
+            value={kcal}
+            onValueChange={setKcal}
+          />
+          <p className="text-[13px] text-ink-3 leading-relaxed">
+            {t('log.kcal_burned_hint', 'From your watch or a machine. Fill in the duration or intensity too and we work out the rest.')}
+          </p>
+        </div>
+      )}
 
       {error && <InlineError message={error} />}
 

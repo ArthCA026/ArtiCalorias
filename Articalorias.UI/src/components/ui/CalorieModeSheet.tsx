@@ -37,7 +37,7 @@ export function CalorieModeSheet({ open, onClose, mode, onPick }: CalorieModeShe
       <p className="mb-3 text-[13px] text-ink-2 leading-relaxed">
         {t(
           'profile.mode_intro',
-          'This is the number every screen compares your day against, on Today and across Progress.',
+          'This is the budget your day is measured against on Today. Progress always compares weeks against your fixed daily goal.',
         )}
       </p>
       <div className="space-y-2">

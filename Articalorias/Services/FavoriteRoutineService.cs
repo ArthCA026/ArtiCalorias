@@ -133,8 +133,10 @@ public class FavoriteRoutineService : IFavoriteRoutineService
                     continue;
                 }
 
-                var profile = await _db.UserProfiles.AsNoTracking().FirstOrDefaultAsync(p => p.UserId == userId, ct);
-                var weight = profile?.CurrentWeightKg ?? 70m;
+                // Same weight source as every other entry calculation: the day's own
+                // snapshot. Keeps the gross calories consistent with the day-level
+                // resting offset in RecalculationService.
+                var weight = log.SnapshotWeightKg ?? 0m;
 
                 var entry = new ActivityEntry
                 {
@@ -146,11 +148,7 @@ public class FavoriteRoutineService : IFavoriteRoutineService
                     SortOrder = ++maxActivitySort,
                 };
 
-                if (entry.METValue.HasValue && entry.DurationMinutes.HasValue)
-                {
-                    var netMet = entry.METValue.Value - 1m;
-                    entry.CalculatedCaloriesKcal = netMet * weight * (entry.DurationMinutes.Value / 60m);
-                }
+                ActivityCalorieMath.Apply(entry, weight, providedCaloriesKcal: null);
 
                 _db.ActivityEntries.Add(entry);
                 addedCount++;

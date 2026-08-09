@@ -23,6 +23,8 @@ export interface UserProfileResponse {
 export interface UserProfileRequest {
   currentWeightKg: number | null;
   heightCm: number | null;
+  /** IANA timezone id; stamped automatically by profileService.update. */
+  timeZoneId?: string | null;
   age?: number | null;
   biologicalSex?: string | null;
   bmrKcal?: number | null;

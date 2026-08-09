@@ -18,7 +18,8 @@
     "amount": "Cantidad",
     "min_suffix": "min",
     "calorie_mode_aria": "Vista de calorías: {{mode}}. Toca para cambiar.",
-    "calorie_mode_changed": "Vista de calorías actualizada"
+    "calorie_mode_changed": "Vista de calorías actualizada",
+    "hour_suffix": "h"
   },
   "macros": {
     "prot": "Prot",
@@ -39,7 +40,7 @@
     "activity": "Actividad",
     "type_switch": "¿Qué quieres registrar?",
     "placeholder_meal": "p. ej. 2 huevos y tostada con mantequilla",
-    "placeholder_activity": "p. ej. 30 min de carrera suave",
+    "placeholder_activity": "p. ej. 30 min de trote suave, o 200 kcal de tu reloj",
     "add": "Añadir",
     "adding_meal": "Añadiendo tu comida",
     "adding_activity": "Añadiendo tu actividad",
@@ -80,7 +81,7 @@
     "add_many": "Añadir {{count}} elementos ({{kcal}} kcal)",
     "add_one_activity": "Añadir 1 actividad",
     "add_many_activities": "Añadir {{count}} actividades",
-    "met_value": "Intensidad (MET): {{met}}",
+    "met_value": "MET {{met}}",
     "minutes_short": "{{v}} min",
     "food_name": "Alimento",
     "food_name_ph": "p. ej. Yogur griego",
@@ -104,12 +105,16 @@
     "estimate_met": "Estimar la intensidad por mí",
     "estimate_error": "No se pudo estimar la intensidad. Puedes escribir un MET tú mismo: caminar es 3, correr unos 9.",
     "added_name": "{{name}} añadido",
-    "met_value": "MET {{met}}",
     "templates_error_title": "No se pudieron cargar las plantillas",
     "templates_error_body": "Revisa tu conexión y reintenta, o vuelve atrás y escribe tu registro.",
     "no_templates_title": "Aún no hay plantillas",
     "no_templates_body_meal": "Guarda comidas frecuentes en la pestaña Plantillas y regístralas aquí en dos toques.",
-    "no_templates_body_activity": "Guarda actividades frecuentes en la pestaña Plantillas y regístralas aquí en dos toques."
+    "no_templates_body_activity": "Guarda actividades frecuentes en la pestaña Plantillas y regístralas aquí en dos toques.",
+    "generic_exercise": "Ejercicio",
+    "know_kcal": "Sé cuántas calorías quemé",
+    "kcal_burned": "Calorías quemadas",
+    "kcal_burned_hint": "De tu reloj o una máquina. Añade también la duración o la intensidad y calculamos el resto.",
+    "kcal_burned_edit_hint": "Quema total, reposo incluido. Edítala para igualar tu reloj y la intensidad se ajusta."
   },
   "today": {
     "title": "Hoy",
@@ -175,7 +180,8 @@
     "duration_meta": "{{min}} min",
     "change_qty_aria": "Cambiar cantidad de {{name}}",
     "change_duration_aria": "Cambiar duración de {{name}}",
-    "list_switch": "Comidas o actividades"
+    "list_switch": "Comidas o actividades",
+    "activities_gross_note": "Cada quema es el total de esa actividad, calorías en reposo incluidas, como lo muestra un reloj."
   },
   "day": {
     "past_hint": "Editando un día pasado",
@@ -213,7 +219,10 @@
     "start_hint": "Registra una comida hoy y tu racha comienza. La constancia gana a la perfección.",
     "safe_today": "Hoy ya cuenta. Vuelve mañana para seguir sumando.",
     "at_stake": "Registra algo hoy para mantener viva tu racha de {{n}} días.",
-    "longest": "Racha más larga"
+    "longest": "Racha más larga",
+    "celebrate_first": "¡Racha iniciada!",
+    "celebrate_day": "¡Día {{n}}!",
+    "celebrate_sub": "Primer registro del día listo. Vuelve mañana para mantener la llama."
   },
   "goal": {
     "lose-aggressive": "Pérdida máxima",
@@ -304,7 +313,7 @@
     "protein_custom_link": "Definir gramos personalizados",
     "protein_custom_label": "Gramos al día",
     "mode_title": "Vista de calorías",
-    "mode_intro": "Este es el número con el que cada pantalla compara tu día, en Hoy y en todo Progreso.",
+    "mode_intro": "Este es el presupuesto con el que se mide tu día en Hoy. Progreso siempre compara las semanas con tu meta diaria fija.",
     "mode_adjusted": "Ajuste semanal",
     "mode_adjusted_desc": "Tu presupuesto diario se reequilibra a lo largo de la semana. Un día fuerte solo reduce un poco los siguientes. Recomendado.",
     "mode_goal": "Objetivo diario fijo",
@@ -320,7 +329,15 @@
     "push_denied": "Las notificaciones están bloqueadas. Permítelas para este sitio en los ajustes del navegador y vuelve a intentarlo.",
     "reminder_time_aria": "Hora del recordatorio de {{meal}}",
     "reminder_toggle_aria": "Activar recordatorio de {{meal}}",
-    "reminders_hint": "Un pequeño aviso a las horas de comer mantiene tu racha a salvo."
+    "reminders_hint": "Un pequeño aviso a las horas de comer mantiene tu racha a salvo.",
+    "row_sleep_neat": "Sueño y movimiento diario",
+    "sleep_neat_value": "{{sleep}} h · {{neat}} h",
+    "sleep_neat_title": "Sueño y movimiento diario",
+    "sleep_hours": "Sueño por noche",
+    "neat_hours": "Movimiento cotidiano",
+    "neat_hint": "Horas que pasas de pie y en movimiento fuera del ejercicio: tareas, cocinar, caminar de un lado a otro.",
+    "sleep_neat_error": "Sueño más movimiento no puede superar 23 horas. Debe quedar al menos 1 hora para todo lo demás.",
+    "sleep_neat_effect": "Estas horas moldean tu gasto diario estimado. Los cambios aplican desde hoy; los días pasados conservan sus números."
   },
   "premium": {
     "title": "ArtiCalorias Plus",
@@ -378,7 +395,15 @@
     "summary_no_body": "Omitiste tus datos corporales, así que tu presupuesto queda bloqueado por ahora. Añádelos cuando quieras en Perfil.",
     "finish": "Empezar a registrar",
     "skip_body": "Omitir por ahora",
-    "save_error": "No se pudo guardar tu perfil. Revisa tu conexión e inténtalo de nuevo."
+    "save_error": "No se pudo guardar tu perfil. Revisa tu conexión e inténtalo de nuevo.",
+    "notif_title": "Un empujón en el momento justo",
+    "notif_sub": "A la hora de comer te decimos exactamente cuánto espacio te queda, para que registrar nunca se olvide.",
+    "notif_preview_title": "Te quedan 1250 kcal hoy",
+    "notif_preview_body": "Espacio para una buena cena. Regístrala cuando comas.",
+    "notif_preview_hint": "Tus recordatorios se verán así, con tus números reales.",
+    "notif_enable": "Activar recordatorios de comidas",
+    "notif_skip": "Quizás luego",
+    "notif_done_hint": "Recordatorios activados. Ajusta las horas aquí o luego en Perfil."
   },
   "auth": {
     "tagline": "Conteo de calorías que encaja con tu semana",
@@ -482,7 +507,7 @@
     "days_of_week": "{{n}} de 7",
     "days_logged": "Días registrados",
     "avg_eaten_label": "Promedio comido al día",
-    "hero_vs_plan": "kcal vs plan",
+    "hero_vs_plan": "kcal vs tu meta diaria",
     "week_on_plan": "En plan esta semana. Firme y constante.",
     "week_on_plan_surplus": "Alimentando tu superávit según el plan. Firme y constante.",
     "week_over_plan": "Un poco por encima del plan. Nada que una semana normal no pueda absorber.",
@@ -539,7 +564,23 @@
     "day_row_aria": "{{day}}: {{eaten}} kcal comidas, {{delta}} kcal respecto al plan.",
     "day_row_aria_no_plan": "{{day}}: {{eaten}} kcal comidas.",
     "today_row": "Hoy",
-    "add_missed_day": "Añadir este día"
+    "add_missed_day": "Añadir este día",
+    "vs_fixed_goal": "vs meta diaria",
+    "week_details_title": "Detalles de la semana",
+    "week_details_aria": "Abrir detalles de la semana: cambio de peso estimado y promedios",
+    "weight_lost_so_far": "peso perdido estimado hasta ahora",
+    "weight_lost_week": "peso perdido estimado esa semana",
+    "weight_gained_so_far": "peso ganado estimado hasta ahora",
+    "weight_gained_week": "peso ganado estimado esa semana",
+    "week_pace": "A este ritmo: {{kg}} al cerrar la semana",
+    "week_days_counted": "Días completos contados",
+    "week_avg_eaten": "Promedio comido por día",
+    "week_avg_burned": "Promedio quemado por día",
+    "week_vs_plan_row": "Vs meta diaria, en total",
+    "week_details_empty_title": "Aún no hay días completos",
+    "week_details_empty_body": "Tu estimación de peso aparece tras tu primer día completo registrado. Hoy cuenta cuando termine.",
+    "week_details_empty_past": "Esa semana no tiene días con datos suficientes para estimar un cambio de peso.",
+    "week_details_disclaimer": "Una estimación según tu balance de calorías (unas 7 700 kcal por kg). El peso en la báscula también se mueve por agua y horarios, así que confía en la tendencia más que en un número suelto."
   },
   "templates": {
     "title": "Plantillas",

@@ -95,7 +95,7 @@ public class DailyLogService : IDailyLogService
                     SortOrder = sortOrder++,
                 };
 
-                CalculateActivityCalories(entry, dailyLog.SnapshotWeightKg ?? 0m);
+                ActivityCalorieMath.Apply(entry, dailyLog.SnapshotWeightKg ?? 0m, providedCaloriesKcal: null);
                 _db.ActivityEntries.Add(entry);
             }
         }
@@ -169,18 +169,5 @@ public class DailyLogService : IDailyLogService
         var monday = date.AddDays(-daysFromMonday);
         var sunday = monday.AddDays(6);
         return (monday, sunday);
-    }
-
-    private static void CalculateActivityCalories(ActivityEntry entry, decimal weightKg)
-    {
-        // Subtract 1 MET: BMR is already counted separately in total expenditure.
-        // Activities with MET < 1 (e.g. Sleep at 0.9) yield negative net calories,
-        // meaning they burn less than the resting baseline and reduce total expenditure.
-        if (entry.METValue.HasValue && entry.DurationMinutes.HasValue)
-        {
-            var netMet = entry.METValue.Value - 1m;
-            entry.CalculatedCaloriesKcal =
-                netMet * weightKg * (entry.DurationMinutes.Value / 60m);
-        }
     }
 }

@@ -132,20 +132,31 @@ public class ActivityParsingService : IActivityParsingService
         Return a JSON object with a single key "items" containing an array.
 
         Each item must have exactly these fields:
-        - activityName (string): activity name in the same language as the user's input; preserve natural casing (e.g. "CrossFit", "Pilates"); do not translate
-        - durationMinutes (number): duration in minutes; if the user stated it, use their value; otherwise estimate a typical duration for that activity type
-        - metValue (number): estimated MET value for the activity
+        - activityName (string): activity name in the same language as the user's input; preserve natural casing (e.g. "CrossFit", "Pilates"); do not translate; empty string "" when the user did not name the activity
+        - durationMinutes (number or null): duration in minutes
+        - metValue (number or null): estimated MET value for the activity
+        - caloriesKcal (number or null): calories burned, ONLY if the user explicitly stated them (e.g. "200 kcal", "burned 350 calories", "quemé 200 kcal")
 
-        Rules:
+        The user may report calories from a smart watch. Extraction rules for that case — follow them exactly:
+        - caloriesKcal is filled ONLY with a number the user said. NEVER estimate or calculate calories yourself.
+        - When the user states calories, NEVER calculate the missing duration or MET from them. Leave what the user did not say as null. The backend does that math.
+        - "200kcal of running" → activityName "running" (keep user language), metValue estimated from the activity name, durationMinutes null, caloriesKcal 200.
+        - "200kcal in 20min" → activityName "", durationMinutes 20, metValue null, caloriesKcal 200.
+        - "200kcal of running in 20min" → activityName "running", durationMinutes 20, metValue null (the backend derives the real MET from calories and duration), caloriesKcal 200.
+        - "200kcal" alone → activityName "", durationMinutes null, metValue null, caloriesKcal 200.
+
+        When the user does NOT state calories (the normal case), caloriesKcal is null and the old behavior applies:
+        - metValue: estimate a reasonable MET value based on the Compendium of Physical Activities.
+        - durationMinutes: if the user stated it, use their value; otherwise estimate a typical duration for that activity (e.g., aerobics class → 45, yoga → 60, running → 30, weight training → 45, stretching → 15).
+
+        General rules:
         - Parse each distinct activity as a separate item.
         - Keep activityName in the same language as the user's input; preserve natural casing; do not translate.
         - If the user mentions multiple activities joined by "and", "y", commas, or similar separators, return one item per activity.
-        - Estimate a reasonable MET value based on the Compendium of Physical Activities.
         - Round metValue to 1 decimal place.
         - Convert durations to minutes.
         - Support inputs in English or Spanish.
         - Never return negative values.
-        - If duration is not stated clearly, estimate a typical duration for that activity (e.g., aerobics class → 45, yoga → 60, running → 30, weight training → 45, stretching → 15). Use the most common session length for recreational exercise.
         - If the activity is too vague to assign a confident MET value, use the most reasonable common estimate for that activity label.
         - Output valid JSON only, with no markdown or extra text.
 
@@ -166,12 +177,27 @@ public class ActivityParsingService : IActivityParsingService
             {
               "activityName": "Correr",
               "durationMinutes": 30,
-              "metValue": 8.3
+              "metValue": 8.3,
+              "caloriesKcal": null
             },
             {
               "activityName": "Estiramiento",
               "durationMinutes": 15,
-              "metValue": 2.3
+              "metValue": 2.3,
+              "caloriesKcal": null
+            }
+          ]
+        }
+
+        Example input: "corrí y quemé 320 kcal según mi reloj"
+        Example output:
+        {
+          "items": [
+            {
+              "activityName": "Correr",
+              "durationMinutes": null,
+              "metValue": 8.3,
+              "caloriesKcal": 320
             }
           ]
         }
@@ -263,7 +289,9 @@ public class ActivityParsingService : IActivityParsingService
 
         foreach (var item in items)
         {
-            if (string.IsNullOrWhiteSpace(item.ActivityName))
+            // A nameless item is only acceptable on the smart-watch path, where the
+            // stated calories make it computable (the backend names it "Exercise").
+            if (string.IsNullOrWhiteSpace(item.ActivityName) && item.CaloriesKcal is not > 0m)
                 continue;
 
             // Clamp values
@@ -272,6 +300,9 @@ public class ActivityParsingService : IActivityParsingService
 
             if (item.MetValue.HasValue)
                 item.MetValue = Math.Clamp(item.MetValue.Value, 0.5m, 50m);
+
+            if (item.CaloriesKcal.HasValue)
+                item.CaloriesKcal = Math.Clamp(item.CaloriesKcal.Value, 0m, 10000m);
 
             validated.Add(item);
         }

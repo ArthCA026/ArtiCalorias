@@ -62,10 +62,18 @@ public class RecalculationService : IRecalculationService
         log.TotalAlcoholGrams = log.FoodEntries.Sum(f => f.AlcoholGrams);
 
         // ── Step 3: Recompute activity totals ──
+        // Entry calories are GROSS (MET × weight × hours): they already contain the
+        // resting burn of their timeframe, exactly like a smart watch reports it.
         log.TotalActivityCaloriesKcal = log.ActivityEntries.Sum(a => a.CalculatedCaloriesKcal);
 
-        // ── Step 3b: Recompute idle-time expenditure (unregistered hours) ──
+        // Resting share inside those gross figures, priced at the MET reference rate
+        // (1 kcal/kg/h). Subtracted from the BMR line in Step 5 so the BMR only covers
+        // the hours of the day without logged activities and nothing is counted twice.
         var totalActivityMinutes = log.ActivityEntries.Sum(a => a.DurationMinutes ?? 0m);
+        var activityRestingOffsetKcal = ActivityCalorieMath.RestingOffset(
+            log.SnapshotWeightKg ?? 0m, totalActivityMinutes);
+
+        // ── Step 3b: Recompute idle-time expenditure (unregistered hours) ──
         var totalActivityHours = totalActivityMinutes / 60m;
         // Sleep & NEAT hours reduce idle time (NULL = log predates the feature; treat as 0)
         var sleepH = log.SnapshotSleepHours ?? 0m;
@@ -93,7 +101,10 @@ public class RecalculationService : IRecalculationService
             log.TotalAlcoholGrams);
 
         // ── Step 5: Recompute total daily expenditure ──
+        // BMR minus the resting offset = resting energy of the non-activity hours only;
+        // activity entries carry their own resting share inside their gross calories.
         log.TotalDailyExpenditureKcal = log.SnapshotBMRKcal
+            - activityRestingOffsetKcal
             + log.TotalActivityCaloriesKcal
             + log.IdleTimeCaloriesKcal
             + log.SleepCaloriesKcal
@@ -111,7 +122,7 @@ public class RecalculationService : IRecalculationService
         // for an aggressive -1.00 kg/wk plan — below the 1200/1500 minimum intake floor).
         // Always floor at 1 kcal so the budget is never <= 0 (prevents negative-budget UI bugs).
         var rawGoalTarget = log.TotalDailyExpenditureKcal + log.SnapshotDailyBaseGoalKcal;
-        var minIntakeForGoal = CalculateMinimumDailyIntakeKcal(log, biologicalSex);
+        var minIntakeForGoal = CalculateMinimumDailyIntakeKcal(log, biologicalSex, activityRestingOffsetKcal);
         var effectiveGoalTarget = Math.Max(
             rawGoalTarget,
             safeguardEnabled ? Math.Max(minIntakeForGoal, 1m) : 1m);
@@ -132,7 +143,7 @@ public class RecalculationService : IRecalculationService
         }
 
         // ── Step 8: Recompute weekly dynamic context ──
-        await RecalculateWeeklyContext(log, siblingData, biologicalSex, safeguardEnabled, referenceToday);
+        await RecalculateWeeklyContext(log, siblingData, biologicalSex, safeguardEnabled, activityRestingOffsetKcal, referenceToday);
 
         log.LastRecalculatedAtUtc = DateTime.UtcNow;
         log.UpdatedAtUtc = DateTime.UtcNow;
@@ -262,7 +273,7 @@ public class RecalculationService : IRecalculationService
     //  Step 8 — Weekly context fields on the DailyLog itself
     // ─────────────────────────────────────────────────────
 
-    private async Task RecalculateWeeklyContext(DailyLog log, IReadOnlyDictionary<long, SiblingDayData>? siblingData, string? biologicalSex, bool safeguardEnabled, DateOnly? referenceToday = null)
+    private async Task RecalculateWeeklyContext(DailyLog log, IReadOnlyDictionary<long, SiblingDayData>? siblingData, string? biologicalSex, bool safeguardEnabled, decimal activityRestingOffsetKcal, DateOnly? referenceToday = null)
     {
         // Use the pre-fetched snapshot when available (cascade path) to avoid
         // an extra DB round-trip per sibling. Fall back to a fresh query otherwise.
@@ -320,7 +331,7 @@ public class RecalculationService : IRecalculationService
         // ── Safety floor — never suggest eating below physiologically safe intake ──
         // biologicalSex and safeguardEnabled are loaded once in Step 1b of
         // RecalculateFullPipelineAsync and passed in, avoiding a redundant DB round-trip.
-        var minIntakeKcal = CalculateMinimumDailyIntakeKcal(log, biologicalSex);
+        var minIntakeKcal = CalculateMinimumDailyIntakeKcal(log, biologicalSex, activityRestingOffsetKcal);
         // Convert intake floor → net-balance floor (SuggestedDailyAverageRemainingKcal is
         // a net-balance target: negative = deficit, positive = surplus vs. expenditure)
         var minNetBalance = minIntakeKcal - log.TotalDailyExpenditureKcal;
@@ -363,7 +374,7 @@ public class RecalculationService : IRecalculationService
     ///  3. BMR safety floor — 80 % of the snapshotted BMR. Prevents absurd suggestions
     ///     for people whose BMR is high enough to make the sex floor alone too permissive.
     /// </summary>
-    private static decimal CalculateMinimumDailyIntakeKcal(DailyLog log, string? biologicalSex)
+    private static decimal CalculateMinimumDailyIntakeKcal(DailyLog log, string? biologicalSex, decimal activityRestingOffsetKcal)
     {
         // 1. Sex-based absolute floor
         var sexFloor = biologicalSex == "F" ? 1200m : 1500m;
@@ -376,7 +387,10 @@ public class RecalculationService : IRecalculationService
         if (log.SnapshotBodyFatPercent is > 0 && log.SnapshotWeightKg.HasValue)
         {
             var ffmKg = log.SnapshotWeightKg.Value * (1m - log.SnapshotBodyFatPercent.Value / 100m);
-            eaFloor = 30m * ffmKg + log.TotalActivityCaloriesKcal;
+            // EA is defined against the ADDITIONAL cost of exercise, so the resting
+            // share inside the gross activity figures is removed again here. This
+            // keeps the floor identical to what it was under the net convention.
+            eaFloor = 30m * ffmKg + (log.TotalActivityCaloriesKcal - activityRestingOffsetKcal);
         }
         else
         {

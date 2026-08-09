@@ -10,11 +10,17 @@ public class CreateActivityEntryRequest
     [StringLength(200)]
     public string ActivityName { get; set; } = string.Empty;
 
-    [Required]
     [Range(0, 1440)]
     public decimal? DurationMinutes { get; set; }
 
-    [Required]
     [Range(0.5, 50)]
     public decimal? METValue { get; set; }
+
+    /// <summary>
+    /// Burned calories supplied directly by the user (e.g. from a smart watch).
+    /// When set, it is stored as the entry's calories and the missing MET or
+    /// duration is derived server-side. Without it, MET + duration are required.
+    /// </summary>
+    [Range(0, 10000)]
+    public decimal? CaloriesKcal { get; set; }
 }

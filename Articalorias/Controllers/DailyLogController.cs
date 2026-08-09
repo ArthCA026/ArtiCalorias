@@ -190,7 +190,7 @@ public class DailyLogController : ControllerBase
                 METValue = item.METValue
             };
 
-            var created = await _activityService.CreateEntryAsync(entry);
+            var created = await _activityService.CreateEntryAsync(entry, item.CaloriesKcal);
             results.Add(MapActivityToResponse(created));
         }
 

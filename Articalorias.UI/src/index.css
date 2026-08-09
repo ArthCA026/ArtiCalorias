@@ -58,6 +58,7 @@
   --animate-pop: pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
   --animate-shimmer: shimmer 1.4s linear infinite;
   --animate-celebrate: celebrate 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  --animate-streak-pop: streak-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 @keyframes fade-in {
@@ -85,6 +86,23 @@
   0% { top: 8%; }
   50% { top: 88%; }
   100% { top: 8%; }
+}
+
+/* Streak celebration: badge pops in, confetti bursts from the center.
+   Each particle gets its own trajectory via --cf-x / --cf-y / --cf-r. */
+@keyframes streak-pop {
+  0% { transform: scale(0.35); opacity: 0; }
+  55% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes confetti-burst {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+  12% { opacity: 1; }
+  100% { transform: translate(var(--cf-x), var(--cf-y)) rotate(var(--cf-r)); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .confetti-piece { display: none; }
+  .animate-streak-pop { animation: fade-in 0.2s ease-out both; }
 }
 
 /* ---------- Base ---------- */

@@ -307,20 +307,32 @@ public class FavoritesController : ControllerBase
     }
 
     [HttpPost("routines/{id:long}/add-to-today")]
-    public async Task<IActionResult> AddRoutineToToday(long id, CancellationToken ct)
+    public async Task<IActionResult> AddRoutineToToday(long id, [FromQuery] DateOnly? date, CancellationToken ct)
     {
         var userId = GetUserId();
 
-        // Resolve the user's local date using their stored timezone so that users
-        // in UTC− timezones don't have entries assigned to the wrong calendar day
-        // (e.g. Costa Rica UTC-6: after 18:00 UTC, UtcNow would yield tomorrow).
-        // Falls back to UTC if TimeZoneId is null or unrecognised.
-        var profile = await _userProfileService.GetByUserIdAsync(userId);
-        TimeZoneInfo tz;
-        try   { tz = TimeZoneInfo.FindSystemTimeZoneById(profile?.TimeZoneId ?? "UTC"); }
-        catch (TimeZoneNotFoundException) { tz = TimeZoneInfo.Utc; }
-        catch (InvalidTimeZoneException)  { tz = TimeZoneInfo.Utc; }
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
+        // The client's own calendar date is the source of truth for "today": the
+        // device knows its local date with no server-side timezone guesswork.
+        // Sanity-capped to ±2 days around UTC now so a wrong device clock cannot
+        // write weeks into the past or future.
+        var utcToday = DateOnly.FromDateTime(DateTime.UtcNow);
+        DateOnly today;
+        if (date.HasValue && Math.Abs(date.Value.DayNumber - utcToday.DayNumber) <= 2)
+        {
+            today = date.Value;
+        }
+        else
+        {
+            // Fallback for older clients: resolve the user's local date from their
+            // stored timezone (e.g. Costa Rica UTC-6: after 18:00 UTC, UtcNow alone
+            // would yield tomorrow). Falls back to UTC when unknown.
+            var profile = await _userProfileService.GetByUserIdAsync(userId);
+            TimeZoneInfo tz;
+            try   { tz = TimeZoneInfo.FindSystemTimeZoneById(profile?.TimeZoneId ?? "UTC"); }
+            catch (TimeZoneNotFoundException) { tz = TimeZoneInfo.Utc; }
+            catch (InvalidTimeZoneException)  { tz = TimeZoneInfo.Utc; }
+            today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
+        }
 
         try
         {

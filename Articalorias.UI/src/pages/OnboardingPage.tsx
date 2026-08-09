@@ -11,6 +11,10 @@ import { Icon, type IconName } from '@/components/ui/Icon';
 import { InlineError } from '@/components/ui/States';
 import { useAuth } from '@/hooks/useAuth';
 import { useUnits } from '@/hooks/useUnits';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { useNotificationSettings } from '@/hooks/useNotificationSettings';
+import { Switch } from '@/components/ui/Switch';
+import { toTimeInputValue, fromTimeInputValue } from '@/utils/notifications';
 import { profileService } from '@/services/profileService';
 import { queryKeys } from '@/lib/queryKeys';
 import { displayToKg, weightLabel, kgToDisplay, ftInToCm } from '@/utils/units';
@@ -31,7 +35,7 @@ import { cn } from '@/utils/cn';
  */
 
 const GOAL_KEYS: GoalPresetKey[] = ['lose-fast', 'lose-moderate', 'lose-slow', 'maintain', 'gain'];
-const TOTAL_STEPS = 4; // account (done), body, goal, protein
+const TOTAL_STEPS = 5; // account (done), body, goal, protein, reminders
 
 const num = (raw: string): number | null => {
   if (raw.trim() === '') return null;
@@ -47,7 +51,8 @@ export default function OnboardingPage() {
   const { system, setSystem, weightUnit } = useUnits();
   const imperial = system === 'imperial';
 
-  const [step, setStep] = useState(0); // 0=body, 1=goal, 2=protein, 3=summary
+  const [step, setStep] = useState(0); // 0=body, 1=goal, 2=protein, 3=reminders, 4=summary
+  const push = usePushNotifications();
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
   const [heightFt, setHeightFt] = useState('');
@@ -146,7 +151,7 @@ export default function OnboardingPage() {
         </button>
       </header>
       <p className="mt-2 text-[12px] font-semibold text-primary-soft-ink text-center">
-        {step < 3
+        {step < 4
           ? t('onboarding.progress_note', 'Account created. You are already {{pct}}% done.', {
               pct: Math.round(progress * 100),
             })
@@ -333,7 +338,9 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {step === 3 && (
+        {step === 3 && <RemindersStep push={push} />}
+
+        {step === 4 && (
           <div className="space-y-4">
             <div className="text-center">
               <span className="inline-flex w-14 h-14 rounded-2xl bg-primary-soft text-primary-soft-ink items-center justify-center animate-pop">
@@ -396,6 +403,19 @@ export default function OnboardingPage() {
           >
             {t('common.continue', 'Continue')}
           </Button>
+        ) : step === 3 ? (
+          // Reminders are opt-in: once enabled the button turns primary, and
+          // declining is one calm tap, never a guilt trip.
+          <Button
+            variant={push.subscribed || !push.supported ? 'primary' : 'ghost'}
+            size="lg"
+            fullWidth
+            onClick={() => setStep(4)}
+          >
+            {push.subscribed || !push.supported
+              ? t('common.continue', 'Continue')
+              : t('onboarding.notif_skip', 'Maybe later')}
+          </Button>
         ) : (
           <Button
             variant="primary"
@@ -429,6 +449,124 @@ function SummaryRow({ icon, label, value }: { icon: IconName; label: string; val
       </span>
       <span className="flex-1 text-[14px] font-semibold text-ink-2">{label}</span>
       <span className="text-[15px] font-bold text-ink">{value}</span>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Reminders step                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Notifications as part of onboarding: the ask is framed around the value
+ * (your remaining calories at meal time), previewed before the permission
+ * prompt so the browser dialog never comes cold. Enabling turns on all three
+ * meal reminders at once; times stay editable right here and later in Profile.
+ */
+function RemindersStep({ push }: { push: ReturnType<typeof usePushNotifications> }) {
+  const { t } = useTranslation();
+  const { schedules, updateSchedule, replaceAll } = useNotificationSettings();
+
+  const mealLabel = (type: string) =>
+    type === 'breakfast'
+      ? t('profile.reminder_breakfast', 'Breakfast')
+      : type === 'lunch'
+        ? t('profile.reminder_lunch', 'Lunch')
+        : t('profile.reminder_dinner', 'Dinner');
+
+  const enable = async () => {
+    await push.subscribe();
+    // Permission granted: turn every meal reminder on in one write, so the
+    // user leaves onboarding with a working setup, not another to-do.
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      replaceAll(schedules.map((s) => ({ ...s, enabled: true })));
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-xl font-extrabold text-ink">
+          {t('onboarding.notif_title', 'A nudge at the right moment')}
+        </h1>
+        <p className="text-sm text-ink-2 mt-1">
+          {t('onboarding.notif_sub', 'At meal times we tell you exactly how much room you have left, so logging never slips.')}
+        </p>
+      </div>
+
+      {/* Preview of the real thing: seeing the value first makes the browser
+          permission prompt an easy yes. */}
+      <div className="rounded-card bg-inset p-3">
+        <div className="rounded-xl bg-card p-3 flex items-start gap-3">
+          <span className="w-9 h-9 rounded-xl bg-primary-soft text-primary-soft-ink flex items-center justify-center shrink-0">
+            <Icon name="bell" size={18} />
+          </span>
+          <span className="flex-1">
+            <span className="block text-[13px] font-bold text-ink">
+              {t('onboarding.notif_preview_title', '1,250 kcal left today')}
+            </span>
+            <span className="block text-[12px] text-ink-2 mt-0.5">
+              {t('onboarding.notif_preview_body', 'Room for a good dinner. Log it once you eat.')}
+            </span>
+          </span>
+        </div>
+        <p className="mt-2 px-1 text-[12px] text-ink-3">
+          {t('onboarding.notif_preview_hint', 'Your reminders will look like this, with your real numbers.')}
+        </p>
+      </div>
+
+      {!push.supported ? (
+        <p className="text-[13px] text-ink-2 leading-relaxed">
+          {t('profile.push_unsupported', 'This browser does not support notifications. Open the app in Chrome or install it to your home screen to enable reminders.')}
+        </p>
+      ) : !push.subscribed ? (
+        <>
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            icon="bell"
+            loading={push.loading}
+            onClick={enable}
+          >
+            {t('onboarding.notif_enable', 'Turn on meal reminders')}
+          </Button>
+          {push.permission === 'denied' && (
+            <p className="text-[13px] text-warning leading-relaxed">
+              {t('profile.push_denied', 'Notifications are blocked. Allow them for this site in your browser settings, then try again.')}
+            </p>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="rounded-card bg-card overflow-hidden divide-y divide-hairline/50">
+            {schedules.map((s) => (
+              <div key={s.type} className="flex items-center gap-3 px-4 py-3">
+                <span className="flex-1 text-[15px] font-semibold text-ink">{mealLabel(s.type)}</span>
+                <input
+                  type="time"
+                  value={toTimeInputValue(s.hour, s.minute)}
+                  disabled={!s.enabled}
+                  onChange={(e) => {
+                    const { hour, minute } = fromTimeInputValue(e.target.value);
+                    updateSchedule(s.type, { hour, minute });
+                  }}
+                  className="bg-inset rounded-lg px-2 py-1.5 text-sm text-ink disabled:opacity-40"
+                  aria-label={t('profile.reminder_time_aria', '{{meal}} reminder time', { meal: mealLabel(s.type) })}
+                />
+                <Switch
+                  checked={s.enabled}
+                  onChange={(on) => updateSchedule(s.type, { enabled: on })}
+                  label={t('profile.reminder_toggle_aria', 'Enable {{meal}} reminder', { meal: mealLabel(s.type) })}
+                />
+              </div>
+            ))}
+          </div>
+          <p className="text-[13px] text-ink-3 leading-relaxed">
+            {t('onboarding.notif_done_hint', 'Reminders are on. Adjust the times here or later in Profile.')}
+          </p>
+        </>
+      )}
     </div>
   );
 }

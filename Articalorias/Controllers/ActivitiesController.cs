@@ -55,7 +55,7 @@ public class ActivitiesController : ControllerBase
             METValue = request.METValue
         };
 
-        var created = await _activityService.CreateEntryAsync(entry);
+        var created = await _activityService.CreateEntryAsync(entry, request.CaloriesKcal);
         return Created($"/api/activities/daily/{date}/{created.ActivityEntryId}", MapEntryToResponse(created));
     }
 
@@ -70,7 +70,7 @@ public class ActivitiesController : ControllerBase
             METValue = request.METValue
         };
 
-        var updated = await _activityService.UpdateEntryAsync(entry);
+        var updated = await _activityService.UpdateEntryAsync(entry, request.CaloriesKcal);
         return Ok(MapEntryToResponse(updated));
     }
 
