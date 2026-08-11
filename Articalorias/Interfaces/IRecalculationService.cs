@@ -24,6 +24,14 @@ public interface IRecalculationService
     Task RecalculateFullPipelineAsync(long dailyLogId);
 
     /// <summary>
+    /// Same pipeline, but with the user's local date as the past-day freeze
+    /// reference. Required whenever the recalculation must be able to update
+    /// today's adjusted budget for users whose local date lags the server's
+    /// UTC date (e.g. marking a past day as a fasting day in the evening).
+    /// </summary>
+    Task RecalculateFullPipelineAsync(long dailyLogId, DateOnly referenceToday);
+
+    /// <summary>
     /// Updates all profile snapshot fields on the daily log for <paramref name="date"/>
     /// from the user's current profile, then runs the full recalculation pipeline.
     /// A no-op if no log exists for that date yet.

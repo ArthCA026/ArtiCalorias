@@ -101,7 +101,9 @@ export function DayView({ date, isToday }: DayViewProps) {
             onOpenDetails={() => setDetailsOpen(true)}
           />
 
-          {isToday && dash.foodEntries.length === 0 && (
+          {/* Onboarding checklist makes no sense on a day deliberately without
+              meals: "log your first meal" would contradict the fast. */}
+          {isToday && dash.foodEntries.length === 0 && !dash.isFastingDay && (
             <ChecklistCard hasGoal={dash.hasCalorieBudgetEstimate} />
           )}
 
@@ -128,6 +130,7 @@ export function DayView({ date, isToday }: DayViewProps) {
               date={date}
               entries={dash.foodEntries}
               isToday={isToday}
+              isFastingDay={dash.isFastingDay}
               onChanged={onChanged}
             />
           ) : (

@@ -181,7 +181,18 @@
     "change_qty_aria": "Cambiar cantidad de {{name}}",
     "change_duration_aria": "Cambiar duración de {{name}}",
     "list_switch": "Comidas o actividades",
-    "activities_gross_note": "Cada quema es el total de esa actividad, calorías en reposo incluidas, como lo muestra un reloj."
+    "activities_gross_note": "Cada quema es el total de esa actividad, calorías en reposo incluidas, como lo muestra un reloj.",
+    "fasting_cta": "¿Ayunando hoy? Márcalo",
+    "fasting_confirm_title": "¿Marcar como día de ayuno?",
+    "fasting_confirm_body": "No se esperan comidas en este día. Todo su déficit de calorías cuenta para tu semana y tu racha queda a salvo. Registrar cualquier comida quita la marca automáticamente.",
+    "fasting_confirm_label": "Marcar día de ayuno",
+    "fasting_state_title": "Día de ayuno",
+    "fasting_state_body": "No se esperan comidas. Todo tu déficit cuenta para la semana y tu racha está a salvo.",
+    "fasting_unmark": "¿No estás ayunando? Quitar la marca",
+    "fasting_marked": "Marcado como día de ayuno",
+    "fasting_unmarked": "Marca de ayuno quitada",
+    "fasting_status": "Ayunando hoy. Tu racha está a salvo y el déficit cuenta para tu semana.",
+    "fasting_has_food_error": "Este día tiene comidas registradas. Elimínalas primero para marcarlo como día de ayuno."
   },
   "day": {
     "past_hint": "Editando un día pasado",
@@ -209,7 +220,11 @@
     "week_over": "Esa semana quedó un poco por encima. Tus objetivos ya lo absorbieron.",
     "week_under_surplus": "Esa semana quedó algo corta de su superávit. Los siguientes objetivos ya se ajustaron.",
     "no_meals_title": "No se registraron comidas ese día",
-    "no_activities_title": "No se registró actividad ese día"
+    "no_activities_title": "No se registró actividad ese día",
+    "fasting_cta": "¿Ayunaste este día? Márcalo",
+    "fasting_state_title": "Un día de ayuno",
+    "fasting_state_body": "Este día fue un ayuno deliberado. Todo su déficit contó para esa semana.",
+    "fasting_status": "Un día de ayuno. Todo su déficit entró en esa semana."
   },
   "streak": {
     "chip_aria": "Racha de registro: {{n}} días",
@@ -580,7 +595,12 @@
     "week_details_empty_title": "Aún no hay días completos",
     "week_details_empty_body": "Tu estimación de peso aparece tras tu primer día completo registrado. Hoy cuenta cuando termine.",
     "week_details_empty_past": "Esa semana no tiene días con datos suficientes para estimar un cambio de peso.",
-    "week_details_disclaimer": "Una estimación según tu balance de calorías (unas 7 700 kcal por kg). El peso en la báscula también se mueve por agua y horarios, así que confía en la tendencia más que en un número suelto."
+    "week_details_disclaimer": "Una estimación según tu balance de calorías (unas 7 700 kcal por kg). El peso en la báscula también se mueve por agua y horarios, así que confía en la tendencia más que en un número suelto.",
+    "fasting_day": "Día de ayuno",
+    "day_row_aria_fasting": "{{day}}: día de ayuno, {{delta}} kcal respecto al plan.",
+    "day_row_aria_fasting_no_plan": "{{day}}: día de ayuno.",
+    "chart_aria_fasting": "{{day}}: día de ayuno, {{burned}} kcal quemadas.",
+    "chart_aria_fasting_no_stats": "{{day}}: día de ayuno."
   },
   "templates": {
     "title": "Plantillas",

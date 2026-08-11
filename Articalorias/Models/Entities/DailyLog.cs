@@ -50,6 +50,13 @@ public class DailyLog
     public decimal SuggestedDailyAverageRemainingKcal { get; set; }
 
     // Estado
+    /// <summary>
+    /// True when the user explicitly marked this day as a deliberate fast.
+    /// A fasting day counts as "logged" (banks its real deficit into the
+    /// weekly budget, keeps the streak) even with zero food entries.
+    /// Automatically cleared by the recalculation pipeline when food appears.
+    /// </summary>
+    public bool IsFastingDay { get; set; }
     public DateTime? LastRecalculatedAtUtc { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }

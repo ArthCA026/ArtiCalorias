@@ -7,6 +7,7 @@ import { historyService } from '@/services/historyService';
 import { queryKeys } from '@/lib/queryKeys';
 import { addDays, mondayOf, parseDate, toDateString } from '@/utils/format';
 import { deltaFor, hasComparablePlan } from '@/utils/calorieMath';
+import { isLoggedDay } from '@/components/progress/weekMath';
 import { cn } from '@/utils/cn';
 import type { DailyLogResponse } from '@/types';
 
@@ -52,7 +53,7 @@ export function WeekStrip({ date, baseGoalKcal, inset }: WeekStripProps) {
   const dots = Array.from({ length: 7 }, (_, i) => {
     const dayStr = addDays(monday, i);
     const log = byDate.get(dayStr);
-    const logged = (log?.totalFoodCaloriesKcal ?? 0) > 0;
+    const logged = log ? isLoggedDay(log) : false;
     const isToday = dayStr === date;
     const isFuture = dayStr > date;
     return { dayStr, logged, isToday, isFuture };

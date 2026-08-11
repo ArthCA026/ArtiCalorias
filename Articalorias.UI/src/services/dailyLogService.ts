@@ -1,4 +1,5 @@
 import api from './api';
+import { toDateString } from '@/utils/format';
 import type {
   DailyLogResponse,
   DailyDashboardResponse,
@@ -62,6 +63,16 @@ export const dailyLogService = {
 
   deleteDay(date: string) {
     return api.delete(`/dailylog/${date}`);
+  },
+
+  /**
+   * Marks or unmarks a day as a deliberate fasting day. The device's local
+   * date travels along so the server updates budgets on the user's calendar.
+   */
+  setFasting(date: string, isFasting: boolean) {
+    return api.put<DailyLogResponse>(`/dailylog/${date}/fasting`, { isFasting }, {
+      params: { today: toDateString() },
+    });
   },
 
   lookupBarcode(barcode: string) {

@@ -22,9 +22,19 @@ public class RecalculationService : IRecalculationService
         decimal SnapshotDailyBaseGoalKcal,
         DateOnly LogDate,
         decimal? SnapshotWeightKg,
-        decimal? SnapshotHeightCm)
+        decimal? SnapshotHeightCm,
+        decimal TotalFoodCaloriesKcal,
+        bool IsFastingDay)
     {
         public bool HasCalorieBudgetEstimate => SnapshotWeightKg.HasValue && SnapshotHeightCm.HasValue;
+
+        /// <summary>
+        /// Same rule as the UI and the streak: a day counts as logged once food
+        /// is on it, or when the user explicitly marked it a fasting day. A day
+        /// row can exist with nothing eaten on it (created by merely opening the
+        /// app); without the fasting mark such a day says nothing about intake.
+        /// </summary>
+        public bool IsLogged => TotalFoodCaloriesKcal > 0m || IsFastingDay;
     }
 
     public RecalculationService(AppDbContext db)
@@ -34,6 +44,16 @@ public class RecalculationService : IRecalculationService
 
     public Task RecalculateFullPipelineAsync(long dailyLogId)
         => RecalculateFullPipelineAsync(dailyLogId, cascade: true, siblingData: null);
+
+    /// <summary>
+    /// Full pipeline with the user's local date as the freeze reference. Needed
+    /// whenever the recalculation must be able to update TODAY's adjusted budget
+    /// (e.g. marking a past day as fasting): with the server UTC clock alone, a
+    /// user behind UTC in the evening would have their real today treated as a
+    /// frozen past day and the newly banked balance would never reach it.
+    /// </summary>
+    public Task RecalculateFullPipelineAsync(long dailyLogId, DateOnly referenceToday)
+        => RecalculateFullPipelineAsync(dailyLogId, cascade: true, siblingData: null, referenceToday);
 
     private async Task RecalculateFullPipelineAsync(long dailyLogId, bool cascade, IReadOnlyDictionary<long, SiblingDayData>? siblingData, DateOnly? referenceToday = null)
     {
@@ -60,6 +80,14 @@ public class RecalculationService : IRecalculationService
         log.TotalFatGrams = log.FoodEntries.Sum(f => f.FatGrams);
         log.TotalCarbsGrams = log.FoodEntries.Sum(f => f.CarbsGrams);
         log.TotalAlcoholGrams = log.FoodEntries.Sum(f => f.AlcoholGrams);
+
+        // A fasting day with food on it is a contradiction: the user broke the
+        // fast or mislabeled the day. Enforced here, at the single point every
+        // food-mutation path funnels through (manual, batch, routine quick-add),
+        // so the flag can never coexist with intake. Deleting the food later
+        // does NOT re-mark the day.
+        if (log.TotalFoodCaloriesKcal > 0m && log.IsFastingDay)
+            log.IsFastingDay = false;
 
         // ── Step 3: Recompute activity totals ──
         // Entry calories are GROSS (MET × weight × hours): they already contain the
@@ -170,7 +198,9 @@ public class RecalculationService : IRecalculationService
                     d.SnapshotDailyBaseGoalKcal,
                     d.LogDate,
                     d.SnapshotWeightKg,
-                    d.SnapshotHeightCm
+                    d.SnapshotHeightCm,
+                    d.TotalFoodCaloriesKcal,
+                    d.IsFastingDay
                 })
                 .ToListAsync();
 
@@ -181,10 +211,10 @@ public class RecalculationService : IRecalculationService
             // mixed-goal weekly targets when the user changed their goal mid-week.
             var siblingDataForCascade = siblings.ToDictionary(
                 s => s.DailyLogId,
-                s => new SiblingDayData(s.NetBalanceKcal, s.SnapshotDailyBaseGoalKcal, s.LogDate, s.SnapshotWeightKg, s.SnapshotHeightCm));
+                s => new SiblingDayData(s.NetBalanceKcal, s.SnapshotDailyBaseGoalKcal, s.LogDate, s.SnapshotWeightKg, s.SnapshotHeightCm, s.TotalFoodCaloriesKcal, s.IsFastingDay));
             // Include the freshly saved primary day so siblings see its values.
             siblingDataForCascade[dailyLogId] = new SiblingDayData(
-                log.NetBalanceKcal, log.SnapshotDailyBaseGoalKcal, log.LogDate, log.SnapshotWeightKg, log.SnapshotHeightCm);
+                log.NetBalanceKcal, log.SnapshotDailyBaseGoalKcal, log.LogDate, log.SnapshotWeightKg, log.SnapshotHeightCm, log.TotalFoodCaloriesKcal, log.IsFastingDay);
 
             foreach (var sibling in siblings)
                 await RecalculateFullPipelineAsync(sibling.DailyLogId, cascade: false, siblingData: siblingDataForCascade, referenceToday: referenceToday);
@@ -292,7 +322,7 @@ public class RecalculationService : IRecalculationService
                 .Where(d => d.UserId == log.UserId
                     && d.WeekStartDate == log.WeekStartDate
                     && d.DailyLogId != log.DailyLogId)
-                .Select(d => new SiblingDayData(d.NetBalanceKcal, d.SnapshotDailyBaseGoalKcal, d.LogDate, d.SnapshotWeightKg, d.SnapshotHeightCm))
+                .Select(d => new SiblingDayData(d.NetBalanceKcal, d.SnapshotDailyBaseGoalKcal, d.LogDate, d.SnapshotWeightKg, d.SnapshotHeightCm, d.TotalFoodCaloriesKcal, d.IsFastingDay))
                 .ToListAsync();
         }
 
@@ -313,20 +343,33 @@ public class RecalculationService : IRecalculationService
         log.WeeklyDifferenceKcal      = log.WeeklyActualToDateKcal - log.WeeklyExpectedToDateKcal;
         log.WeeklyRemainingTargetKcal = log.WeeklyTargetKcal - log.WeeklyActualToDateKcal;
 
-        // Use only completed past days that have a full calorie budget estimate for the
-        // suggested average, so days without body metrics don't distort the suggestion.
-        // Today itself counts as one of the remaining days to plan for.
-        var selfHasBudget   = log.SnapshotWeightKg.HasValue && log.SnapshotHeightCm.HasValue;
-        var eligiblePastDays = others
-            .Where(o => o.LogDate < log.LogDate && o.HasCalorieBudgetEstimate)
-            .ToList();
-        var pastDaysBalance = eligiblePastDays.Sum(o => o.NetBalanceKcal)
-            + (selfHasBudget ? 0m : 0m); // self already excluded — kept for readability
-        var daysRemainingIncludingToday = 7 - others.Count;
+        // ── Suggested daily budget: bank only what was actually logged ──────────
+        // Only past days with food logged AND a calorie budget estimate may bank a
+        // deficit or surplus. An empty day row (created by merely opening the app)
+        // has NetBalance = -TDEE, and counting that as "banked" would hand the rest
+        // of the week a phantom budget of a whole day's expenditure — the user did
+        // not undereat, they just did not log. Every other past day (unlogged,
+        // missing row, or lacking body metrics) is assumed ON PLAN: it contributes
+        // its own goal, which cancels out of the average exactly as if the week
+        // were that many days shorter.
+        //
+        // Remaining days come from the calendar, not from row counts: a past day
+        // with no row is elapsed time, never a day still available to plan for.
+        var pastDays = others.Where(o => o.LogDate < log.LogDate).ToList();
+        var bankedKcal = pastDays.Sum(o =>
+            o.IsLogged && o.HasCalorieBudgetEstimate
+                ? o.NetBalanceKcal
+                : o.SnapshotDailyBaseGoalKcal);
 
-        var rawSuggested = daysRemainingIncludingToday > 0
-            ? (log.WeeklyTargetKcal - pastDaysBalance) / daysRemainingIncludingToday
-            : log.SnapshotDailyBaseGoalKcal;
+        // Elapsed week days with no row at all: assumed on plan at today's goal.
+        var daysElapsedBeforeToday = Math.Clamp(log.LogDate.DayNumber - log.WeekStartDate.DayNumber, 0, 6);
+        var missingPastDays = Math.Max(daysElapsedBeforeToday - pastDays.Count, 0);
+        bankedKcal += missingPastDays * log.SnapshotDailyBaseGoalKcal;
+
+        // Today always counts as one of the remaining days to plan for (>= 1).
+        var daysRemainingIncludingToday = 7 - daysElapsedBeforeToday;
+
+        var rawSuggested = (log.WeeklyTargetKcal - bankedKcal) / daysRemainingIncludingToday;
 
         // ── Safety floor — never suggest eating below physiologically safe intake ──
         // biologicalSex and safeguardEnabled are loaded once in Step 1b of

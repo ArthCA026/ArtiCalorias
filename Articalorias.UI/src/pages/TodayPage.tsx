@@ -23,7 +23,8 @@ export default function TodayPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const hasLoggedToday = (dash?.foodEntries.length ?? 0) > 0;
+  // A marked fasting day counts as logged: streak safe, celebration eligible.
+  const hasLoggedToday = (dash?.foodEntries.length ?? 0) > 0 || (dash?.isFastingDay ?? false);
 
   // ── Streak celebration (first food of the day bumps the counter) ──────────
   // The streak query refetches after every log mutation; when its value rises

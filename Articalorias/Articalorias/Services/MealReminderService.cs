@@ -143,9 +143,16 @@ public class MealReminderService : BackgroundService
                         d.CaloriesRemainingToDailyTargetKcal,
                         d.SuggestedDailyAverageRemainingKcal,
                         d.SnapshotDailyBaseGoalKcal,
+                        d.IsFastingDay,
                         HasBudget = d.SnapshotWeightKg != null && d.SnapshotHeightCm != null,
                     })
                     .FirstOrDefaultAsync(ct);
+
+                // A deliberate fasting day gets no meal nudges: reminding
+                // someone to log lunch on a day they chose not to eat is noise.
+                // Reminders resume automatically the next day.
+                if (log is not null && log.IsFastingDay)
+                    continue;
 
                 if (log is not null && log.HasBudget)
                 {

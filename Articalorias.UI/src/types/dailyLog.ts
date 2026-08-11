@@ -17,6 +17,8 @@ export interface DailyLogResponse {
 
   snapshotProteinGoalGrams: number;
   snapshotDailyBaseGoalKcal: number;
+  /** User explicitly marked this day as a deliberate fast. */
+  isFastingDay: boolean;
   hasCalorieBudgetEstimate: boolean;
 }
 

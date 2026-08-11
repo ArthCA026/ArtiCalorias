@@ -1,4 +1,5 @@
 using Articalorias.Data;
+using Articalorias.Exceptions;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -9,11 +10,13 @@ public class DailyLogService : IDailyLogService
 {
     private readonly AppDbContext _db;
     private readonly IRecalculationService _recalculation;
+    private readonly IStreakService _streak;
 
-    public DailyLogService(AppDbContext db, IRecalculationService recalculation)
+    public DailyLogService(AppDbContext db, IRecalculationService recalculation, IStreakService streak)
     {
         _db = db;
         _recalculation = recalculation;
+        _streak = streak;
     }
 
     public async Task<DailyLog?> GetSummaryByDateAsync(long userId, DateOnly date)
@@ -161,6 +164,42 @@ public class DailyLogService : IDailyLogService
 
         // Recalculate affected weekly and monthly summaries
         await _recalculation.RecalculateAfterDayDeletionAsync(userId, date, weekStart, weekEnd, baseDailyGoal);
+    }
+
+    public async Task<DailyLog> SetFastingAsync(long userId, DateOnly date, bool isFasting, DateOnly referenceToday)
+    {
+        // Ensure the day exists (snapshots included) before flagging it.
+        await GetOrCreateAsync(userId, date);
+
+        // GetOrCreateAsync returns an untracked summary; re-query tracked.
+        var log = await _db.DailyLogs
+            .FirstAsync(d => d.UserId == userId && d.LogDate == date);
+
+        if (log.IsFastingDay == isFasting)
+            return log; // Idempotent: nothing to change, nothing to recalculate.
+
+        if (isFasting)
+        {
+            // A fast and food entries cannot coexist. The UI only offers the
+            // mark on an empty day, so hitting this means stale state or an
+            // auto-added template meal: tell the user exactly what to do.
+            var hasFood = await _db.FoodEntries.AnyAsync(f => f.DailyLogId == log.DailyLogId);
+            if (hasFood)
+                throw new ApiException(ErrorCodes.FastingDayHasFood,
+                    "This day has meals logged. Remove them before marking it as a fasting day.");
+        }
+
+        log.IsFastingDay = isFasting;
+        log.UpdatedAtUtc = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        // referenceToday keeps the user's real today un-frozen so it receives
+        // the newly banked (or released) fasting balance; the cascade updates
+        // the rest of the week. The streak follows: a fasting day qualifies.
+        await _recalculation.RecalculateFullPipelineAsync(log.DailyLogId, referenceToday);
+        await _streak.RecalculateForUserAsync(userId);
+
+        return (await GetSummaryByDateAsync(userId, date))!;
     }
 
     private static (DateOnly weekStart, DateOnly weekEnd) GetWeekRange(DateOnly date)

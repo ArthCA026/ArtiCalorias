@@ -58,6 +58,12 @@ export function CalorieHero({ dash, mode, isToday, onOpenDetails }: CalorieHeroP
   let statusTone: 'ok' | 'push' | 'calm' = 'calm';
   if (!dash.hasCalorieBudgetEstimate) {
     statusText = t('today.no_budget', 'Add weight and height to unlock your budget');
+  } else if (dash.isFastingDay) {
+    // A deliberate fast: no nudges to eat, no alarm about the untouched ring.
+    statusText = isToday
+      ? t('today.fasting_status', 'Fasting today. Your streak is safe and the deficit counts toward your week.')
+      : t('day.fasting_status', 'A fasting day. Its full deficit went into that week.');
+    statusTone = isToday ? 'ok' : 'calm';
   } else if (isSurplusGoal) {
     if (remaining > 0) {
       statusText = isToday

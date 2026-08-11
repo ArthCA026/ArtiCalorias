@@ -78,6 +78,42 @@ public class DailyLogController : ControllerBase
         return Ok(MapToResponse(log!));
     }
 
+    /// <summary>
+    /// Marks or unmarks a day as a deliberate fasting day. The optional
+    /// <paramref name="today"/> query param carries the client's local date so
+    /// budgets and the freeze rule work on the user's calendar, not UTC's.
+    /// </summary>
+    [HttpPut("{date}/fasting")]
+    public async Task<IActionResult> SetFasting(DateOnly date, [FromBody] SetFastingRequest request, [FromQuery] DateOnly? today)
+    {
+        var userId = GetUserId();
+
+        // Same local-date resolution as the routines quick-add: trust the
+        // client's calendar date within a ±2 day sanity window around UTC now,
+        // otherwise fall back to the stored profile timezone (then UTC).
+        var utcToday = DateOnly.FromDateTime(DateTime.UtcNow);
+        DateOnly localToday;
+        if (today.HasValue && Math.Abs(today.Value.DayNumber - utcToday.DayNumber) <= 2)
+        {
+            localToday = today.Value;
+        }
+        else
+        {
+            var profile = await _profileService.GetByUserIdAsync(userId);
+            TimeZoneInfo tz;
+            try   { tz = TimeZoneInfo.FindSystemTimeZoneById(profile?.TimeZoneId ?? "UTC"); }
+            catch (TimeZoneNotFoundException) { tz = TimeZoneInfo.Utc; }
+            catch (InvalidTimeZoneException)  { tz = TimeZoneInfo.Utc; }
+            localToday = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
+        }
+
+        if (date > localToday)
+            return BadRequest(new { Message = "A future day cannot be marked as a fasting day." });
+
+        var log = await _dailyLogService.SetFastingAsync(userId, date, request.IsFasting, localToday);
+        return Ok(MapToResponse(log));
+    }
+
     [HttpPost("{date}/refresh-snapshot")]
     public async Task<IActionResult> RefreshSnapshot(DateOnly date)
     {
@@ -302,6 +338,7 @@ public class DailyLogController : ControllerBase
         SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
         SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams,
         SnapshotDailyBaseGoalKcal = d.SnapshotDailyBaseGoalKcal,
+        IsFastingDay = d.IsFastingDay,
         HasCalorieBudgetEstimate = d.SnapshotWeightKg.HasValue && d.SnapshotHeightCm.HasValue
     };
 
@@ -347,6 +384,7 @@ public class DailyLogController : ControllerBase
         SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
         SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams,
         SnapshotDailyBaseGoalKcal = d.SnapshotDailyBaseGoalKcal,
+        IsFastingDay = d.IsFastingDay,
         FoodEntries = foods.Select(MapFoodToResponse).ToList(),
         ActivityEntries = activities.Select(MapActivityToResponse).ToList(),
         SleepCaloriesKcal = d.SleepCaloriesKcal,

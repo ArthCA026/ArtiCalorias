@@ -23,6 +23,10 @@ public class DailyLogResponse
     public decimal SnapshotProteinGoalGrams { get; set; }
     public decimal SnapshotDailyBaseGoalKcal { get; set; }
 
+    // Estado
+    /// <summary>User explicitly marked this day as a deliberate fast.</summary>
+    public bool IsFastingDay { get; set; }
+
     // Availability flags — false when body metrics were absent at log creation
     public bool HasCalorieBudgetEstimate { get; set; }
 }

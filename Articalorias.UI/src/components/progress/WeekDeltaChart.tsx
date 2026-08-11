@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
+import { Icon } from '@/components/ui/Icon';
 import { CalorieModeTag } from '@/components/ui/CalorieModeTag';
 import { calorieModeShortLabel } from '@/components/ui/calorieModeLabels';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -31,11 +32,13 @@ interface WeekDeltaChartProps {
 
 interface Slot {
   date: string;
-  /** Only set once the day actually has food on it. */
+  /** Only set once the day actually has food on it (or is a marked fast). */
   log: DailyLogResponse | null;
   /** Signed delta in the display unit, rounded. null when there is no log. */
   value: number | null;
   favorable: boolean;
+  /** A deliberate fast: drawn as a marker on the plan line, never as a bar. */
+  fasting: boolean;
   isFuture: boolean;
   letter: string;
 }
@@ -91,13 +94,17 @@ export function WeekDeltaChart({ monday, days, mode }: WeekDeltaChartProps) {
       // A row can exist with no food on it, and a profile with no weight or
       // height gets zeroed budget fields. Neither may draw a bar: the delta
       // would be the whole day's plan, which on a deficit day renders as a
-      // full height favorable bar.
+      // full height favorable bar. A marked fasting day is comparable data,
+      // but it gets a marker instead of a bar for the same scale reason: a
+      // deliberate -2,000 would blow the domain and squash every normal day.
       const log = row && hasComparablePlan(row) ? row : null;
+      const fasting = !!row?.isFastingDay;
       return {
         date,
         log,
-        value: log ? Math.round(deltaFor(log, mode)) : null,
-        favorable: log ? isFavorableFor(log, mode) : false,
+        value: log && !fasting ? Math.round(deltaFor(log, mode)) : null,
+        favorable: log && !fasting ? isFavorableFor(log, mode) : false,
+        fasting,
         isFuture: date > today,
         letter: narrow.format(parseDate(date)),
       };
@@ -120,7 +127,7 @@ export function WeekDeltaChart({ monday, days, mode }: WeekDeltaChartProps) {
     [i18n.language],
   );
 
-  const hasAnyLog = slots.some((s) => s.log);
+  const hasAnyLog = slots.some((s) => s.log || s.fasting);
 
   // The color rule, stated in terms of this week's own goal type, so that a
   // green bar pointing down is explained rather than surprising.
@@ -166,6 +173,23 @@ export function WeekDeltaChart({ monday, days, mode }: WeekDeltaChartProps) {
   const tipFor = (i: number): DayTipModel => {
     const s = slots[i];
     const title = weekdayLong.format(parseDate(s.date));
+    if (s.fasting) {
+      return {
+        index: i,
+        title,
+        value: null,
+        caption: t('progress.fasting_day', 'Fasting day'),
+        stats: s.log
+          ? [
+              {
+                label: t('progress.chart_col_burned', 'Burned'),
+                value: energy(s.log.totalDailyExpenditureKcal),
+              },
+            ]
+          : undefined,
+        below: true,
+      };
+    }
     if (!s.log || s.value === null) {
       return {
         index: i,
@@ -208,6 +232,13 @@ export function WeekDeltaChart({ monday, days, mode }: WeekDeltaChartProps) {
   /** Everything the readout shows, as one sentence, for assistive tech. */
   const ariaFor = (s: Slot): string => {
     const day = weekdayLong.format(parseDate(s.date));
+    if (s.fasting)
+      return s.log
+        ? t('progress.chart_aria_fasting', '{{day}}: fasting day, {{burned}} kcal burned.', {
+            day,
+            burned: energy(s.log.totalDailyExpenditureKcal),
+          })
+        : t('progress.chart_aria_fasting_no_stats', '{{day}}: fasting day.', { day });
     if (!s.log || s.value === null)
       return t('progress.chart_aria_empty', '{{day}}: nothing logged.', { day });
     const unit = 'kcal';
@@ -379,8 +410,22 @@ function BarColumn({ slot, domain, selected, dimmed, label, onSelect }: BarColum
           style={{ width: BAR_W, height: 4, top: HALF - 2, background: color }}
         />
       )}
+      {/* A deliberate fast: a moon on the plan line. A bar would be the whole
+          day's budget and would squash every other day's scale. */}
+      {slot.fasting && (
+        <span
+          aria-hidden="true"
+          className={cn(
+            'absolute left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center rounded-full bg-primary-soft text-primary-soft-ink',
+            dimmed && 'opacity-35',
+          )}
+          style={{ width: 18, height: 18, top: HALF }}
+        >
+          <Icon name="moon" size={11} />
+        </span>
+      )}
       {/* Nothing logged: a neutral placeholder, never a colored bar. */}
-      {v === null && (
+      {v === null && !slot.fasting && (
         <span
           aria-hidden="true"
           className="absolute left-1/2 -translate-x-1/2 rounded-full bg-press"
@@ -391,7 +436,7 @@ function BarColumn({ slot, domain, selected, dimmed, label, onSelect }: BarColum
         className={cn(
           'absolute inset-x-0 bottom-0 flex items-end justify-center text-[11px]',
           selected ? 'font-bold text-ink' : 'font-semibold text-ink-2',
-          v === null && !selected && 'opacity-45',
+          v === null && !slot.fasting && !selected && 'opacity-45',
         )}
         style={{ height: XBAND_H }}
       >

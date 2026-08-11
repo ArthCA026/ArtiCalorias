@@ -308,25 +308,38 @@ export default function ProgressPage() {
             // floating column-header row is gone for good.
             if (log) {
               const comparable = hasComparablePlan(log);
-              const eatenLabel = t('progress.eaten_meta', '{{kcal}} kcal eaten', {
-                kcal: Math.round(log.totalFoodCaloriesKcal).toLocaleString(i18n.language),
-              });
+              // A fasting day's subline names the fast; "0 kcal eaten" would
+              // read as a forgotten day instead of a deliberate one.
+              const eatenLabel = log.isFastingDay
+                ? t('progress.fasting_day', 'Fasting day')
+                : t('progress.eaten_meta', '{{kcal}} kcal eaten', {
+                    kcal: Math.round(log.totalFoodCaloriesKcal).toLocaleString(i18n.language),
+                  });
               return (
                 <button
                   key={date}
                   type="button"
                   onClick={() => navigate(`/day/${log.logDate}`)}
                   aria-label={
-                    comparable
-                      ? t('progress.day_row_aria', '{{day}}: {{eaten}} kcal eaten, {{delta}} kcal from plan.', {
-                          day: weekdayLong.format(parseDate(date)),
-                          eaten: Math.round(log.totalFoodCaloriesKcal).toLocaleString(i18n.language),
-                          delta: signedEnergyValue(deltaFor(log, mode)),
-                        })
-                      : t('progress.day_row_aria_no_plan', '{{day}}: {{eaten}} kcal eaten.', {
-                          day: weekdayLong.format(parseDate(date)),
-                          eaten: Math.round(log.totalFoodCaloriesKcal).toLocaleString(i18n.language),
-                        })
+                    log.isFastingDay
+                      ? comparable
+                        ? t('progress.day_row_aria_fasting', '{{day}}: fasting day, {{delta}} kcal from plan.', {
+                            day: weekdayLong.format(parseDate(date)),
+                            delta: signedEnergyValue(deltaFor(log, mode)),
+                          })
+                        : t('progress.day_row_aria_fasting_no_plan', '{{day}}: fasting day.', {
+                            day: weekdayLong.format(parseDate(date)),
+                          })
+                      : comparable
+                        ? t('progress.day_row_aria', '{{day}}: {{eaten}} kcal eaten, {{delta}} kcal from plan.', {
+                            day: weekdayLong.format(parseDate(date)),
+                            eaten: Math.round(log.totalFoodCaloriesKcal).toLocaleString(i18n.language),
+                            delta: signedEnergyValue(deltaFor(log, mode)),
+                          })
+                        : t('progress.day_row_aria_no_plan', '{{day}}: {{eaten}} kcal eaten.', {
+                            day: weekdayLong.format(parseDate(date)),
+                            eaten: Math.round(log.totalFoodCaloriesKcal).toLocaleString(i18n.language),
+                          })
                   }
                   className={cn(
                     'pressable w-full flex items-center gap-3 px-4 py-2.5 text-left active:bg-press',

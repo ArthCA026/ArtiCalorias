@@ -86,13 +86,15 @@ public class StreakService : IStreakService
     {
         var cutoff = today.AddDays(-LookbackDays);
 
-        // Qualifying dates: DailyLogs that have at least one FoodEntry,
+        // Qualifying dates: DailyLogs with at least one FoodEntry, or explicitly
+        // marked as a fasting day (a deliberate fast is a logged day: breaking
+        // the streak for it would punish exactly the most engaged users),
         // within the bounded lookback window, ordered newest first.
         var qualifiedDates = await _db.DailyLogs
             .AsNoTracking()
             .Where(dl => dl.UserId == streak.UserId
                       && dl.LogDate >= cutoff
-                      && dl.FoodEntries.Count > 0)
+                      && (dl.FoodEntries.Count > 0 || dl.IsFastingDay))
             .OrderByDescending(dl => dl.LogDate)
             .Select(dl => dl.LogDate)
             .ToListAsync(ct);

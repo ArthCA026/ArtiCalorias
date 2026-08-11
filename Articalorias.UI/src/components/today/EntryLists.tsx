@@ -14,6 +14,7 @@ import { Icon } from '@/components/ui/Icon';
 import { EmptyState, InlineError } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
 import { useLogSheet } from '@/components/log/LogSheetContext';
+import { MarkFastingButton, FastingState } from '@/components/today/FastingControls';
 import { foodService } from '@/services/foodService';
 import { activityService } from '@/services/activityService';
 import { foodTemplateService } from '@/services/foodTemplateService';
@@ -36,6 +37,8 @@ interface MealsListProps {
   entries: FoodEntryResponse[];
   /** Drives the empty state tense: still open today, closed on a past day */
   isToday: boolean;
+  /** The day is a marked deliberate fast (only meaningful when empty) */
+  isFastingDay: boolean;
   onChanged: () => void;
 }
 
@@ -86,7 +89,7 @@ function MealRow({
   );
 }
 
-export function MealsList({ date, entries, isToday, onChanged }: MealsListProps) {
+export function MealsList({ date, entries, isToday, isFastingDay, onChanged }: MealsListProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { openLog } = useLogSheet();
@@ -169,7 +172,9 @@ export function MealsList({ date, entries, isToday, onChanged }: MealsListProps)
   return (
     <section>
       <Card padded={false} className="overflow-hidden">
-        {entries.length === 0 ? (
+        {entries.length === 0 && isFastingDay ? (
+          <FastingState date={date} isToday={isToday} />
+        ) : entries.length === 0 ? (
           <EmptyState
             icon="meal"
             title={
@@ -180,7 +185,11 @@ export function MealsList({ date, entries, isToday, onChanged }: MealsListProps)
             body={t('today.no_meals_body', 'Describe your meal in plain words and the AI fills in the macros for you.')}
             actionLabel={t('today.log_first_meal', 'Log a meal')}
             onAction={() => openLog('meal', date)}
-          />
+          >
+            {/* The escape hatch for deliberate zero-intake days: without it, a
+                real fast is indistinguishable from a day never tracked. */}
+            <MarkFastingButton date={date} isToday={isToday} />
+          </EmptyState>
         ) : (
           <div className="divide-y divide-hairline/50">
             {entries.map((e) => (

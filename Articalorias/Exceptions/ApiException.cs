@@ -22,4 +22,5 @@ public static class ErrorCodes
     public const string ResendCooldown = "RESEND_COOLDOWN";
     public const string InvalidInput = "INVALID_INPUT";
     public const string ActivityDurationExceeded = "ACTIVITY_DURATION_EXCEEDED";
+    public const string FastingDayHasFood = "FASTING_DAY_HAS_FOOD";
 }

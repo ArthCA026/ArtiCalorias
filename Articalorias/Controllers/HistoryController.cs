@@ -77,6 +77,7 @@ public class HistoryController : ControllerBase
         SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
         SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams,
         SnapshotDailyBaseGoalKcal = d.SnapshotDailyBaseGoalKcal,
+        IsFastingDay = d.IsFastingDay,
         HasCalorieBudgetEstimate = d.SnapshotWeightKg.HasValue && d.SnapshotHeightCm.HasValue
     };
 

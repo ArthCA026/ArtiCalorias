@@ -50,7 +50,8 @@ public class DailyDashboardResponse
     public decimal SuggestedDailyAverageRemainingKcal { get; set; }
 
     // Estado
-    public bool IsFinalized { get; set; }
+    /// <summary>User explicitly marked this day as a deliberate fast.</summary>
+    public bool IsFastingDay { get; set; }
 
     // Snapshot usado
     public decimal? SnapshotWeightKg { get; set; }

@@ -11,6 +11,9 @@ public class DailyLogConfiguration : IEntityTypeConfiguration<DailyLog>
         builder.ToTable("DailyLog", "app");
         builder.HasKey(d => d.DailyLogId);
 
+        // Estado
+        builder.Property(d => d.IsFastingDay).HasDefaultValue(false);
+
         // Snapshot
         builder.Property(d => d.SnapshotWeightKg).HasColumnType("decimal(8,2)");
         builder.Property(d => d.SnapshotHeightCm).HasColumnType("decimal(8,2)");

@@ -54,7 +54,9 @@ export function isFavorableFor(log: DailyLogResponse, mode: CalorieMode): boolea
  * A row can exist with no food on it, and a profile without weight or height
  * gets its budget fields zeroed server side. Either way the delta would be a
  * fabricated number, so those days show what was eaten and nothing else.
+ * A marked fasting day is the exception: its zero intake is real, deliberate
+ * data, so its (large, favorable) distance from plan is a true number.
  */
 export function hasComparablePlan(log: DailyLogResponse): boolean {
-  return log.totalFoodCaloriesKcal > 0 && log.hasCalorieBudgetEstimate;
+  return (log.totalFoodCaloriesKcal > 0 || log.isFastingDay) && log.hasCalorieBudgetEstimate;
 }
