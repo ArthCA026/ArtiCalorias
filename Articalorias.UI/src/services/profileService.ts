@@ -24,4 +24,9 @@ export const profileService = {
       timeZoneId: deviceTimeZone(),
     });
   },
+
+  /** Marks the first-run tutorial as completed or skipped (idempotent). */
+  markTutorialSeen() {
+    return api.post('/userprofile/tutorial-seen');
+  },
 };

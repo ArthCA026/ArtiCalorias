@@ -22,6 +22,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(u => u.PasswordResetToken).HasMaxLength(250);
         builder.Property(u => u.PasswordResetTokenExpiresAtUtc).HasColumnType("datetime2(0)");
+        builder.Property(u => u.LastActiveAtUtc).HasColumnType("datetime2(0)");
 
         builder.HasIndex(u => u.Username).IsUnique().HasDatabaseName("UQ_User_Username");
         builder.HasIndex(u => u.Email).IsUnique().HasDatabaseName("UQ_User_Email");

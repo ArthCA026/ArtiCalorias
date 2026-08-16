@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
@@ -43,23 +43,62 @@ const num = (raw: string): number | null => {
 /* Body details                                                        */
 /* ------------------------------------------------------------------ */
 
-export function BodySheet({ open, onClose, profile, onSave, saving }: EditSheetProps) {
+interface BodySheetProps extends EditSheetProps {
+  /** Open with the advanced (BMR / body fat) section expanded */
+  initialAdvanced?: boolean;
+}
+
+export function BodySheet({ open, onClose, profile, onSave, saving, initialAdvanced }: BodySheetProps) {
   const { t } = useTranslation();
   const { system, weightUnit } = useUnits();
   const imperial = system === 'imperial';
-  const [weight, setWeight] = useState(
-    profile.currentWeightKg !== null
-      ? String(Math.round(kgToDisplay(profile.currentWeightKg, weightUnit) * 10) / 10)
-      : '',
-  );
-  const [height, setHeight] = useState(profile.heightCm !== null ? String(profile.heightCm) : '');
-  const storedFtIn = profile.heightCm !== null ? cmToFtIn(profile.heightCm) : null;
-  const [heightFt, setHeightFt] = useState(storedFtIn ? String(storedFtIn.ft) : '');
-  const [heightIn, setHeightIn] = useState(storedFtIn ? String(storedFtIn.inch) : '');
-  const [age, setAge] = useState(profile.age !== null ? String(profile.age) : '');
-  const [sex, setSex] = useState<'M' | 'F' | ''>(
-    profile.biologicalSex === 'M' || profile.biologicalSex === 'F' ? profile.biologicalSex : '',
-  );
+
+  const usesManualDetails = !profile.autoCalculateBMR || !profile.autoCalculateBodyFat;
+
+  const [weight, setWeight] = useState('');
+  const [height, setHeight] = useState('');
+  const [heightFt, setHeightFt] = useState('');
+  const [heightIn, setHeightIn] = useState('');
+  const [age, setAge] = useState('');
+  const [sex, setSex] = useState<'M' | 'F' | ''>('');
+  // Advanced: manual BMR / body fat for people who know their real numbers
+  // (DEXA scan, smart scale, lab test). Auto stays the smart default.
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [bmrMode, setBmrMode] = useState<'auto' | 'manual'>('auto');
+  const [bmrValue, setBmrValue] = useState('');
+  const [bfMode, setBfMode] = useState<'auto' | 'manual'>('auto');
+  const [bfValue, setBfValue] = useState('');
+
+  // Re-derive every field each time the sheet opens: the profile may have
+  // been saved elsewhere, and the unit system may have been switched since
+  // mount. Without this, "70" typed as kg silently reopens labeled lbs — and
+  // saving it would corrupt the stored weight by a factor of 2.2.
+  /* eslint-disable react-hooks/set-state-in-effect -- resetting draft fields
+     on the open transition is a bounded, intentional props→state sync */
+  useEffect(() => {
+    if (!open) return;
+    setWeight(
+      profile.currentWeightKg !== null
+        ? String(Math.round(kgToDisplay(profile.currentWeightKg, weightUnit) * 10) / 10)
+        : '',
+    );
+    setHeight(profile.heightCm !== null ? String(profile.heightCm) : '');
+    const storedFtIn = profile.heightCm !== null ? cmToFtIn(profile.heightCm) : null;
+    setHeightFt(storedFtIn ? String(storedFtIn.ft) : '');
+    setHeightIn(storedFtIn ? String(storedFtIn.inch) : '');
+    setAge(profile.age !== null ? String(profile.age) : '');
+    setSex(profile.biologicalSex === 'M' || profile.biologicalSex === 'F' ? profile.biologicalSex : '');
+    setShowAdvanced(!!initialAdvanced || usesManualDetails);
+    setBmrMode(profile.autoCalculateBMR ? 'auto' : 'manual');
+    setBmrValue(!profile.autoCalculateBMR && profile.bmrKcal > 0 ? String(Math.round(profile.bmrKcal)) : '');
+    setBfMode(profile.autoCalculateBodyFat ? 'auto' : 'manual');
+    setBfValue(
+      !profile.autoCalculateBodyFat && profile.bodyFatPercent !== null
+        ? String(profile.bodyFatPercent)
+        : '',
+    );
+  }, [open, profile, weightUnit, initialAdvanced, usesManualDetails]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const w = num(weight);
   const ft = num(heightFt);
@@ -71,11 +110,15 @@ export function BodySheet({ open, onClose, profile, onSave, saving }: EditSheetP
       : ftInToCm(ft ?? 0, inch ?? 0)
     : num(height);
   const a = num(age);
+  const bmr = num(bmrValue);
+  const bf = num(bfValue);
   const valid =
     (w === null || (w > 0 && w < 1200)) &&
     (h === null || (h > 0 && h < 300)) &&
     (inch === null || (inch >= 0 && inch < 12)) &&
-    (a === null || (a >= 1 && a <= 150));
+    (a === null || (a >= 1 && a <= 150)) &&
+    (bmrMode === 'auto' || (bmr !== null && bmr >= 500 && bmr <= 8000)) &&
+    (bfMode === 'auto' || (bf !== null && bf >= 1 && bf <= 75));
 
   return (
     <Sheet open={open} onClose={onClose} title={t('profile.body_title', 'Body details')}>
@@ -145,8 +188,96 @@ export function BodySheet({ open, onClose, profile, onSave, saving }: EditSheetP
             />
           </div>
         </div>
+
+        {/* Special details: progressive disclosure keeps the everyday path
+            two fields long while gym-goers with real measurements get full
+            control one tap deeper. */}
+        <button
+          type="button"
+          aria-expanded={showAdvanced}
+          className="pressable flex items-center gap-1 text-sm font-semibold text-primary-soft-ink py-1"
+          onClick={() => setShowAdvanced((v) => !v)}
+        >
+          <Icon name={showAdvanced ? 'chevronUp' : 'chevronDown'} size={16} />
+          {t('profile.advanced_toggle', 'Special details: BMR & body fat')}
+        </button>
+
+        {showAdvanced && (
+          <div className="space-y-3.5 rounded-card bg-inset p-3.5">
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[13px] font-semibold text-ink-2">
+                  {t('profile.bmr_label', 'BMR (calories at rest)')}
+                </p>
+                <SegmentedControl<'auto' | 'manual'>
+                  aria-label={t('profile.bmr_mode_aria', 'BMR mode')}
+                  options={[
+                    { value: 'auto', label: t('profile.mode_auto', 'Auto') },
+                    { value: 'manual', label: t('profile.mode_manual', 'Manual') },
+                  ]}
+                  value={bmrMode}
+                  onChange={setBmrMode}
+                />
+              </div>
+              {bmrMode === 'auto' ? (
+                <p className="text-[13px] text-ink-3 leading-relaxed">
+                  {profile.bmrKcal > 0
+                    ? t('profile.bmr_auto_value', 'Calculated for you: {{kcal}} kcal (Mifflin-St Jeor).', {
+                        kcal: Math.round(profile.bmrKcal).toLocaleString(),
+                      })
+                    : t('profile.bmr_auto_pending', 'Calculated from weight, height, age and sex once they are set.')}
+                </p>
+              ) : (
+                <DecimalField
+                  aria-label={t('profile.bmr_label', 'BMR (calories at rest)')}
+                  suffix="kcal"
+                  placeholder="1700"
+                  value={bmrValue}
+                  onValueChange={setBmrValue}
+                  hint={t('profile.bmr_manual_hint', 'From a metabolic test or your own tracking. Used for every calorie calculation.')}
+                />
+              )}
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[13px] font-semibold text-ink-2">
+                  {t('profile.bf_label', 'Body fat')}
+                </p>
+                <SegmentedControl<'auto' | 'manual'>
+                  aria-label={t('profile.bf_mode_aria', 'Body fat mode')}
+                  options={[
+                    { value: 'auto', label: t('profile.mode_auto', 'Auto') },
+                    { value: 'manual', label: t('profile.mode_manual', 'Manual') },
+                  ]}
+                  value={bfMode}
+                  onChange={setBfMode}
+                />
+              </div>
+              {bfMode === 'auto' ? (
+                <p className="text-[13px] text-ink-3 leading-relaxed">
+                  {profile.bodyFatPercent !== null
+                    ? t('profile.bf_auto_value', 'Estimated for you: {{pct}}% (formula, not a measurement).', {
+                        pct: profile.bodyFatPercent,
+                      })
+                    : t('profile.bf_auto_pending', 'Estimated from your BMI, age and sex once they are set.')}
+                </p>
+              ) : (
+                <DecimalField
+                  aria-label={t('profile.bf_label', 'Body fat')}
+                  suffix="%"
+                  placeholder="18"
+                  value={bfValue}
+                  onValueChange={setBfValue}
+                  hint={t('profile.bf_manual_hint', 'From a smart scale, caliper or DEXA scan. Sharpens the safety floors.')}
+                />
+              )}
+            </div>
+          </div>
+        )}
+
         <p className="text-[13px] text-ink-3 leading-relaxed">
-          {t('profile.body_hint', 'Used to estimate your daily burn. Your BMR and body fat are recalculated automatically.')}
+          {t('profile.body_hint_v2', 'These size your daily burn. On Auto, BMR and body fat recalculate whenever your body details change.')}
         </p>
         <Button
           variant="primary"
@@ -160,8 +291,10 @@ export function BodySheet({ open, onClose, profile, onSave, saving }: EditSheetP
               heightCm: h,
               age: a,
               biologicalSex: sex,
-              autoCalculateBMR: true,
-              autoCalculateBodyFat: true,
+              autoCalculateBMR: bmrMode === 'auto',
+              bmrKcal: bmrMode === 'manual' ? bmr : null,
+              autoCalculateBodyFat: bfMode === 'auto',
+              bodyFatPercent: bfMode === 'manual' ? bf : null,
             })
           }
         >
@@ -188,6 +321,18 @@ export function GoalSheet({ open, onClose, profile, onSave, saving }: EditSheetP
   const [showCustom, setShowCustom] = useState(current.isCustom);
   const [customKg, setCustomKg] = useState('');
   const [customError, setCustomError] = useState<string | null>(null);
+
+  // Re-derive on every open: the goal may have been saved since mount.
+  /* eslint-disable react-hooks/set-state-in-effect -- bounded open-transition reset */
+  useEffect(() => {
+    if (!open) return;
+    const m = matchPreset(String(Math.round(profile.dailyBaseGoalKcal)));
+    setSelectedKey(m.isCustom ? 'custom' : (m.preset as GoalPresetKey));
+    setShowCustom(m.isCustom);
+    setCustomKg('');
+    setCustomError(null);
+  }, [open, profile.dailyBaseGoalKcal]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const presets = GOAL_KEYS.map((k) => GOAL_PRESETS.find((p) => p.key === k)!);
 
@@ -300,6 +445,15 @@ export function ProteinSheet({ open, onClose, profile, onSave, saving }: EditShe
   );
   const [error, setError] = useState<string | null>(null);
 
+  // Re-derive on every open: the target may have been saved since mount.
+  /* eslint-disable react-hooks/set-state-in-effect -- bounded open-transition reset */
+  useEffect(() => {
+    if (!open) return;
+    setCustomGrams(profile.proteinGoalGrams !== null ? String(Math.round(profile.proteinGoalGrams)) : '');
+    setError(null);
+  }, [open, profile.proteinGoalGrams]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
   const save = () => {
     if (showCustom) {
       const g = num(customGrams);
@@ -398,6 +552,15 @@ export function SleepNeatSheet({ open, onClose, profile, onSave, saving }: EditS
   const { t } = useTranslation();
   const [sleep, setSleep] = useState(profile.sleepHours);
   const [neat, setNeat] = useState(profile.neatHours);
+
+  // Re-derive on every open: the hours may have been saved since mount.
+  /* eslint-disable react-hooks/set-state-in-effect -- bounded open-transition reset */
+  useEffect(() => {
+    if (!open) return;
+    setSleep(profile.sleepHours);
+    setNeat(profile.neatHours);
+  }, [open, profile.sleepHours, profile.neatHours]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Backend rule: at least 1 hour of the day must stay unreserved.
   const total = sleep + neat;

@@ -1,5 +1,15 @@
 import type { FoodEntryResponse } from './food';
 import type { ActivityEntryResponse } from './activity';
+import type { MacroKey } from './macros';
+
+/** One tracked macro as frozen on a specific day (past days keep theirs). */
+export interface DayMacroTarget {
+  macroKey: MacroKey;
+  /** Grams (ml for water). Null = tracked amount-only, no bar. */
+  target: number | null;
+  /** "hit" = goal to reach, "limit" = warn when exceeded. */
+  direction: 'hit' | 'limit';
+}
 
 export interface DailyLogResponse {
   dailyLogId: number;
@@ -7,6 +17,15 @@ export interface DailyLogResponse {
 
   totalFoodCaloriesKcal: number;
   totalProteinGrams: number;
+  totalFatGrams: number;
+  totalCarbsGrams: number;
+  totalAlcoholGrams: number;
+  /** Null = no entry of the day carried sugar data (not tracked then). */
+  totalSugarGrams: number | null;
+  /** Null = no entry of the day carried water data (not tracked then). */
+  totalWaterMl: number | null;
+  /** Extended macro targets frozen on this day (empty = only protein tracked). */
+  macroTargets: DayMacroTarget[];
 
   totalDailyExpenditureKcal: number;
 
@@ -34,11 +53,10 @@ export interface DailyDashboardResponse extends DailyLogResponse {
   hasCalorieBudgetEstimate: boolean;
   hasCalorieEstimate: boolean;
   hasProteinGoal: boolean;
+  /** False until the user logs food themself for the first time ever. */
+  hasEverLoggedFood: boolean;
 
-  // Macro split and expenditure detail (populated by the dashboard mapper)
-  totalFatGrams: number;
-  totalCarbsGrams: number;
-  totalAlcoholGrams: number;
+  // Expenditure detail (populated by the dashboard mapper)
   totalActivityCaloriesKcal: number;
   tefKcal: number;
   netBalanceKcal: number;

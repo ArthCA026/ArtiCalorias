@@ -11,6 +11,8 @@ import { WeekDeltaChart } from '@/components/progress/WeekDeltaChart';
 import { WeekPickerSheet } from '@/components/progress/WeekPickerSheet';
 import { WeekDetailsSheet } from '@/components/progress/WeekDetailsSheet';
 import { PremiumInsightCard } from '@/components/progress/PremiumInsightCard';
+import { BodyCard } from '@/components/progress/BodyCard';
+import { MacrosWeekCard } from '@/components/progress/MacrosWeekCard';
 import { StreakCard } from '@/components/progress/StreakCard';
 import { ProgressSkeleton } from '@/components/progress/ProgressSkeleton';
 import { isLoggedDay } from '@/components/progress/weekMath';
@@ -282,8 +284,14 @@ export default function ProgressPage() {
           <PremiumInsightCard monday={monday} days={days} mode={mode} />
 
           <WeekDeltaChart monday={monday} days={days} mode={mode} />
+
+          <MacrosWeekCard days={days} />
         </>
       )}
+
+      {/* The body graph describes NOW (weight trend), so like the streak it
+          only accompanies the current week. */}
+      {days && isCurrentWeek && <BodyCard />}
 
       {days && (
         <Card padded={false} className="overflow-hidden">

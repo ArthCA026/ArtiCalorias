@@ -21,6 +21,8 @@ public class AppDbContext : DbContext
     public DbSet<NotificationSchedule> NotificationSchedules => Set<NotificationSchedule>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<UserStreak> UserStreaks => Set<UserStreak>();
+    public DbSet<UserMacroPreference> UserMacroPreferences => Set<UserMacroPreference>();
+    public DbSet<BodyMeasurement> BodyMeasurements => Set<BodyMeasurement>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -6,6 +6,8 @@ import { CalorieHero } from '@/components/today/CalorieHero';
 import { DayDetailsSheet } from '@/components/today/DayDetailsSheet';
 import { MealsList, ActivitiesList } from '@/components/today/EntryLists';
 import { ChecklistCard } from '@/components/today/ChecklistCard';
+import { MacroSummaryCard } from '@/components/today/MacroSummaryCard';
+import { WaterCard } from '@/components/today/WaterCard';
 import { TodaySkeleton } from '@/components/today/TodaySkeleton';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { ErrorState } from '@/components/ui/States';
@@ -94,36 +96,47 @@ export function DayView({ date, isToday }: DayViewProps) {
             </Card>
           )}
 
-          <CalorieHero
-            dash={dash}
-            mode={mode}
-            isToday={isToday}
-            onOpenDetails={() => setDetailsOpen(true)}
-          />
+          <div data-tour="ring">
+            <CalorieHero
+              dash={dash}
+              mode={mode}
+              isToday={isToday}
+              onOpenDetails={() => setDetailsOpen(true)}
+            />
+          </div>
 
-          {/* Onboarding checklist makes no sense on a day deliberately without
-              meals: "log your first meal" would contradict the fast. */}
-          {isToday && dash.foodEntries.length === 0 && !dash.isFastingDay && (
+          {/* Getting-started checklist: only for accounts that have never
+              logged anything, ever. A day that merely STARTS empty (every
+              morning does) must not resurrect it for veterans. It also makes
+              no sense on a deliberate fast: "log your first meal" would
+              contradict the fast. */}
+          {isToday && !dash.hasEverLoggedFood && dash.foodEntries.length === 0 && !dash.isFastingDay && (
             <ChecklistCard hasGoal={dash.hasCalorieBudgetEstimate} />
           )}
 
-          <SegmentedControl<ListTab>
-            aria-label={t('today.list_switch', 'Meals or activities')}
-            options={[
-              {
-                value: 'meals',
-                label: `${t('today.meals', 'Meals')} (${dash.foodEntries.length})`,
-                icon: 'meal',
-              },
-              {
-                value: 'activities',
-                label: `${t('today.activities', 'Activities')} (${dash.activityEntries.length})`,
-                icon: 'activity',
-              },
-            ]}
-            value={listTab}
-            onChange={setListTab}
-          />
+          <MacroSummaryCard log={dash} />
+
+          <WaterCard date={date} log={dash} />
+
+          <div data-tour="lists">
+            <SegmentedControl<ListTab>
+              aria-label={t('today.list_switch', 'Meals or activities')}
+              options={[
+                {
+                  value: 'meals',
+                  label: `${t('today.meals', 'Meals')} (${dash.foodEntries.length})`,
+                  icon: 'meal',
+                },
+                {
+                  value: 'activities',
+                  label: `${t('today.activities', 'Activities')} (${dash.activityEntries.length})`,
+                  icon: 'activity',
+                },
+              ]}
+              value={listTab}
+              onChange={setListTab}
+            />
+          </div>
 
           {listTab === 'meals' ? (
             <MealsList
@@ -156,6 +169,7 @@ export function DayView({ date, isToday }: DayViewProps) {
 
       <Fab
         label={t('log.fab', 'Log')}
+        dataTour="log"
         onClick={() => openLog(listTab === 'activities' ? 'activity' : 'meal', date)}
       />
     </div>

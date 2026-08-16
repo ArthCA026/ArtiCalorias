@@ -18,6 +18,8 @@ interface WeekStripProps {
   baseGoalKcal: number;
   /** Render on the inset surface (when shown inside a sheet) */
   inset?: boolean;
+  /** When provided, each non-future day becomes a button that opens it */
+  onPickDay?: (date: string) => void;
 }
 
 /**
@@ -25,7 +27,7 @@ interface WeekStripProps {
  * Filled dots reward consistency (completion bias); the copy keeps the
  * focus on the week, not on any single imperfect day.
  */
-export function WeekStrip({ date, baseGoalKcal, inset }: WeekStripProps) {
+export function WeekStrip({ date, baseGoalKcal, inset, onPickDay }: WeekStripProps) {
   const { t, i18n } = useTranslation();
   const monday = mondayOf(date);
   const sunday = addDays(monday, 6);
@@ -107,11 +109,8 @@ export function WeekStrip({ date, baseGoalKcal, inset }: WeekStripProps) {
         </p>
       </div>
       <div className="flex justify-between">
-        {dots.map((d) => (
-          <div key={d.dayStr} className="flex flex-col items-center gap-1.5">
-            <span className="text-[11px] font-semibold text-ink-3">
-              {weekdayFormatter.format(parseDate(d.dayStr))}
-            </span>
+        {dots.map((d) => {
+          const dotFace = (
             <span
               className={cn(
                 'w-8 h-8 rounded-full flex items-center justify-center',
@@ -130,10 +129,40 @@ export function WeekStrip({ date, baseGoalKcal, inset }: WeekStripProps) {
                 <span className="w-1.5 h-1.5 rounded-full bg-current" />
               )}
             </span>
-          </div>
-        ))}
+          );
+          // Each past-or-today dot is a door into that day: seeing the week
+          // AND being able to step into any of its days is what makes "you
+          // can edit old days" discoverable without a manual.
+          const tappable = onPickDay && !d.isFuture && d.dayStr !== date;
+          return tappable ? (
+            <button
+              key={d.dayStr}
+              type="button"
+              onClick={() => onPickDay(d.dayStr)}
+              aria-label={t('today.week_day_open_aria', 'Open {{date}}', { date: d.dayStr })}
+              className="pressable flex flex-col items-center gap-1.5"
+            >
+              <span className="text-[11px] font-semibold text-ink-3">
+                {weekdayFormatter.format(parseDate(d.dayStr))}
+              </span>
+              {dotFace}
+            </button>
+          ) : (
+            <div key={d.dayStr} className="flex flex-col items-center gap-1.5">
+              <span className="text-[11px] font-semibold text-ink-3">
+                {weekdayFormatter.format(parseDate(d.dayStr))}
+              </span>
+              {dotFace}
+            </div>
+          );
+        })}
       </div>
       <p className="mt-3.5 text-[13px] text-ink-2 leading-relaxed">{summary}</p>
+      {onPickDay && (
+        <p className="mt-1 text-[12px] text-ink-3">
+          {t('today.week_tap_hint', 'Tap a day to open and edit it.')}
+        </p>
+      )}
     </Card>
   );
 }

@@ -20,6 +20,8 @@ public class FoodEntryConfiguration : IEntityTypeConfiguration<FoodEntry>
         builder.Property(f => f.FatGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
         builder.Property(f => f.CarbsGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
         builder.Property(f => f.AlcoholGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
+        builder.Property(f => f.SugarGrams).HasColumnType("decimal(10,2)");
+        builder.Property(f => f.WaterMl).HasColumnType("decimal(10,2)");
 
         builder.Property(f => f.SortOrder).HasDefaultValue(0);
         builder.Property(f => f.Notes).HasMaxLength(500);

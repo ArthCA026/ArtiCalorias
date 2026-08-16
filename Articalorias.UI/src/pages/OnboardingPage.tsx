@@ -17,7 +17,15 @@ import { Switch } from '@/components/ui/Switch';
 import { toTimeInputValue, fromTimeInputValue } from '@/utils/notifications';
 import { profileService } from '@/services/profileService';
 import { queryKeys } from '@/lib/queryKeys';
-import { displayToKg, weightLabel, kgToDisplay, ftInToCm } from '@/utils/units';
+import {
+  displayToKg,
+  weightLabel,
+  kgToDisplay,
+  ftInToCm,
+  cmToFtIn,
+  weightUnitFor,
+  type UnitSystem,
+} from '@/utils/units';
 import {
   GOAL_PRESETS,
   formatKgPerWeekShort,
@@ -59,9 +67,44 @@ export default function OnboardingPage() {
   const [heightIn, setHeightIn] = useState('');
   const [age, setAge] = useState('');
   const [sex, setSex] = useState<'M' | 'F' | ''>('');
+  // Special details (optional, for people who know their measured numbers).
+  // Empty = auto-calculated, which is the right default for almost everyone.
+  const [showSpecial, setShowSpecial] = useState(false);
+  const [manualBmr, setManualBmr] = useState('');
+  const [manualBf, setManualBf] = useState('');
   const [goalKey, setGoalKey] = useState<GoalPresetKey>('lose-moderate');
   const [proteinId, setProteinId] = useState<ProteinPresetId>('everyday');
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Switching units CONVERTS what was already typed instead of relabeling it:
+   * 150 cm flips to 4 ft 11 in, 70 kg to 154.3 lbs. Without the conversion,
+   * the same digits silently change meaning and the budget math inherits the
+   * wrong body.
+   */
+  const switchSystem = (next: UnitSystem) => {
+    if (next === system) return;
+    const currentWeight = num(weight);
+    if (currentWeight !== null) {
+      const kg = displayToKg(currentWeight, weightUnit);
+      setWeight(String(Math.round(kgToDisplay(kg, weightUnitFor(next)) * 10) / 10));
+    }
+    if (next === 'imperial') {
+      const cm = num(height);
+      if (cm !== null && cm > 0) {
+        const { ft: f, inch: i } = cmToFtIn(cm);
+        setHeightFt(String(f));
+        setHeightIn(String(i));
+      }
+    } else {
+      const f = num(heightFt);
+      const i = num(heightIn);
+      if (f !== null || i !== null) {
+        setHeight(String(Math.round(ftInToCm(f ?? 0, i ?? 0))));
+      }
+    }
+    setSystem(next);
+  };
 
   const w = num(weight);
   const ft = num(heightFt);
@@ -74,6 +117,8 @@ export default function OnboardingPage() {
     : num(height);
   const a = num(age);
   const weightKg = w !== null ? Math.round(displayToKg(w, weightUnit) * 10) / 10 : null;
+  const bmrOverride = num(manualBmr);
+  const bfOverride = num(manualBf);
 
   const goal = GOAL_PRESETS.find((p) => p.key === goalKey)!;
   const proteinPreset = PROTEIN_PRESETS.find((p) => p.id === proteinId)!;
@@ -82,8 +127,10 @@ export default function OnboardingPage() {
       ? Math.round(weightKg * Math.max(proteinPreset.gramsPerKg, getAgeProteinMinimum(a ?? 30)))
       : null;
 
-  // Local preview with the same formulas the server uses (Mifflin-St Jeor)
+  // Local preview with the same formulas the server uses (Mifflin-St Jeor).
+  // A manual BMR takes over exactly like it does server-side.
   const bmrPreview = (() => {
+    if (bmrOverride !== null && bmrOverride > 0) return Math.round(bmrOverride);
     if (weightKg === null || h === null) return null;
     const offset = sex === 'M' ? 5 : sex === 'F' ? -161 : -78;
     return Math.round(10 * weightKg + 6.25 * h - 5 * (a ?? 30) + offset);
@@ -95,6 +142,9 @@ export default function OnboardingPage() {
     ? maintenancePreview + Number(goal.kcal)
     : null;
 
+  const hasManualBmr = bmrOverride !== null && bmrOverride > 0;
+  const hasManualBf = bfOverride !== null && bfOverride > 0;
+
   const save = useMutation({
     mutationFn: () =>
       profileService
@@ -103,8 +153,10 @@ export default function OnboardingPage() {
           heightCm: h,
           age: a,
           biologicalSex: sex,
-          autoCalculateBMR: true,
-          autoCalculateBodyFat: true,
+          autoCalculateBMR: !hasManualBmr,
+          bmrKcal: hasManualBmr ? bmrOverride : null,
+          autoCalculateBodyFat: !hasManualBf,
+          bodyFatPercent: hasManualBf ? bfOverride : null,
           dailyBaseGoalKcal: Number(goal.kcal),
           proteinGoalGrams: proteinGrams,
           autoCalculateProteinGoal: proteinGrams === null,
@@ -127,7 +179,9 @@ export default function OnboardingPage() {
     ((w === null || (w > 0 && w < 1200)) &&
       (h === null || (h > 0 && h < 300)) &&
       (inch === null || (inch >= 0 && inch < 12)) &&
-      (a === null || (a >= 1 && a <= 150)));
+      (a === null || (a >= 1 && a <= 150)) &&
+      (bmrOverride === null || (bmrOverride >= 500 && bmrOverride <= 8000)) &&
+      (bfOverride === null || (bfOverride >= 1 && bfOverride <= 75)));
 
   const progress = (step + 1) / (TOTAL_STEPS + 1);
 
@@ -177,7 +231,7 @@ export default function OnboardingPage() {
                   { value: 'imperial', label: t('profile.units_imperial', 'Imperial (lbs, ft)') },
                 ]}
                 value={system}
-                onChange={setSystem}
+                onChange={switchSystem}
               />
               <div className="grid grid-cols-2 gap-3">
                 <DecimalField
@@ -244,6 +298,42 @@ export default function OnboardingPage() {
                   />
                 </div>
               </div>
+
+              {/* Special details, folded away: most people never need them,
+                  and the ones who do (gym-goers with a DEXA or metabolic
+                  test) know exactly what they are looking for. */}
+              <button
+                type="button"
+                aria-expanded={showSpecial}
+                className="pressable flex items-center gap-1 text-sm font-semibold text-primary-soft-ink py-1"
+                onClick={() => setShowSpecial((v) => !v)}
+              >
+                <Icon name={showSpecial ? 'chevronUp' : 'chevronDown'} size={16} />
+                {t('onboarding.special_toggle', 'Special details (optional)')}
+              </button>
+              {showSpecial && (
+                <div className="space-y-3">
+                  <p className="text-[13px] text-ink-3 leading-relaxed">
+                    {t('onboarding.special_hint', 'Know your measured BMR or body fat? Enter them and we use your numbers instead of formulas. Leave empty to auto-calculate.')}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <DecimalField
+                      label={t('onboarding.special_bmr', 'BMR')}
+                      suffix="kcal"
+                      placeholder={t('profile.auto', 'Auto')}
+                      value={manualBmr}
+                      onValueChange={setManualBmr}
+                    />
+                    <DecimalField
+                      label={t('onboarding.special_bf', 'Body fat')}
+                      suffix="%"
+                      placeholder={t('profile.auto', 'Auto')}
+                      value={manualBf}
+                      onValueChange={setManualBf}
+                    />
+                  </div>
+                </div>
+              )}
             </Card>
           </div>
         )}

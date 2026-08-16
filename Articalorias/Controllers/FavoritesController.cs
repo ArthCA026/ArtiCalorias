@@ -67,6 +67,8 @@ public class FavoritesController : ControllerBase
             FatGrams = request.FatGrams,
             CarbsGrams = request.CarbsGrams,
             AlcoholGrams = request.AlcoholGrams,
+            SugarGrams = request.SugarGrams,
+            WaterMl = request.WaterMl,
             AutoAddToNewDay = request.AutoAddToNewDay,
         };
         var created = await _foodTemplateService.CreateAsync(template, ct);
@@ -89,6 +91,8 @@ public class FavoritesController : ControllerBase
             FatGrams = request.FatGrams,
             CarbsGrams = request.CarbsGrams,
             AlcoholGrams = request.AlcoholGrams,
+            SugarGrams = request.SugarGrams,
+            WaterMl = request.WaterMl,
             AutoAddToNewDay = request.AutoAddToNewDay,
         };
         var updated = await _foodTemplateService.UpdateAsync(template, ct);
@@ -365,6 +369,8 @@ public class FavoritesController : ControllerBase
         FatGrams = t.FatGrams,
         CarbsGrams = t.CarbsGrams,
         AlcoholGrams = t.AlcoholGrams,
+        SugarGrams = t.SugarGrams,
+        WaterMl = t.WaterMl,
         AutoAddToNewDay = t.AutoAddToNewDay,
         IsActive = t.IsActive,
     };

@@ -1,12 +1,17 @@
+import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Sheet } from '@/components/ui/Sheet';
 import { MacroStrip } from '@/components/ui/MacroStrip';
+import { Icon } from '@/components/ui/Icon';
 import { WeekStrip } from './WeekStrip';
 import { CalorieModeTag } from '@/components/ui/CalorieModeTag';
 import { budgetFor, isSurplusGoalDay } from '@/utils/calorieMath';
+import { useMacroPreferences } from '@/hooks/useMacroPreferences';
+import { MACRO_META, formatMacroAmount, macroLabel, macroTotalFor } from '@/utils/macros';
+import { toDateString } from '@/utils/format';
 import { cn } from '@/utils/cn';
 import type { CalorieMode } from '@/hooks/useCalorieMode';
-import type { DailyDashboardResponse } from '@/types';
+import type { DailyDashboardResponse, MacroKey } from '@/types';
 
 interface DayDetailsSheetProps {
   open: boolean;
@@ -28,7 +33,19 @@ interface DayDetailsSheetProps {
  */
 export function DayDetailsSheet({ open, onClose, dash, mode, date, isToday }: DayDetailsSheetProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const e = (kcal: number) => Math.round(Math.abs(kcal)).toLocaleString();
+
+  // Tracked-macro rows come from the DAY's frozen targets, so a past day
+  // reads exactly as it was lived. Macros tracked NOW but absent from that
+  // day get named honestly instead of showing a fabricated zero.
+  const { data: prefs } = useMacroPreferences();
+  const dayKeys = new Set(dash.macroTargets.map((m) => m.macroKey));
+  const untrackedThen = !isToday
+    ? (prefs ?? [])
+        .filter((p) => p.isTracked && !dayKeys.has(p.macroKey))
+        .map((p) => macroLabel(t, p.macroKey))
+    : [];
 
   const budget = Math.max(budgetFor(dash, mode), 1);
   const remaining = budget - dash.totalFoodCaloriesKcal;
@@ -113,12 +130,53 @@ export function DayDetailsSheet({ open, onClose, dash, mode, date, isToday }: Da
             fat={dash.totalFatGrams}
             carbs={dash.totalCarbsGrams}
           />
+
+          {dash.macroTargets.length > 0 && (
+            <div className="mt-3 border-t border-hairline/60 pt-1">
+              {dash.macroTargets.map((m) => {
+                const key = m.macroKey as MacroKey;
+                const value = macroTotalFor(dash, key) ?? 0;
+                const limitBroken = m.direction === 'limit' && m.target !== null && value > m.target;
+                return (
+                  <div key={key} className="flex items-center justify-between h-9">
+                    <span className="flex items-center gap-2 text-[13px] font-semibold text-ink-2">
+                      <Icon name={MACRO_META[key].icon} size={14} style={{ color: MACRO_META[key].color }} />
+                      {macroLabel(t, key)}
+                    </span>
+                    <span className={cn('text-[13px] font-bold tabular-nums', limitBroken ? 'text-warning' : 'text-ink')}>
+                      {formatMacroAmount(key, value)}
+                      {m.target !== null && (
+                        <span className="text-ink-3 font-medium">
+                          {' '}
+                          {m.direction === 'limit'
+                            ? t('macros.of_limit', 'of {{limit}} limit', { limit: formatMacroAmount(key, m.target) })
+                            : `/ ${formatMacroAmount(key, m.target)}`}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {untrackedThen.length > 0 && (
+            <p className="mt-2 text-[12px] text-ink-3 leading-relaxed">
+              {t('day.macros_untracked_then', 'Not tracked on this day: {{macros}}. Tracking starts counting from the day you turn it on.', {
+                macros: untrackedThen.join(', '),
+              })}
+            </p>
+          )}
         </div>
 
         <WeekStrip
           date={date}
           baseGoalKcal={dash.snapshotDailyBaseGoalKcal}
           inset
+          onPickDay={(day) => {
+            onClose();
+            navigate(day === toDateString() ? '/today' : `/day/${day}`);
+          }}
         />
       </div>
     </Sheet>

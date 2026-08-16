@@ -1,20 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { DayView } from '@/components/day/DayView';
+import { DatePickerSheet } from '@/components/day/DatePickerSheet';
 import { StreakChip } from '@/components/today/StreakChip';
 import { StreakCelebration } from '@/components/today/StreakCelebration';
+import { AppTour } from '@/components/today/AppTour';
+import { Icon } from '@/components/ui/Icon';
 import { useGetStreak } from '@/hooks/useStreak';
 import { dailyLogService } from '@/services/dailyLogService';
+import { profileService } from '@/services/profileService';
 import { queryKeys } from '@/lib/queryKeys';
 import { toDateString, parseDate } from '@/utils/format';
+import type { UserProfileResponse } from '@/types';
 
 /** One celebration per calendar day, surviving reloads and remounts. */
 const CELEBRATED_KEY = 'ac-streak-celebrated';
+/** Local guard so the tour never re-flashes while the profile refetches. */
+const TUTORIAL_KEY = 'ac-tutorial-done';
 
 export default function TodayPage() {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const today = toDateString();
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   // Same key as DayView's query: shared cache entry, no extra request
   const { data: dash } = useQuery({
@@ -26,40 +37,71 @@ export default function TodayPage() {
   // A marked fasting day counts as logged: streak safe, celebration eligible.
   const hasLoggedToday = (dash?.foodEntries.length ?? 0) > 0 || (dash?.isFastingDay ?? false);
 
-  // ── Streak celebration (first food of the day bumps the counter) ──────────
-  // The streak query refetches after every log mutation; when its value rises
-  // while today has food on it, that rise IS the "first log of the day" moment.
-  // prevStreak only advances once food is visible, so the celebration is never
-  // lost to the race between the streak refetch and the dashboard refetch.
+  // ── Streak celebration ────────────────────────────────────────────────────
+  // The rule is state-based, not event-based: celebrate the moment TODAY is
+  // part of the streak (streak.lastLoggedDate === today), once per local day.
+  // For manual loggers that happens right after their first log; for auto-add
+  // users it happens on their first open of the day, because the server now
+  // counts auto-added meals into the streak. The old "counter went up while I
+  // was watching" trigger silently skipped exactly that second group.
   const { data: streak } = useGetStreak();
   const [celebrating, setCelebrating] = useState<number | null>(null);
-  const prevStreak = useRef<number | null>(null);
+
+  // First open of a day with auto-added meals: the dashboard request extends
+  // the streak server-side, but the parallel streak request may have raced it
+  // and cached yesterday's state for 5 minutes. When the day visibly has food
+  // and the cached streak does not include today, refetch it once.
+  const streakRefreshedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!hasLoggedToday || !streak?.streakEnabled) return;
+    if (streak.lastLoggedDate === today) return;
+    if (streakRefreshedFor.current === today) return; // once per day per mount
+    streakRefreshedFor.current = today;
+    queryClient.invalidateQueries({ queryKey: queryKeys.streak() });
+  }, [hasLoggedToday, streak?.streakEnabled, streak?.lastLoggedDate, today, queryClient]);
 
   useEffect(() => {
     if (!streak?.streakEnabled) return;
-    const n = streak.currentStreak;
-    const prev = prevStreak.current;
+    if (streak.currentStreak <= 0) return;
+    if (streak.lastLoggedDate !== today) return; // today not in the streak yet
+    if (!hasLoggedToday) return; // dashboard still catching up; wait for it
+    if (localStorage.getItem(CELEBRATED_KEY) === today) return;
+    localStorage.setItem(CELEBRATED_KEY, today);
+    // Reacting to async queries settling is what this effect exists for; it
+    // fires at most once per calendar day, so the extra render is bounded.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCelebrating(streak.currentStreak);
+  }, [streak?.streakEnabled, streak?.currentStreak, streak?.lastLoggedDate, hasLoggedToday, today]);
 
-    if (prev === null) {
-      // First settled value of this visit: a baseline, never a celebration.
-      prevStreak.current = n;
-      return;
-    }
-    if (n > prev) {
-      if (!hasLoggedToday) return; // dashboard still catching up; keep waiting
-      prevStreak.current = n;
-      if (localStorage.getItem(CELEBRATED_KEY) !== today) {
-        localStorage.setItem(CELEBRATED_KEY, today);
-        // Reacting to an external async source (the streak query settling after
-        // a log) is exactly what this effect exists for; it fires at most once
-        // per calendar day, so the extra render is intentional and bounded.
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setCelebrating(n);
-      }
-      return;
-    }
-    prevStreak.current = n;
-  }, [streak?.streakEnabled, streak?.currentStreak, hasLoggedToday, today, streak]);
+  // ── First-run tour ────────────────────────────────────────────────────────
+  // Only for a brand-new account: onboarded, never logged anything, tutorial
+  // never seen (server flag, mirrored locally to avoid refetch flicker).
+  const { data: profile } = useQuery({
+    queryKey: queryKeys.profile(),
+    queryFn: () => profileService.get().then((r) => r.data),
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const tourEligible =
+    !!profile &&
+    !!dash &&
+    profile.isOnboardingCompleted &&
+    !profile.hasSeenTutorial &&
+    !profile.hasEverLoggedFood &&
+    localStorage.getItem(TUTORIAL_KEY) === null &&
+    celebrating === null;
+
+  const finishTour = useMutation({
+    mutationFn: () => profileService.markTutorialSeen(),
+  });
+
+  const onTourDone = () => {
+    localStorage.setItem(TUTORIAL_KEY, '1');
+    queryClient.setQueryData<UserProfileResponse>(queryKeys.profile(), (p) =>
+      p ? { ...p, hasSeenTutorial: true } : p,
+    );
+    finishTour.mutate();
+  };
 
   const dateLabel = useMemo(
     () =>
@@ -78,16 +120,39 @@ export default function TodayPage() {
           <h1 className="text-[22px] font-extrabold text-ink leading-tight">
             {t('today.title', 'Today')}
           </h1>
-          <p className="text-[13px] text-ink-2 capitalize">{dateLabel}</p>
+          {/* The date is a door, not a label: it opens the calendar to any
+              other day, which is where "can I edit yesterday?" gets its
+              visible, always-present answer. */}
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            aria-label={t('today.open_calendar_aria', 'Open the calendar to go to another day')}
+            className="pressable flex items-center gap-1 text-[13px] text-ink-2 capitalize"
+          >
+            {dateLabel}
+            <Icon name="calendar" size={13} className="text-ink-3" />
+          </button>
         </div>
         <StreakChip hasLoggedToday={hasLoggedToday} />
       </header>
 
       <DayView date={today} isToday />
 
+      <DatePickerSheet
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        selected={today}
+        maxDate={today}
+        onPick={(date) => {
+          if (date !== today) navigate(`/day/${date}`);
+        }}
+      />
+
       {celebrating !== null && (
         <StreakCelebration streak={celebrating} onDone={() => setCelebrating(null)} />
       )}
+
+      {tourEligible && <AppTour onDone={onTourDone} />}
     </div>
   );
 }

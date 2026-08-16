@@ -19,6 +19,19 @@ public class DailyDashboardResponse
     public decimal TotalFatGrams { get; set; }
     public decimal TotalCarbsGrams { get; set; }
     public decimal TotalAlcoholGrams { get; set; }
+    /// <summary>Null = no entry of the day carried sugar data (not tracked then).</summary>
+    public decimal? TotalSugarGrams { get; set; }
+    /// <summary>Null = no entry of the day carried water data (not tracked then).</summary>
+    public decimal? TotalWaterMl { get; set; }
+
+    /// <summary>Extended macro targets frozen on this day (empty = only protein was tracked).</summary>
+    public List<DayMacroTargetResponse> MacroTargets { get; set; } = [];
+
+    /// <summary>
+    /// False until the user logs food THEMSELF for the first time ever (auto-added
+    /// template meals do not count). Gates the getting-started checklist.
+    /// </summary>
+    public bool HasEverLoggedFood { get; set; }
 
     // Gasto
     public decimal TotalActivityCaloriesKcal { get; set; }

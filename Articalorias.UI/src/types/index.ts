@@ -6,3 +6,5 @@ export type * from './activity';
 export type * from './history';
 export type * from './foodTemplate';
 export type * from './favorites';
+export type * from './macros';
+export type * from './measurement';

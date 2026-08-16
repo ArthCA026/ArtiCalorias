@@ -30,5 +30,11 @@ public class UpdateFoodTemplateRequest
     [Range(0, 9999.99)]
     public decimal AlcoholGrams { get; set; }
 
+    [Range(0, 9999.99)]
+    public decimal? SugarGrams { get; set; }
+
+    [Range(0, 99999.99)]
+    public decimal? WaterMl { get; set; }
+
     public bool AutoAddToNewDay { get; set; }
 }

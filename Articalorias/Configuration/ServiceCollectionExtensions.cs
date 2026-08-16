@@ -47,6 +47,12 @@ public static class ServiceCollectionExtensions
         // Logging streak
         services.AddScoped<IStreakService, StreakService>();
 
+        // Optional macro tracking (carbs, fat, alcohol, sugar, water)
+        services.AddScoped<IMacroPreferenceService, MacroPreferenceService>();
+
+        // Body measurements (weight / body fat history behind the Body page)
+        services.AddScoped<IBodyMeasurementService, BodyMeasurementService>();
+
         // OpenAI food parsing
         services.AddScoped<IFoodParsingService, FoodParsingService>();
 

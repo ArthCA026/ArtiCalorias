@@ -11,12 +11,14 @@ public class FavoriteRoutineService : IFavoriteRoutineService
     private readonly AppDbContext _db;
     private readonly IDailyLogService _dailyLogService;
     private readonly IRecalculationService _recalculation;
+    private readonly IStreakService _streak;
 
-    public FavoriteRoutineService(AppDbContext db, IDailyLogService dailyLogService, IRecalculationService recalculation)
+    public FavoriteRoutineService(AppDbContext db, IDailyLogService dailyLogService, IRecalculationService recalculation, IStreakService streak)
     {
         _db = db;
         _dailyLogService = dailyLogService;
         _recalculation = recalculation;
+        _streak = streak;
     }
 
     public async Task<IReadOnlyList<FavoriteRoutine>> GetByUserAsync(long userId, CancellationToken ct = default)
@@ -113,6 +115,7 @@ public class FavoriteRoutineService : IFavoriteRoutineService
         var log = await _dailyLogService.GetOrCreateAsync(userId, today);
 
         var addedCount = 0;
+        var addedFood = false;
         var skippedItems = new List<SkippedRoutineItem>();
 
         var maxFoodSort = await _db.FoodEntries
@@ -173,12 +176,15 @@ public class FavoriteRoutineService : IFavoriteRoutineService
                     FatGrams = item.FoodTemplate.FatGrams,
                     CarbsGrams = item.FoodTemplate.CarbsGrams,
                     AlcoholGrams = item.FoodTemplate.AlcoholGrams,
+                    SugarGrams = item.FoodTemplate.SugarGrams,
+                    WaterMl = item.FoodTemplate.WaterMl,
                     SortOrder = ++maxFoodSort,
                     CreatedAtUtc = DateTime.UtcNow,
                     UpdatedAtUtc = DateTime.UtcNow,
                 };
 
                 _db.FoodEntries.Add(entry);
+                addedFood = true;
                 addedCount++;
             }
             else
@@ -189,6 +195,20 @@ public class FavoriteRoutineService : IFavoriteRoutineService
 
         await _db.SaveChangesAsync(ct);
         await _recalculation.RecalculateFullPipelineAsync(log.DailyLogId);
+
+        // A quick-added routine is the user logging food: the streak and the
+        // first-log flag must move exactly as they do for a manual entry.
+        if (addedFood)
+        {
+            await _streak.RecalculateForUserAsync(userId, ct);
+
+            var profile = await _db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId, ct);
+            if (profile is not null && !profile.FirstFoodLoggedAtUtc.HasValue)
+            {
+                profile.FirstFoodLoggedAtUtc = DateTime.UtcNow;
+                await _db.SaveChangesAsync(ct);
+            }
+        }
 
         return new AddRoutineToTodayResponse
         {

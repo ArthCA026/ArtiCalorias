@@ -8,6 +8,8 @@ export interface FoodTemplateResponse {
   fatGrams: number;
   carbsGrams: number;
   alcoholGrams: number;
+  sugarGrams: number | null;
+  waterMl: number | null;
   autoAddToNewDay: boolean;
   isActive: boolean;
 }
@@ -21,6 +23,8 @@ export interface CreateFoodTemplateRequest {
   fatGrams: number;
   carbsGrams: number;
   alcoholGrams: number;
+  sugarGrams?: number | null;
+  waterMl?: number | null;
   autoAddToNewDay: boolean;
 }
 
@@ -33,5 +37,7 @@ export interface UpdateFoodTemplateRequest {
   fatGrams: number;
   carbsGrams: number;
   alcoholGrams: number;
+  sugarGrams?: number | null;
+  waterMl?: number | null;
   autoAddToNewDay: boolean;
 }

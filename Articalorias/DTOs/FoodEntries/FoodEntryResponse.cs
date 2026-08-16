@@ -11,6 +11,8 @@ public class FoodEntryResponse
     public decimal FatGrams { get; set; }
     public decimal CarbsGrams { get; set; }
     public decimal AlcoholGrams { get; set; }
+    public decimal? SugarGrams { get; set; }
+    public decimal? WaterMl { get; set; }
     public int SortOrder { get; set; }
     public string? Notes { get; set; }
 }

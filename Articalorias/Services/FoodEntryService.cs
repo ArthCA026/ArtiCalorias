@@ -42,6 +42,7 @@ public class FoodEntryService : IFoodEntryService
 
         var userId = await GetUserIdForLogAsync(entry.DailyLogId);
         await _streak.RecalculateForUserAsync(userId);
+        await MarkFirstFoodLoggedAsync(userId);
 
         return entry;
     }
@@ -69,8 +70,23 @@ public class FoodEntryService : IFoodEntryService
 
         var userId = await GetUserIdForLogAsync(dailyLogId);
         await _streak.RecalculateForUserAsync(userId);
+        await MarkFirstFoodLoggedAsync(userId);
 
         return entries;
+    }
+
+    /// <summary>
+    /// Stamps the user's first-ever own food log (once). Auto-added template
+    /// meals never reach this path on purpose: the getting-started checklist
+    /// keeps nudging until the user logs something THEMSELF.
+    /// </summary>
+    private async Task MarkFirstFoodLoggedAsync(long userId)
+    {
+        var profile = await _db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
+        if (profile is null || profile.FirstFoodLoggedAtUtc.HasValue)
+            return;
+        profile.FirstFoodLoggedAtUtc = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
     }
 
     public async Task<FoodEntry> UpdateAsync(FoodEntry entry, bool scaleByQuantity = false)
@@ -97,6 +113,10 @@ public class FoodEntryService : IFoodEntryService
             existing.FatGrams = Math.Round(existing.FatGrams * ratio, 2);
             existing.CarbsGrams = Math.Round(existing.CarbsGrams * ratio, 2);
             existing.AlcoholGrams = Math.Round(existing.AlcoholGrams * ratio, 2);
+            if (existing.SugarGrams.HasValue)
+                existing.SugarGrams = Math.Round(existing.SugarGrams.Value * ratio, 2);
+            if (existing.WaterMl.HasValue)
+                existing.WaterMl = Math.Round(existing.WaterMl.Value * ratio, 2);
         }
         else
         {
@@ -105,6 +125,8 @@ public class FoodEntryService : IFoodEntryService
             existing.FatGrams = entry.FatGrams;
             existing.CarbsGrams = entry.CarbsGrams;
             existing.AlcoholGrams = entry.AlcoholGrams;
+            existing.SugarGrams = entry.SugarGrams;
+            existing.WaterMl = entry.WaterMl;
         }
 
         existing.UpdatedAtUtc = DateTime.UtcNow;

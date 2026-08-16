@@ -8,6 +8,8 @@ interface FabProps {
   label: string;
   onClick: () => void;
   className?: string;
+  /** Anchor id for the first-run tour spotlight */
+  dataTour?: string;
 }
 
 /**
@@ -15,11 +17,12 @@ interface FabProps {
  * Each page renders its own with a label naming its primary action,
  * so the button never means something different than it says.
  */
-export function Fab({ icon = 'plus', label, onClick, className }: FabProps) {
+export function Fab({ icon = 'plus', label, onClick, className, dataTour }: FabProps) {
   const haptics = useHaptics();
   return (
     <button
       type="button"
+      data-tour={dataTour}
       onClick={() => {
         haptics.tap();
         onClick();

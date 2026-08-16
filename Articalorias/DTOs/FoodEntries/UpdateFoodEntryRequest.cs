@@ -29,6 +29,12 @@ public class UpdateFoodEntryRequest
     [Range(0, 10000)]
     public decimal AlcoholGrams { get; set; }
 
+    [Range(0, 10000)]
+    public decimal? SugarGrams { get; set; }
+
+    [Range(0, 100000)]
+    public decimal? WaterMl { get; set; }
+
     [StringLength(500)]
     public string? Notes { get; set; }
 

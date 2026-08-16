@@ -9,12 +9,14 @@ interface TabDef {
   icon: IconName;
   labelKey: string;
   fallback: string;
+  /** Anchor id for the first-run tour spotlight */
+  tourId?: string;
 }
 
 const tabs: TabDef[] = [
   { to: '/today', icon: 'home', labelKey: 'tabs.today', fallback: 'Today' },
-  { to: '/templates', icon: 'bookmark', labelKey: 'tabs.templates', fallback: 'Templates' },
-  { to: '/progress', icon: 'chart', labelKey: 'tabs.progress', fallback: 'Progress' },
+  { to: '/templates', icon: 'bookmark', labelKey: 'tabs.templates', fallback: 'Templates', tourId: 'tab-templates' },
+  { to: '/progress', icon: 'chart', labelKey: 'tabs.progress', fallback: 'Progress', tourId: 'tab-progress' },
   { to: '/profile', icon: 'user', labelKey: 'tabs.profile', fallback: 'Profile' },
 ];
 
@@ -24,6 +26,7 @@ function TabButton({ tab }: { tab: TabDef }) {
   return (
     <NavLink
       to={tab.to}
+      data-tour={tab.tourId}
       onClick={() => haptics.tap()}
       className="pressable flex items-center justify-center"
       style={{ width: 72, height: 48 }}

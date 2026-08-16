@@ -34,6 +34,19 @@ public class UserProfile
 
     public bool IsOnboardingCompleted { get; set; }
 
+    /// <summary>
+    /// First time the user themself logged food (manual, AI, barcode, template
+    /// or routine — NOT template auto-add). NULL = never logged anything.
+    /// Gates the "You are N of 3 steps in" checklist and the first-run tutorial.
+    /// </summary>
+    public DateTime? FirstFoodLoggedAtUtc { get; set; }
+
+    /// <summary>
+    /// The user finished or skipped the first-run interactive tutorial.
+    /// Backfilled to true for accounts that existed before the feature.
+    /// </summary>
+    public bool HasSeenTutorial { get; set; }
+
     /// <summary>IANA timezone ID (e.g. "America/New_York"). Null → UTC.</summary>
     public string? TimeZoneId { get; set; }
 

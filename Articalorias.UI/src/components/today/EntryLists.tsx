@@ -121,6 +121,8 @@ export function MealsList({ date, entries, isToday, isFastingDay, onChanged }: M
         fatGrams: round1(entry.fatGrams / qty),
         carbsGrams: round1(entry.carbsGrams / qty),
         alcoholGrams: round1(entry.alcoholGrams / qty),
+        sugarGrams: entry.sugarGrams !== null ? round1(entry.sugarGrams / qty) : null,
+        waterMl: entry.waterMl !== null ? round1(entry.waterMl / qty) : null,
         autoAddToNewDay: false,
       });
     },
@@ -145,6 +147,8 @@ export function MealsList({ date, entries, isToday, isFastingDay, onChanged }: M
         fatGrams: entry.fatGrams,
         carbsGrams: entry.carbsGrams,
         alcoholGrams: entry.alcoholGrams,
+        sugarGrams: entry.sugarGrams,
+        waterMl: entry.waterMl,
         notes: entry.notes,
       };
       if (entry.quantity && entry.quantity > 0) {
@@ -158,6 +162,8 @@ export function MealsList({ date, entries, isToday, isFastingDay, onChanged }: M
         fatGrams: round1(entry.fatGrams * qty),
         carbsGrams: round1(entry.carbsGrams * qty),
         alcoholGrams: round1(entry.alcoholGrams * qty),
+        sugarGrams: entry.sugarGrams !== null ? round1(entry.sugarGrams * qty) : null,
+        waterMl: entry.waterMl !== null ? round1(entry.waterMl * qty) : null,
         scaleByQuantity: false,
       });
     },
@@ -270,7 +276,14 @@ function EditFoodSheet({ date, entry, onClose, onChanged }: EditFoodSheetProps) 
   const [protein, setProtein] = useState(String(entry.proteinGrams));
   const [fat, setFat] = useState(String(entry.fatGrams));
   const [carbs, setCarbs] = useState(String(entry.carbsGrams));
+  const [sugar, setSugar] = useState(entry.sugarGrams !== null ? String(entry.sugarGrams) : '');
+  const [water, setWater] = useState(entry.waterMl !== null ? String(entry.waterMl) : '');
   const [error, setError] = useState<string | null>(null);
+
+  // Only entries that carry the optional macros show their fields; an old
+  // entry from before tracking keeps its honest "not captured" state.
+  const hasSugar = entry.sugarGrams !== null;
+  const hasWater = entry.waterMl !== null;
 
   // Changing quantity scales every macro proportionally (what you see is what is saved)
   const applyQty = (nextQty: number) => {
@@ -280,6 +293,8 @@ function EditFoodSheet({ date, entry, onClose, onChanged }: EditFoodSheetProps) 
     setProtein((v) => String(round1(num(v) * ratio)));
     setFat((v) => String(round1(num(v) * ratio)));
     setCarbs((v) => String(round1(num(v) * ratio)));
+    if (hasSugar) setSugar((v) => String(round1(num(v) * ratio)));
+    if (hasWater) setWater((v) => String(round1(num(v) * ratio)));
   };
 
   const save = useMutation({
@@ -293,6 +308,8 @@ function EditFoodSheet({ date, entry, onClose, onChanged }: EditFoodSheetProps) 
         fatGrams: num(fat),
         carbsGrams: num(carbs),
         alcoholGrams: entry.alcoholGrams,
+        sugarGrams: hasSugar ? num(sugar) : null,
+        waterMl: hasWater ? num(water) : null,
         notes: entry.notes,
         scaleByQuantity: false,
       }),
@@ -330,6 +347,16 @@ function EditFoodSheet({ date, entry, onClose, onChanged }: EditFoodSheetProps) 
           <DecimalField label={t('log.fat', 'Fat')} suffix="g" value={fat} onValueChange={setFat} />
           <DecimalField label={t('log.carbs', 'Carbs')} suffix="g" value={carbs} onValueChange={setCarbs} />
         </div>
+        {(hasSugar || hasWater) && (
+          <div className="grid grid-cols-2 gap-3">
+            {hasSugar && (
+              <DecimalField label={t('log.sugar', 'Sugar')} suffix="g" value={sugar} onValueChange={setSugar} />
+            )}
+            {hasWater && (
+              <DecimalField label={t('log.water', 'Water')} suffix="ml" value={water} onValueChange={setWater} />
+            )}
+          </div>
+        )}
         {error && <InlineError message={error} />}
         <Button
           variant="primary"

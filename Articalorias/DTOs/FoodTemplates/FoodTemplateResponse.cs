@@ -11,6 +11,8 @@ public class FoodTemplateResponse
     public decimal FatGrams { get; set; }
     public decimal CarbsGrams { get; set; }
     public decimal AlcoholGrams { get; set; }
+    public decimal? SugarGrams { get; set; }
+    public decimal? WaterMl { get; set; }
     public bool AutoAddToNewDay { get; set; }
     public bool IsActive { get; set; }
 }

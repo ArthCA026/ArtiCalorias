@@ -48,12 +48,19 @@ public class OpenFoodFactsService : IOpenFoodFactsService
                 FatGrams        = ToDecimal(useServing ? n.FatServing           : n.Fat100g),
                 CarbsGrams      = ToDecimal(useServing ? n.CarbohydratesServing : n.Carbohydrates100g),
                 AlcoholGrams    = ToDecimal(useServing ? n.AlcoholServing       : n.Alcohol100g),
+                // Label data costs nothing extra, so sugar is captured whether
+                // or not the user tracks it yet: the day it gets enabled, the
+                // history is already there. Null (not 0) when the label omits it.
+                SugarGrams      = ToNullableDecimal(useServing ? n.SugarsServing : n.Sugars100g),
             }
         ];
     }
 
     private static decimal ToDecimal(double? value) =>
         value is null or double.NaN ? 0m : (decimal)value;
+
+    private static decimal? ToNullableDecimal(double? value) =>
+        value is null or double.NaN ? null : (decimal)value;
 
     // ── Open Food Facts response model (private, used only here) ──────────────
 
@@ -106,6 +113,12 @@ public class OpenFoodFactsService : IOpenFoodFactsService
 
         [JsonPropertyName("carbohydrates_serving")]
         public double? CarbohydratesServing { get; set; }
+
+        [JsonPropertyName("sugars_100g")]
+        public double? Sugars100g { get; set; }
+
+        [JsonPropertyName("sugars_serving")]
+        public double? SugarsServing { get; set; }
 
         [JsonPropertyName("alcohol_100g")]
         public double? Alcohol100g { get; set; }

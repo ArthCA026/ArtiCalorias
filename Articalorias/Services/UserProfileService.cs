@@ -8,10 +8,12 @@ namespace Articalorias.Services;
 public class UserProfileService : IUserProfileService
 {
     private readonly AppDbContext _db;
+    private readonly IBodyMeasurementService _measurements;
 
-    public UserProfileService(AppDbContext db)
+    public UserProfileService(AppDbContext db, IBodyMeasurementService measurements)
     {
         _db = db;
+        _measurements = measurements;
     }
 
     public async Task<UserProfile?> GetByUserIdAsync(long userId)
@@ -65,10 +67,15 @@ public class UserProfileService : IUserProfileService
 
             await _db.SaveChangesAsync();
 
+            // Every profile save with a weight also lands on the Body graph
+            // (today's point), so the two views can never tell different stories.
+            await _measurements.RecordFromProfileAsync(userId);
+
             return existing;
         }
 
         await _db.SaveChangesAsync();
+        await _measurements.RecordFromProfileAsync(userId);
 
         return existing ?? profile;
     }
@@ -84,8 +91,9 @@ public class UserProfileService : IUserProfileService
     /// <summary>
     /// Applies Mifflin–St Jeor (BMR) and Deurenberg (Body Fat %) formulas
     /// when auto-calculate flags are enabled and the required inputs are present.
+    /// Internal so the measurement sync path applies the exact same math.
     /// </summary>
-    private static void ApplyAutoCalculations(UserProfile p)
+    internal static void ApplyAutoCalculations(UserProfile p)
     {
         var hasBodyMetrics = p.CurrentWeightKg.HasValue && p.HeightCm.HasValue;
 

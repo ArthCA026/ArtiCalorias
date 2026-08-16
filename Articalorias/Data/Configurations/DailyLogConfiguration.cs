@@ -28,6 +28,9 @@ public class DailyLogConfiguration : IEntityTypeConfiguration<DailyLog>
         builder.Property(d => d.TotalFatGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
         builder.Property(d => d.TotalCarbsGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
         builder.Property(d => d.TotalAlcoholGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
+        builder.Property(d => d.TotalSugarGrams).HasColumnType("decimal(10,2)");
+        builder.Property(d => d.TotalWaterMl).HasColumnType("decimal(10,2)");
+        builder.Property(d => d.MacroTargetsJson).HasMaxLength(1000);
 
         // Gasto
         builder.Property(d => d.TotalActivityCaloriesKcal).HasColumnType("decimal(10,2)").HasDefaultValue(0m);

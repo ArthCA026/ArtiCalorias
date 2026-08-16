@@ -15,6 +15,12 @@ public class FoodEntry
     public decimal CarbsGrams { get; set; }
     public decimal AlcoholGrams { get; set; }
 
+    // Optional macro tracking (nullable: NULL = not captured when this entry
+    // was logged, 0 = captured and genuinely zero — the distinction lets old
+    // days say "not tracked then" instead of showing a fake 0).
+    public decimal? SugarGrams { get; set; }
+    public decimal? WaterMl { get; set; }
+
     public int SortOrder { get; set; }
     public string? Notes { get; set; }
 

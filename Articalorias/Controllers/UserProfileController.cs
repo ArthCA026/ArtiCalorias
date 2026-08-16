@@ -1,9 +1,11 @@
 using System.Security.Claims;
+using Articalorias.Data;
 using Articalorias.DTOs.UserProfiles;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Articalorias.Controllers;
 
@@ -13,10 +15,12 @@ namespace Articalorias.Controllers;
 public class UserProfileController : ControllerBase
 {
     private readonly IUserProfileService _profileService;
+    private readonly AppDbContext _db;
 
-    public UserProfileController(IUserProfileService profileService)
+    public UserProfileController(IUserProfileService profileService, AppDbContext db)
     {
         _profileService = profileService;
+        _db = db;
     }
 
     [HttpGet]
@@ -61,6 +65,21 @@ public class UserProfileController : ControllerBase
         return Ok(MapToResponse(result));
     }
 
+    /// <summary>
+    /// Marks the first-run tutorial as completed or skipped. Idempotent, and a
+    /// dedicated endpoint on purpose: the full profile PUT re-runs the
+    /// auto-calculation pipeline, which a UI flag must never trigger.
+    /// </summary>
+    [HttpPost("tutorial-seen")]
+    public async Task<IActionResult> TutorialSeen()
+    {
+        var userId = GetUserId();
+        await _db.UserProfiles
+            .Where(p => p.UserId == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.HasSeenTutorial, true));
+        return NoContent();
+    }
+
     private long GetUserId()
     {
         var claim = User.FindFirst(ClaimTypes.NameIdentifier)
@@ -85,6 +104,8 @@ public class UserProfileController : ControllerBase
         Country = p.Country,
         TimeZoneId = p.TimeZoneId,
         IsOnboardingCompleted = p.IsOnboardingCompleted,
+        HasSeenTutorial = p.HasSeenTutorial,
+        HasEverLoggedFood = p.FirstFoodLoggedAtUtc.HasValue,
         SleepHours = p.SleepHours,
         NeatHours = p.NeatHours,
         CalorieDisplayMode = p.CalorieDisplayMode,

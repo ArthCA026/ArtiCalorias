@@ -8,6 +8,15 @@ namespace Articalorias.Services;
 
 public class DailyLogService : IDailyLogService
 {
+    /// <summary>
+    /// Auto-add stops when the user has not actively opened the app for this
+    /// many days. Without the pause, an abandoned session that keeps requesting
+    /// dashboards would fabricate meals and burn calculations forever (zombie
+    /// days). A returning user's first heartbeat re-arms auto-add before their
+    /// dashboard request lands, so a real comeback day is never left empty.
+    /// </summary>
+    public const int AutoAddPauseAfterDays = 3;
+
     private readonly AppDbContext _db;
     private readonly IRecalculationService _recalculation;
     private readonly IStreakService _streak;
@@ -56,6 +65,11 @@ public class DailyLogService : IDailyLogService
 
         var (weekStart, weekEnd) = GetWeekRange(date);
 
+        var macroPrefs = await _db.UserMacroPreferences
+            .AsNoTracking()
+            .Where(m => m.UserId == userId)
+            .ToListAsync();
+
         var dailyLog = new DailyLog
         {
             UserId = userId,
@@ -70,6 +84,7 @@ public class DailyLogService : IDailyLogService
             SnapshotProteinGoalGrams = proteinGoal,
             SnapshotSleepHours = profile.SleepHours,
             SnapshotNeatHours = profile.NeatHours,
+            MacroTargetsJson = MacroTargets.BuildJson(profile, macroPrefs),
 
             WeekStartDate = weekStart,
             WeekEndDate = weekEnd
@@ -78,62 +93,97 @@ public class DailyLogService : IDailyLogService
         _db.DailyLogs.Add(dailyLog);
         await _db.SaveChangesAsync();
 
-        // Auto-add activity entries from templates with AutoAddToNewDay = true.
-        var autoAddTemplates = await _db.ActivityTemplates
-            .Where(t => t.IsActive && t.AutoAddToNewDay && t.UserId == userId)
-            .ToListAsync();
+        // ── Auto-add templates — but only when this row is the user's actual
+        // TODAY, and only for users who are actually around to eat them.
+        //
+        // 1. Local-today check: browsing an old (or future) date creates its
+        //    row for viewing/editing, and auto-adding meals to a day the user
+        //    opened just to LOOK at would silently rewrite their history.
+        // 2. Activity window: if the user has not actively opened the app in
+        //    AutoAddPauseAfterDays, the routine meals stop materializing, so an
+        //    abandoned account or a forgotten open tab cannot generate zombie
+        //    logs every midnight. NULL LastActiveAtUtc (brand-new account or
+        //    pre-feature user mid-rollout) counts as active: pausing them
+        //    would break auto-add on their very first day.
+        var isUsersToday = date == LocalDates.TodayFor(profile.TimeZoneId);
+        var lastActive = await _db.Users
+            .AsNoTracking()
+            .Where(u => u.UserId == userId)
+            .Select(u => u.LastActiveAtUtc)
+            .FirstOrDefaultAsync();
+        var isUserActive = lastActive is null
+            || DateTime.UtcNow - lastActive.Value <= TimeSpan.FromDays(AutoAddPauseAfterDays);
 
-        if (autoAddTemplates.Count > 0)
+        var autoAddedFood = false;
+        if (isUsersToday && isUserActive)
         {
-            var sortOrder = 1;
-            foreach (var template in autoAddTemplates)
+            // Auto-add activity entries from templates with AutoAddToNewDay = true.
+            var autoAddTemplates = await _db.ActivityTemplates
+                .Where(t => t.IsActive && t.AutoAddToNewDay && t.UserId == userId)
+                .ToListAsync();
+
+            if (autoAddTemplates.Count > 0)
             {
-                var entry = new ActivityEntry
+                var sortOrder = 1;
+                foreach (var template in autoAddTemplates)
+                {
+                    var entry = new ActivityEntry
+                    {
+                        DailyLogId = dailyLog.DailyLogId,
+                        ActivityTemplateId = template.ActivityTemplateId,
+                        ActivityName = template.TemplateName,
+                        DurationMinutes = template.DefaultDurationMinutes,
+                        METValue = template.DefaultMET,
+                        SortOrder = sortOrder++,
+                    };
+
+                    ActivityCalorieMath.Apply(entry, dailyLog.SnapshotWeightKg ?? 0m, providedCaloriesKcal: null);
+                    _db.ActivityEntries.Add(entry);
+                }
+            }
+
+            // Auto-add food entries from food templates with AutoAddToNewDay = true.
+            var autoAddFoodTemplates = await _db.FoodTemplates
+                .Where(f => f.IsActive && f.AutoAddToNewDay && f.UserId == userId)
+                .ToListAsync();
+
+            var foodSortOrder = 1;
+            foreach (var template in autoAddFoodTemplates)
+            {
+                var foodEntry = new FoodEntry
                 {
                     DailyLogId = dailyLog.DailyLogId,
-                    ActivityTemplateId = template.ActivityTemplateId,
-                    ActivityName = template.TemplateName,
-                    DurationMinutes = template.DefaultDurationMinutes,
-                    METValue = template.DefaultMET,
-                    SortOrder = sortOrder++,
+                    FoodTemplateId = template.FoodTemplateId,
+                    FoodName = template.TemplateName,
+                    PortionDescription = template.PortionDescription,
+                    Quantity = template.DefaultQuantity,
+                    CaloriesKcal = template.CaloriesKcal,
+                    ProteinGrams = template.ProteinGrams,
+                    FatGrams = template.FatGrams,
+                    CarbsGrams = template.CarbsGrams,
+                    AlcoholGrams = template.AlcoholGrams,
+                    SugarGrams = template.SugarGrams,
+                    WaterMl = template.WaterMl,
+                    SortOrder = foodSortOrder++,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    UpdatedAtUtc = DateTime.UtcNow,
                 };
-
-                ActivityCalorieMath.Apply(entry, dailyLog.SnapshotWeightKg ?? 0m, providedCaloriesKcal: null);
-                _db.ActivityEntries.Add(entry);
+                _db.FoodEntries.Add(foodEntry);
+                autoAddedFood = true;
             }
+
+            await _db.SaveChangesAsync();
         }
-
-        // Auto-add food entries from food templates with AutoAddToNewDay = true.
-        var autoAddFoodTemplates = await _db.FoodTemplates
-            .Where(f => f.IsActive && f.AutoAddToNewDay && f.UserId == userId)
-            .ToListAsync();
-
-        var foodSortOrder = 1;
-        foreach (var template in autoAddFoodTemplates)
-        {
-            var foodEntry = new FoodEntry
-            {
-                DailyLogId = dailyLog.DailyLogId,
-                FoodTemplateId = template.FoodTemplateId,
-                FoodName = template.TemplateName,
-                PortionDescription = template.PortionDescription,
-                Quantity = template.DefaultQuantity,
-                CaloriesKcal = template.CaloriesKcal,
-                ProteinGrams = template.ProteinGrams,
-                FatGrams = template.FatGrams,
-                CarbsGrams = template.CarbsGrams,
-                AlcoholGrams = template.AlcoholGrams,
-                SortOrder = foodSortOrder++,
-                CreatedAtUtc = DateTime.UtcNow,
-                UpdatedAtUtc = DateTime.UtcNow,
-            };
-            _db.FoodEntries.Add(foodEntry);
-        }
-
-        await _db.SaveChangesAsync();
 
         // Run full pipeline on the new day
         await _recalculation.RecalculateFullPipelineAsync(dailyLog.DailyLogId);
+
+        // Auto-added meals make the day "logged", which extends the streak the
+        // moment the user opens the app. Without this, the streak (and its
+        // celebration) sat stale until the first MANUAL log, which auto-add
+        // users may never make on a routine day.
+        if (autoAddedFood)
+            await _streak.RecalculateForUserAsync(userId);
 
         return (await GetSummaryByDateAsync(userId, date))!;
     }

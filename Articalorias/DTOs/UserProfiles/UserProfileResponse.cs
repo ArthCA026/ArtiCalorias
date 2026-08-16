@@ -16,6 +16,10 @@ public class UserProfileResponse
     public bool AutoCalculateProteinGoal { get; set; }
     public string? Country { get; set; }
     public bool IsOnboardingCompleted { get; set; }
+    /// <summary>The user finished or skipped the first-run tutorial.</summary>
+    public bool HasSeenTutorial { get; set; }
+    /// <summary>The user has logged food themself at least once, ever.</summary>
+    public bool HasEverLoggedFood { get; set; }
     public string? TimeZoneId { get; set; }
 
     // Display preferences

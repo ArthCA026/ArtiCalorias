@@ -20,6 +20,8 @@ import {
   RemindersSheet,
   SleepNeatSheet,
 } from '@/components/profile/ProfileSheets';
+import { MacrosSheet } from '@/components/profile/MacrosSheet';
+import { useMacroPreferences } from '@/hooks/useMacroPreferences';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme, type Theme } from '@/hooks/useTheme';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -41,8 +43,8 @@ import { matchPreset, GOAL_PRESETS } from '@/utils/goalUtils';
 import { FEATURES } from '@/config/features';
 import type { UserProfileRequest } from '@/types';
 
-type OpenSheet = 'body' | 'goal' | 'protein' | 'mode' | 'reminders' | 'sleep-neat' | null;
-type ConfirmKind = 'streak-reset' | 'clear-history' | 'delete-account' | null;
+type OpenSheet = 'body' | 'goal' | 'protein' | 'macros' | 'mode' | 'reminders' | 'sleep-neat' | null;
+type ConfirmKind = 'streak-reset' | 'clear-history' | 'delete-account' | 'bmr-review' | null;
 
 export default function ProfilePage() {
   const { t } = useTranslation();
@@ -62,6 +64,10 @@ export default function ProfilePage() {
 
   const [sheet, setSheet] = useState<OpenSheet>(null);
   const [confirm, setConfirm] = useState<ConfirmKind>(null);
+  // The review nudge reopens the body sheet with the advanced section shown.
+  const [bodyAdvanced, setBodyAdvanced] = useState(false);
+  const { data: macroPrefs } = useMacroPreferences();
+  const trackedMacroCount = (macroPrefs ?? []).filter((m) => m.isTracked).length;
 
   const profileQuery = useQuery({
     queryKey: queryKeys.profile(),
@@ -124,6 +130,30 @@ export default function ProfilePage() {
     }
     return t('profile.goal_custom_value', 'Custom');
   })();
+
+  /**
+   * After a body save: the user changed weight or height but left a MANUAL
+   * BMR or body fat untouched. Those numbers were measured at a different
+   * body, so offer a review — once, right now, never as a nagging banner.
+   */
+  const maybeNudgeBmrReview = (patch: Partial<UserProfileRequest>) => {
+    if (!profile) return;
+    const weightChanged = (patch.currentWeightKg ?? null) !== (profile.currentWeightKg ?? null);
+    const heightChanged = (patch.heightCm ?? null) !== (profile.heightCm ?? null);
+    if (!weightChanged && !heightChanged) return;
+
+    const manualBmrKept =
+      patch.autoCalculateBMR === false &&
+      patch.bmrKcal != null &&
+      Math.round(patch.bmrKcal) === Math.round(profile.bmrKcal);
+    const manualBfKept =
+      patch.autoCalculateBodyFat === false &&
+      patch.bodyFatPercent != null &&
+      profile.bodyFatPercent !== null &&
+      patch.bodyFatPercent === profile.bodyFatPercent;
+
+    if (manualBmrKept || manualBfKept) setConfirm('bmr-review');
+  };
 
   return (
     <div className="space-y-4">
@@ -203,6 +233,17 @@ export default function ProfilePage() {
                 }
                 chevron
                 onClick={() => setSheet('protein')}
+              />
+              <ListRow
+                icon="sliders"
+                title={t('profile.row_macros', 'Macro tracking')}
+                right={
+                  trackedMacroCount > 0
+                    ? t('profile.macros_tracked_n', '{{n}} tracked', { n: trackedMacroCount })
+                    : t('profile.macros_tracked_none', 'Protein only')
+                }
+                chevron
+                onClick={() => setSheet('macros')}
               />
               <ListRow
                 icon="scale"
@@ -369,11 +410,18 @@ export default function ProfilePage() {
           {/* Sheets */}
           <BodySheet
             open={sheet === 'body'}
-            onClose={() => setSheet(null)}
+            onClose={() => {
+              setSheet(null);
+              setBodyAdvanced(false);
+            }}
             profile={profile}
-            onSave={(patch) => save.mutate(patch)}
+            initialAdvanced={bodyAdvanced}
+            onSave={(patch) =>
+              save.mutate(patch, { onSuccess: () => maybeNudgeBmrReview(patch) })
+            }
             saving={save.isPending}
           />
+          <MacrosSheet open={sheet === 'macros'} onClose={() => setSheet(null)} />
           <GoalSheet
             open={sheet === 'goal'}
             onClose={() => setSheet(null)}
@@ -406,6 +454,19 @@ export default function ProfilePage() {
           />
           <RemindersSheet open={sheet === 'reminders'} onClose={() => setSheet(null)} />
 
+          <ConfirmSheet
+            open={confirm === 'bmr-review'}
+            onClose={() => setConfirm(null)}
+            title={t('profile.bmr_review_title', 'Review your manual values?')}
+            body={t('profile.bmr_review_body', 'Your body details changed, but your BMR or body fat are set manually and stayed the same. Numbers measured at a different weight may be off now.')}
+            confirmLabel={t('profile.bmr_review_confirm', 'Review them now')}
+            cancelLabel={t('profile.bmr_review_keep', 'Keep them as they are')}
+            onConfirm={() => {
+              setConfirm(null);
+              setBodyAdvanced(true);
+              setSheet('body');
+            }}
+          />
           <ConfirmSheet
             open={confirm === 'streak-reset'}
             onClose={() => setConfirm(null)}

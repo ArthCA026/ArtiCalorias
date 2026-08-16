@@ -19,6 +19,8 @@ public class FoodTemplateConfiguration : IEntityTypeConfiguration<FoodTemplate>
         builder.Property(f => f.FatGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
         builder.Property(f => f.CarbsGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
         builder.Property(f => f.AlcoholGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
+        builder.Property(f => f.SugarGrams).HasColumnType("decimal(10,2)");
+        builder.Property(f => f.WaterMl).HasColumnType("decimal(10,2)");
         builder.Property(f => f.AutoAddToNewDay).HasDefaultValue(false);
         builder.Property(f => f.IsActive).HasDefaultValue(true);
         builder.Property(f => f.CreatedAtUtc).HasColumnType("datetime2(0)").HasDefaultValueSql("SYSUTCDATETIME()");

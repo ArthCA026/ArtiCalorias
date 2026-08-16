@@ -56,6 +56,8 @@ public class FoodTemplateService : IFoodTemplateService
         existing.FatGrams = template.FatGrams;
         existing.CarbsGrams = template.CarbsGrams;
         existing.AlcoholGrams = template.AlcoholGrams;
+        existing.SugarGrams = template.SugarGrams;
+        existing.WaterMl = template.WaterMl;
         existing.AutoAddToNewDay = template.AutoAddToNewDay;
         existing.UpdatedAtUtc = DateTime.UtcNow;
 

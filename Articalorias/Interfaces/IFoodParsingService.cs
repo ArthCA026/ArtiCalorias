@@ -14,7 +14,8 @@ public interface IFoodParsingService
     /// </summary>
     /// <param name="freeText">The free-text food description.</param>
     /// <param name="country">Optional user country for region-specific calorie estimation.</param>
-    Task<IReadOnlyList<ParsedFoodItem>> ParseFreeTextAsync(string freeText, string? country = null);
+    /// <param name="options">Optional macro fields to extract (from the user's tracked macros).</param>
+    Task<IReadOnlyList<ParsedFoodItem>> ParseFreeTextAsync(string freeText, string? country = null, FoodParsingOptions? options = null);
 
     /// <summary>
     /// Sends a base64-encoded image (and optional text context) to OpenAI Vision
@@ -25,9 +26,11 @@ public interface IFoodParsingService
     /// <param name="mimeType">MIME type of the image (e.g. image/jpeg).</param>
     /// <param name="freeText">Optional additional context from the user.</param>
     /// <param name="country">Optional user country for region-specific calorie estimation.</param>
+    /// <param name="options">Optional macro fields to extract (from the user's tracked macros).</param>
     Task<IReadOnlyList<ParsedFoodItem>> ParseImageAsync(
         string imageBase64,
         string mimeType,
         string? freeText,
-        string? country = null);
+        string? country = null,
+        FoodParsingOptions? options = null);
 }

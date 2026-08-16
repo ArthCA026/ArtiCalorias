@@ -81,6 +81,17 @@ public class RecalculationService : IRecalculationService
         log.TotalCarbsGrams = log.FoodEntries.Sum(f => f.CarbsGrams);
         log.TotalAlcoholGrams = log.FoodEntries.Sum(f => f.AlcoholGrams);
 
+        // Optional macros keep the null/number distinction: a NULL total means
+        // no entry of the day carried the data (macro not tracked back then),
+        // while a number — even 0 on a day with entries that tracked it — is a
+        // real measurement. Partial days sum whatever entries do carry.
+        log.TotalSugarGrams = log.FoodEntries.Any(f => f.SugarGrams.HasValue)
+            ? log.FoodEntries.Sum(f => f.SugarGrams ?? 0m)
+            : null;
+        log.TotalWaterMl = log.FoodEntries.Any(f => f.WaterMl.HasValue)
+            ? log.FoodEntries.Sum(f => f.WaterMl ?? 0m)
+            : null;
+
         // A fasting day with food on it is a contradiction: the user broke the
         // fast or mislabeled the day. Enforced here, at the single point every
         // food-mutation path funnels through (manual, batch, routine quick-add),
@@ -247,6 +258,16 @@ public class RecalculationService : IRecalculationService
         log.SnapshotProteinGoalGrams  = proteinGoal;
         log.SnapshotSleepHours        = profile.SleepHours;
         log.SnapshotNeatHours         = profile.NeatHours;
+
+        // Refreshing a snapshot re-freezes the macro targets too, so "apply
+        // from today" after changing tracked macros uses the same mechanism
+        // as sleep/NEAT changes. Past days are never refreshed by the UI, so
+        // their frozen targets stay historically true.
+        var macroPrefs = await _db.UserMacroPreferences
+            .AsNoTracking()
+            .Where(m => m.UserId == userId)
+            .ToListAsync();
+        log.MacroTargetsJson = MacroTargets.BuildJson(profile, macroPrefs);
 
         await _db.SaveChangesAsync();
 

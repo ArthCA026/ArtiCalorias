@@ -15,6 +15,15 @@ public class User
     public string? PasswordResetToken { get; set; }
     public DateTime? PasswordResetTokenExpiresAtUtc { get; set; }
 
+    /// <summary>
+    /// Last time the user actively opened the app (heartbeat from a visible
+    /// session). NULL = never recorded (pre-feature accounts and brand-new
+    /// users before their first heartbeat). Drives the auto-add pause: no
+    /// template is auto-added to a new day when this is older than
+    /// <see cref="Services.DailyLogService.AutoAddPauseAfterDays"/>.
+    /// </summary>
+    public DateTime? LastActiveAtUtc { get; set; }
+
     // Navigation
     public UserProfile? UserProfile { get; set; }
     public ICollection<DailyLog> DailyLogs { get; set; } = [];

@@ -37,7 +37,7 @@ public class FoodParsingService : IFoodParsingService
         _chatClient = new ChatClient(config.Model, config.ApiKey);
     }
 
-    public async Task<IReadOnlyList<ParsedFoodItem>> ParseFreeTextAsync(string freeText, string? country = null)
+    public async Task<IReadOnlyList<ParsedFoodItem>> ParseFreeTextAsync(string freeText, string? country = null, FoodParsingOptions? options = null)
     {
         if (string.IsNullOrWhiteSpace(freeText))
             return [];
@@ -55,9 +55,7 @@ public class FoodParsingService : IFoodParsingService
             throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
         }
 
-        var systemPrompt = string.IsNullOrWhiteSpace(country)
-            ? DeveloperPrompt
-            : $"{DeveloperPrompt}\n\nThe user is located in {country}. Use typical food products, brands, and portion sizes common in {country} when estimating calories and macros.";
+        var systemPrompt = BuildSystemPrompt(country, options ?? FoodParsingOptions.None);
 
         // 1. Build the prompt
         var messages = new List<ChatMessage>
@@ -66,7 +64,7 @@ public class FoodParsingService : IFoodParsingService
             new UserChatMessage(freeText)
         };
 
-        var options = new ChatCompletionOptions
+        var chatOptions = new ChatCompletionOptions
         {
             ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
         };
@@ -75,7 +73,7 @@ public class FoodParsingService : IFoodParsingService
         ChatCompletion completion;
         try
         {
-            completion = await _chatClient.CompleteChatAsync(messages, options);
+            completion = await _chatClient.CompleteChatAsync(messages, chatOptions);
         }
         catch (System.ClientModel.ClientResultException ex) when (ex.Status == 429)
         {
@@ -95,10 +93,49 @@ public class FoodParsingService : IFoodParsingService
         var items = DeserializeResponse(content);
 
         // 3. Validate — bad AI output never reaches the frontend
-        var validated = Validate(items);
+        var validated = Validate(items, options ?? FoodParsingOptions.None);
 
         // 4. Scale per-unit nutrition by quantity, then normalize portion descriptions
         return NormalizePortions(Scale(validated));
+    }
+
+    /// <summary>
+    /// Assembles the system prompt for the caller's tracked macros. The base
+    /// prompt is untouched when no optional macro is tracked, so default users
+    /// keep the exact extraction contract that has been tuned so far.
+    /// </summary>
+    private static string BuildSystemPrompt(string? country, FoodParsingOptions options)
+    {
+        var prompt = DeveloperPrompt;
+
+        var extraFields = new List<string>();
+        var extraRules = new List<string>();
+
+        if (options.IncludeSugar)
+        {
+            extraFields.Add("- sugarGrams (number) — total sugars for ONE unit only (naturally occurring plus added), never multiplied by quantity. Sugars are a subset of carbsGrams and must never exceed them.");
+            extraRules.Add("- Sugar: estimate total sugars per unit (e.g. a can of cola ~35 g, a plain egg 0 g). sugarGrams <= carbsGrams always.");
+        }
+
+        if (options.IncludeWater)
+        {
+            extraFields.Add("- waterMl (number) — milliliters of drinkable fluid ONE unit contributes. Count water and other beverages (coffee, tea, milk, soda) at their full volume. Solid foods are 0 even if moist. Never multiplied by quantity.");
+            extraRules.Add("- Water: only drinks contribute waterMl (a 330 ml soda -> 330, a glass of water -> 250 unless specified, solid food -> 0).");
+        }
+
+        if (extraFields.Count > 0)
+        {
+            prompt += "\n\nADDITIONAL TRACKED FIELDS (the user tracks these; include them on EVERY item)\n"
+                   + string.Join("\n", extraFields)
+                   + "\n" + string.Join("\n", extraRules);
+        }
+
+        if (!string.IsNullOrWhiteSpace(country))
+        {
+            prompt += $"\n\nThe user is located in {country}. Use typical food products, brands, and portion sizes common in {country} when estimating calories and macros.";
+        }
+
+        return prompt;
     }
 
     // ─────────────────────────────────────────────────────
@@ -216,7 +253,7 @@ public class FoodParsingService : IFoodParsingService
     //  Validation — reject bad AI output before it reaches the frontend
     // ─────────────────────────────────────────────────────
 
-    private static IReadOnlyList<ParsedFoodItem> Validate(List<ParsedFoodItem> items)
+    private static IReadOnlyList<ParsedFoodItem> Validate(List<ParsedFoodItem> items, FoodParsingOptions options)
     {
         if (items.Count == 0)
             throw new InvalidOperationException("OpenAI returned no food items. Try a more descriptive input.");
@@ -234,6 +271,16 @@ public class FoodParsingService : IFoodParsingService
             item.FatGrams = Math.Max(0, item.FatGrams);
             item.CarbsGrams = Math.Max(0, item.CarbsGrams);
             item.AlcoholGrams = Math.Max(0, item.AlcoholGrams);
+
+            // Optional fields: only kept when they were requested (an untracked
+            // macro must stay NULL in the database — NULL is what lets old days
+            // say "not tracked then"), clamped into physical plausibility.
+            item.SugarGrams = options.IncludeSugar
+                ? Math.Min(Math.Max(0, item.SugarGrams ?? 0), item.CarbsGrams)
+                : null;
+            item.WaterMl = options.IncludeWater
+                ? Math.Clamp(item.WaterMl ?? 0, 0, 5000)
+                : null;
 
             // Reject absurd single-item values
             if (item.CaloriesKcal > 10000)
@@ -264,6 +311,10 @@ public class FoodParsingService : IFoodParsingService
             item.FatGrams     = Math.Round(item.FatGrams     * qty, 1);
             item.CarbsGrams   = Math.Round(item.CarbsGrams   * qty, 1);
             item.AlcoholGrams = Math.Round(item.AlcoholGrams * qty, 1);
+            if (item.SugarGrams.HasValue)
+                item.SugarGrams = Math.Round(item.SugarGrams.Value * qty, 1);
+            if (item.WaterMl.HasValue)
+                item.WaterMl = Math.Round(item.WaterMl.Value * qty, 1);
         }
 
         return items;
@@ -277,7 +328,8 @@ public class FoodParsingService : IFoodParsingService
         string imageBase64,
         string mimeType,
         string? freeText,
-        string? country = null)
+        string? country = null,
+        FoodParsingOptions? options = null)
     {
         if (string.IsNullOrWhiteSpace(imageBase64))
             throw new ArgumentException("Image data is required.", nameof(imageBase64));
@@ -295,9 +347,7 @@ public class FoodParsingService : IFoodParsingService
             throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
         }
 
-        var systemPrompt = string.IsNullOrWhiteSpace(country)
-            ? DeveloperPrompt
-            : $"{DeveloperPrompt}\n\nThe user is located in {country}. Use typical food products, brands, and portion sizes common in {country} when estimating calories and macros.";
+        var systemPrompt = BuildSystemPrompt(country, options ?? FoodParsingOptions.None);
 
         // Decode base64 → BinaryData for the OpenAI SDK
         byte[] imageBytes;
@@ -326,7 +376,7 @@ public class FoodParsingService : IFoodParsingService
             new UserChatMessage(imagePart, textPart),
         };
 
-        var options = new ChatCompletionOptions
+        var chatOptions = new ChatCompletionOptions
         {
             ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
         };
@@ -338,7 +388,7 @@ public class FoodParsingService : IFoodParsingService
         ChatCompletion completion;
         try
         {
-            completion = await _chatClient.CompleteChatAsync(messages, options);
+            completion = await _chatClient.CompleteChatAsync(messages, chatOptions);
         }
         catch (Exception ex)
         {
@@ -350,7 +400,7 @@ public class FoodParsingService : IFoodParsingService
         _logger.LogInformation("OpenAI Vision response: {Response}", content);
 
         var items = DeserializeResponse(content);
-        var validated = Validate(items);
+        var validated = Validate(items, options ?? FoodParsingOptions.None);
         return NormalizePortions(Scale(validated));
     }
 

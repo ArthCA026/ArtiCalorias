@@ -14,4 +14,10 @@ public class ParsedFoodItem
     public decimal FatGrams { get; set; }
     public decimal CarbsGrams { get; set; }
     public decimal AlcoholGrams { get; set; }
+
+    /// <summary>Only requested (and returned) when the user tracks sugar.</summary>
+    public decimal? SugarGrams { get; set; }
+
+    /// <summary>Only requested (and returned) when the user tracks water.</summary>
+    public decimal? WaterMl { get; set; }
 }

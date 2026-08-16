@@ -9,6 +9,16 @@ public class DailyLogResponse
     // Ingesta
     public decimal TotalFoodCaloriesKcal { get; set; }
     public decimal TotalProteinGrams { get; set; }
+    public decimal TotalFatGrams { get; set; }
+    public decimal TotalCarbsGrams { get; set; }
+    public decimal TotalAlcoholGrams { get; set; }
+    /// <summary>Null = no entry of the day carried sugar data (not tracked then).</summary>
+    public decimal? TotalSugarGrams { get; set; }
+    /// <summary>Null = no entry of the day carried water data (not tracked then).</summary>
+    public decimal? TotalWaterMl { get; set; }
+
+    /// <summary>Extended macro targets frozen on this day (empty = only protein was tracked).</summary>
+    public List<DayMacroTargetResponse> MacroTargets { get; set; } = [];
 
     // Gasto
     public decimal TotalDailyExpenditureKcal { get; set; }

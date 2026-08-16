@@ -340,6 +340,53 @@ const paths: Record<string, ReactElement> = {
       <path d="M12 7v2" />
     </>
   ),
+  droplet: (
+    <path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z" />
+  ),
+  glassWater: (
+    <>
+      <path d="M15.2 22H8.8a2 2 0 0 1-2-1.79L5 3h14l-1.81 17.21A2 2 0 0 1 15.2 22Z" />
+      <path d="M6 12a5 5 0 0 1 6 0 5 5 0 0 0 6 0" />
+    </>
+  ),
+  wheat: (
+    <>
+      <path d="M2 22 16 8" />
+      <path d="M3.47 12.53 5 11l1.53 1.53a3.5 3.5 0 0 1 0 4.94L5 19l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z" />
+      <path d="M7.47 8.53 9 7l1.53 1.53a3.5 3.5 0 0 1 0 4.94L9 15l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z" />
+      <path d="M11.47 4.53 13 3l1.53 1.53a3.5 3.5 0 0 1 0 4.94L13 11l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z" />
+      <path d="M20 2h2v2a4 4 0 0 1-4 4h-2V6a4 4 0 0 1 4-4Z" />
+      <path d="M11.47 17.47 13 19l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L5 19l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z" />
+      <path d="M15.47 13.47 17 15l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L9 15l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z" />
+      <path d="M19.47 9.47 21 11l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L13 11l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z" />
+    </>
+  ),
+  candy: (
+    <>
+      <path d="m9.5 7.5-2 2a4.95 4.95 0 1 0 7 7l2-2a4.95 4.95 0 1 0-7-7Z" />
+      <path d="M14 6.5v10" />
+      <path d="M10 7.5v10" />
+      <path d="m16 7 1-5 1.37.68A3 3 0 0 0 19.7 3H21v1.3c0 .46.1.92.32 1.33L22 7l-5 1" />
+      <path d="m8 17-1 5-1.37-.68A3 3 0 0 0 4.3 21H3v-1.3a3 3 0 0 0-.32-1.33L2 17l5-1" />
+    </>
+  ),
+  wine: (
+    <>
+      <path d="M8 22h8" />
+      <path d="M7 10h10" />
+      <path d="M12 15v7" />
+      <path d="M12 15a5 5 0 0 0 5-5c0-2-.5-4-2-8H9c-1.5 4-2 6-2 8a5 5 0 0 0 5 5Z" />
+    </>
+  ),
+  ruler: (
+    <>
+      <path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.3 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0Z" />
+      <path d="m14.5 12.5 2-2" />
+      <path d="m11.5 9.5 2-2" />
+      <path d="m8.5 6.5 2-2" />
+      <path d="m17.5 15.5 2-2" />
+    </>
+  ),
 };
 
 export type IconName = keyof typeof paths;
@@ -349,9 +396,11 @@ interface IconProps {
   size?: number;
   strokeWidth?: number;
   className?: string;
+  /** Inline style, e.g. a token-driven color: style={{ color: 'var(--t-water)' }} */
+  style?: React.CSSProperties;
 }
 
-export function Icon({ name, size = 24, strokeWidth = 2, className }: IconProps) {
+export function Icon({ name, size = 24, strokeWidth = 2, className, style }: IconProps) {
   return (
     <svg
       width={size}
@@ -363,6 +412,7 @@ export function Icon({ name, size = 24, strokeWidth = 2, className }: IconProps)
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
+      style={style}
       aria-hidden="true"
     >
       {paths[name]}

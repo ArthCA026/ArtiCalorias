@@ -7,6 +7,7 @@ import { InlineError } from '@/components/ui/States';
 import { Icon } from '@/components/ui/Icon';
 import { foodService } from '@/services/foodService';
 import { activityService } from '@/services/activityService';
+import { useMacroPreferences } from '@/hooks/useMacroPreferences';
 import { extractApiError } from '@/utils/apiError';
 
 interface ManualProps {
@@ -33,7 +34,15 @@ export function ManualFood({ date, onBack, onDone }: ManualProps) {
   const [fat, setFat] = useState('');
   const [carbs, setCarbs] = useState('');
   const [alcohol, setAlcohol] = useState('');
+  const [sugar, setSugar] = useState('');
+  const [water, setWater] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  // Sugar / water fields only appear for people who track them: everyone
+  // else keeps the exact form they know.
+  const { data: macroPrefs } = useMacroPreferences();
+  const tracksSugar = (macroPrefs ?? []).some((p) => p.macroKey === 'sugar' && p.isTracked);
+  const tracksWater = (macroPrefs ?? []).some((p) => p.macroKey === 'water' && p.isTracked);
 
   const save = useMutation({
     mutationFn: () => {
@@ -47,6 +56,8 @@ export function ManualFood({ date, onBack, onDone }: ManualProps) {
           fatGrams: num(fat) ?? 0,
           carbsGrams: num(carbs) ?? 0,
           alcoholGrams: num(alcohol) ?? 0,
+          sugarGrams: tracksSugar ? (num(sugar) ?? 0) : null,
+          waterMl: tracksWater ? (num(water) ?? 0) : null,
         })
         .then(() => date);
     },
@@ -132,6 +143,28 @@ export function ManualFood({ date, onBack, onDone }: ManualProps) {
               onValueChange={setAlcohol}
             />
           </div>
+          {(tracksSugar || tracksWater) && (
+            <div className="grid grid-cols-2 gap-3">
+              {tracksSugar && (
+                <DecimalField
+                  label={t('log.sugar', 'Sugar')}
+                  placeholder="0"
+                  suffix="g"
+                  value={sugar}
+                  onValueChange={setSugar}
+                />
+              )}
+              {tracksWater && (
+                <DecimalField
+                  label={t('log.water', 'Water')}
+                  placeholder="0"
+                  suffix="ml"
+                  value={water}
+                  onValueChange={setWater}
+                />
+              )}
+            </div>
+          )}
         </div>
       )}
 

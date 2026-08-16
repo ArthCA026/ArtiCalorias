@@ -11,6 +11,7 @@ import TodayPage from '@/pages/TodayPage';
 import DayPage from '@/pages/DayPage';
 import TemplatesPage from '@/pages/TemplatesPage';
 import ProgressPage from '@/pages/ProgressPage';
+import BodyPage from '@/pages/BodyPage';
 import ProfilePage from '@/pages/ProfilePage';
 import PremiumPage from '@/pages/PremiumPage';
 import NotFoundPage from '@/pages/NotFoundPage';
@@ -46,6 +47,7 @@ const router = createBrowserRouter([
           { path: '/day/:date', element: <DayPage /> },
           { path: '/templates', element: <TemplatesPage /> },
           { path: '/progress', element: <ProgressPage /> },
+          { path: '/progress/body', element: <BodyPage /> },
           { path: '/profile', element: <ProfilePage /> },
         ],
       },

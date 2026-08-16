@@ -62,6 +62,18 @@
   --t-premium: #b8860b;
   --t-premium-soft: #f6ecd2;
 
+  /* Macro accents (optional tracking) */
+  --t-carbs: #c17a10;
+  --t-carbs-soft: #f8ecd6;
+  --t-fat: #b98207;
+  --t-fat-soft: #f9efd2;
+  --t-sugar: #d4497f;
+  --t-sugar-soft: #fae2ec;
+  --t-alcohol: #8e4ec6;
+  --t-alcohol-soft: #efe3f9;
+  --t-water: #0e87c9;
+  --t-water-soft: #d9eef9;
+
   /* Progress ring gradient (goal gradient effect) */
   --t-ring-from: #38d08f;
   --t-ring-to: #0ba06b;
@@ -116,6 +128,18 @@
   --t-streak-soft: #362a12;
   --t-premium: #e3b341;
   --t-premium-soft: #33290f;
+
+  /* Macro accents (optional tracking) */
+  --t-carbs: #e0a145;
+  --t-carbs-soft: #362a14;
+  --t-fat: #ddb84a;
+  --t-fat-soft: #34290e;
+  --t-sugar: #ef7fae;
+  --t-sugar-soft: #3b1a29;
+  --t-alcohol: #b585e8;
+  --t-alcohol-soft: #2c1e40;
+  --t-water: #4db3ee;
+  --t-water-soft: #10293a;
 
   /* Progress ring gradient */
   --t-ring-from: #2fdb96;

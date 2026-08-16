@@ -41,6 +41,17 @@
   --color-premium: var(--t-premium);
   --color-premium-soft: var(--t-premium-soft);
 
+  --color-carbs: var(--t-carbs);
+  --color-carbs-soft: var(--t-carbs-soft);
+  --color-fat: var(--t-fat);
+  --color-fat-soft: var(--t-fat-soft);
+  --color-sugar: var(--t-sugar);
+  --color-sugar-soft: var(--t-sugar-soft);
+  --color-alcohol: var(--t-alcohol);
+  --color-alcohol-soft: var(--t-alcohol-soft);
+  --color-water: var(--t-water);
+  --color-water-soft: var(--t-water-soft);
+
   --color-ring-track: var(--t-ring-track);
 
   --color-tip: var(--t-tip);

@@ -13,6 +13,10 @@ export interface UserProfileResponse {
   autoCalculateProteinGoal: boolean;
   country: string | null;
   isOnboardingCompleted: boolean;
+  /** The user finished or skipped the first-run tutorial. */
+  hasSeenTutorial: boolean;
+  /** The user has logged food themself at least once, ever. */
+  hasEverLoggedFood: boolean;
   calorieDisplayMode: 'net' | 'goal' | 'adjusted';
   minCaloriesSafeguardEnabled: boolean;
   // Sleep & NEAT

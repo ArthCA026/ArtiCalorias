@@ -20,6 +20,19 @@ public class DailyLog
     public decimal TotalFatGrams { get; set; }
     public decimal TotalCarbsGrams { get; set; }
     public decimal TotalAlcoholGrams { get; set; }
+    // Nullable: NULL = no entry of the day carried this data (macro was not
+    // tracked then), a number = the sum over the entries that did carry it.
+    public decimal? TotalSugarGrams { get; set; }
+    public decimal? TotalWaterMl { get; set; }
+
+    /// <summary>
+    /// JSON snapshot of the extended macro targets active on this day
+    /// (serialized <see cref="Services.MacroTargets.DayMacroTarget"/> list).
+    /// NULL = the day predates macro tracking or nothing beyond protein was
+    /// tracked. Written on day creation and by refresh-snapshot; past days
+    /// keep the targets they were lived under.
+    /// </summary>
+    public string? MacroTargetsJson { get; set; }
 
     // Gasto del día
     public decimal TotalActivityCaloriesKcal { get; set; }

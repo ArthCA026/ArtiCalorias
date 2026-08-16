@@ -11,6 +11,8 @@ export const queryKeys = {
   profile: () => ['profile'] as const,
   notificationSchedules: () => ['notification-schedules'] as const,
   streak: () => ['streak'] as const,
+  macroPreferences: () => ['macro-preferences'] as const,
+  measurements: () => ['measurements'] as const,
 };
 
 /**

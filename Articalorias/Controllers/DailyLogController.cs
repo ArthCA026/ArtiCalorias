@@ -6,6 +6,7 @@ using Articalorias.DTOs.FoodEntries;
 using Articalorias.DTOs.FoodParsing;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
+using Articalorias.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -24,6 +25,7 @@ public class DailyLogController : ControllerBase
     private readonly IActivityParsingService _activityParsing;
     private readonly IUserProfileService _profileService;
     private readonly IFoodTemplateService _foodTemplateService;
+    private readonly IMacroPreferenceService _macroPreferences;
 
     public DailyLogController(
         IDailyLogService dailyLogService,
@@ -33,7 +35,8 @@ public class DailyLogController : ControllerBase
         IFoodParsingService foodParsing,
         IActivityParsingService activityParsing,
         IUserProfileService profileService,
-        IFoodTemplateService foodTemplateService)
+        IFoodTemplateService foodTemplateService,
+        IMacroPreferenceService macroPreferences)
     {
         _dailyLogService = dailyLogService;
         _foodEntryService = foodEntryService;
@@ -43,6 +46,7 @@ public class DailyLogController : ControllerBase
         _activityParsing = activityParsing;
         _profileService = profileService;
         _foodTemplateService = foodTemplateService;
+        _macroPreferences = macroPreferences;
     }
 
     [HttpGet("{date}")]
@@ -61,8 +65,9 @@ public class DailyLogController : ControllerBase
 
         var foods = await _foodEntryService.GetByDailyLogAsync(log.DailyLogId);
         var activities = await _activityService.GetEntriesByDailyLogAsync(log.DailyLogId);
+        var profile = await _profileService.GetByUserIdAsync(userId);
 
-        return Ok(MapToDashboard(log, foods, activities));
+        return Ok(MapToDashboard(log, foods, activities, profile?.FirstFoodLoggedAtUtc.HasValue ?? false));
     }
 
     [HttpPost("{date}/recalculate")]
@@ -145,7 +150,8 @@ public class DailyLogController : ControllerBase
     {
         var userId = GetUserId();
         var profile = await _profileService.GetByUserIdAsync(userId);
-        var parsed = await _foodParsing.ParseFreeTextAsync(request.FreeText, profile?.Country);
+        var options = await GetParsingOptionsAsync(userId);
+        var parsed = await _foodParsing.ParseFreeTextAsync(request.FreeText, profile?.Country, options);
         return Ok(parsed);
     }
 
@@ -156,12 +162,26 @@ public class DailyLogController : ControllerBase
     {
         var userId = GetUserId();
         var profile = await _profileService.GetByUserIdAsync(userId);
+        var options = await GetParsingOptionsAsync(userId);
         var parsed = await _foodParsing.ParseImageAsync(
             request.ImageBase64,
             request.MimeType,
             request.FreeText,
-            profile?.Country);
+            profile?.Country,
+            options);
         return Ok(parsed);
+    }
+
+    /// <summary>
+    /// The prompt only asks for what the user actually tracks: extra fields
+    /// make parsing slower, costlier and less accurate for everyone else.
+    /// </summary>
+    private async Task<FoodParsingOptions> GetParsingOptionsAsync(long userId)
+    {
+        var prefs = await _macroPreferences.GetForUserAsync(userId);
+        return new FoodParsingOptions(
+            IncludeSugar: prefs.Any(p => p.MacroKey == MacroTargets.Sugar && p.IsTracked),
+            IncludeWater: prefs.Any(p => p.MacroKey == MacroTargets.Water && p.IsTracked));
     }
 
     // ── Batch confirm (user reviewed AI proposals and hit confirm) ──
@@ -186,6 +206,8 @@ public class DailyLogController : ControllerBase
             FatGrams = i.FatGrams,
             CarbsGrams = i.CarbsGrams,
             AlcoholGrams = i.AlcoholGrams,
+            SugarGrams = i.SugarGrams,
+            WaterMl = i.WaterMl,
             Notes = i.Notes
         }).ToList();
 
@@ -272,6 +294,8 @@ public class DailyLogController : ControllerBase
             FatGrams = request.FatGrams,
             CarbsGrams = request.CarbsGrams,
             AlcoholGrams = request.AlcoholGrams,
+            SugarGrams = request.SugarGrams,
+            WaterMl = request.WaterMl,
             FoodTemplateId = request.FoodTemplateId,
             Notes = request.Notes
         };
@@ -294,6 +318,8 @@ public class DailyLogController : ControllerBase
             FatGrams = request.FatGrams,
             CarbsGrams = request.CarbsGrams,
             AlcoholGrams = request.AlcoholGrams,
+            SugarGrams = request.SugarGrams,
+            WaterMl = request.WaterMl,
             Notes = request.Notes
         };
 
@@ -325,12 +351,24 @@ public class DailyLogController : ControllerBase
         return long.Parse(claim.Value);
     }
 
+    /// <summary>Shared with HistoryController: keeps every daily payload identical.</summary>
+    internal static List<DayMacroTargetResponse> MapMacroTargets(string? json) =>
+        MacroTargets.ParseJson(json)
+            .Select(t => new DayMacroTargetResponse { MacroKey = t.Key, Target = t.Target, Direction = t.Direction })
+            .ToList();
+
     private static DailyLogResponse MapToResponse(DailyLog d) => new()
     {
         DailyLogId = d.DailyLogId,
         LogDate = d.LogDate,
         TotalFoodCaloriesKcal = d.TotalFoodCaloriesKcal,
         TotalProteinGrams = d.TotalProteinGrams,
+        TotalFatGrams = d.TotalFatGrams,
+        TotalCarbsGrams = d.TotalCarbsGrams,
+        TotalAlcoholGrams = d.TotalAlcoholGrams,
+        TotalSugarGrams = d.TotalSugarGrams,
+        TotalWaterMl = d.TotalWaterMl,
+        MacroTargets = MapMacroTargets(d.MacroTargetsJson),
         TotalDailyExpenditureKcal = d.TotalDailyExpenditureKcal,
         DailyGoalDeltaKcal = d.DailyGoalDeltaKcal,
         CaloriesRemainingToDailyTargetKcal = d.CaloriesRemainingToDailyTargetKcal,
@@ -353,6 +391,8 @@ public class DailyLogController : ControllerBase
         FatGrams = f.FatGrams,
         CarbsGrams = f.CarbsGrams,
         AlcoholGrams = f.AlcoholGrams,
+        SugarGrams = f.SugarGrams,
+        WaterMl = f.WaterMl,
         SortOrder = f.SortOrder,
         Notes = f.Notes
     };
@@ -371,12 +411,17 @@ public class DailyLogController : ControllerBase
     private static DailyDashboardResponse MapToDashboard(
         DailyLog d,
         IReadOnlyList<FoodEntry> foods,
-        IReadOnlyList<ActivityEntry> activities) => new()
+        IReadOnlyList<ActivityEntry> activities,
+        bool hasEverLoggedFood) => new()
     {
         DailyLogId = d.DailyLogId,
         LogDate = d.LogDate,
         TotalFoodCaloriesKcal = d.TotalFoodCaloriesKcal,
         TotalProteinGrams = d.TotalProteinGrams,
+        TotalSugarGrams = d.TotalSugarGrams,
+        TotalWaterMl = d.TotalWaterMl,
+        MacroTargets = MapMacroTargets(d.MacroTargetsJson),
+        HasEverLoggedFood = hasEverLoggedFood,
         TotalDailyExpenditureKcal = d.TotalDailyExpenditureKcal,
         DailyGoalDeltaKcal = d.DailyGoalDeltaKcal,
         CaloriesRemainingToDailyTargetKcal = d.CaloriesRemainingToDailyTargetKcal,

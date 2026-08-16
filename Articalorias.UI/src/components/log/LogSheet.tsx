@@ -42,6 +42,10 @@ const toFoodRequest = (item: ParsedFoodItem): CreateFoodEntryRequest => ({
   fatGrams: item.fatGrams,
   carbsGrams: item.carbsGrams,
   alcoholGrams: item.alcoholGrams,
+  // Only present when the user tracks them; null keeps the honest
+  // "not captured" state in the database.
+  sugarGrams: item.sugarGrams,
+  waterMl: item.waterMl,
 });
 
 const toActivityRequest = (item: ParsedActivityItem, genericName: string): CreateActivityEntryRequest => {
