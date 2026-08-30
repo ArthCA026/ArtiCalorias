@@ -6,32 +6,40 @@ import { IconButton } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/States';
-import { ActionSheet, ConfirmSheet } from '@/components/ui/ActionSheet';
+import { ConfirmSheet } from '@/components/ui/ActionSheet';
 import { MacroStrip } from '@/components/ui/MacroStrip';
+import { useMacroPreferences } from '@/hooks/useMacroPreferences';
 import { ItemRow, ItemMeta } from '@/components/ui/ItemRow';
+import { SelectionBar, type SelectionAction } from '@/components/ui/SelectionBar';
 import { Fab } from '@/components/ui/Fab';
 import { useToast } from '@/components/ui/Toast';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import { foodTemplateService } from '@/services/foodTemplateService';
 import { foodService } from '@/services/foodService';
+import { dailyLogService } from '@/services/dailyLogService';
 import { queryKeys, invalidateDayData } from '@/lib/queryKeys';
 import { fmt, round1, qtyStr, toDateString } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 import type { FoodTemplateResponse } from '@/types';
 import { MealTemplateSheet } from './MealTemplateSheet';
 
-/** Meals tab: saved meal templates with one-tap logging to today. */
+/**
+ * Meals tab: saved meal templates. One tap opens the editor, the + logs it
+ * to today, holding a row starts multi-select (add several to today, or
+ * delete several) — the same gesture language as the Today lists.
+ */
 export function MealTemplates() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<FoodTemplateResponse | null>(null);
   const [editing, setEditing] = useState<FoodTemplateResponse | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<FoodTemplateResponse | null>(null);
   const [usedIn, setUsedIn] = useState<string[]>([]);
+  const [selectIds, setSelectIds] = useState<Set<number> | null>(null);
+  const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false);
 
   const query = useQuery({
     queryKey: queryKeys.foodTemplates(),
@@ -46,6 +54,29 @@ export function MealTemplates() {
     const q = search.trim().toLowerCase();
     return q ? list.filter((x) => x.templateName.toLowerCase().includes(q)) : list;
   }, [query.data, search]);
+
+  // Stale ids (templates deleted elsewhere) are inert: everything below
+  // derives from the LIVE list, so they simply stop matching anything.
+  const selecting = selectIds !== null;
+  const selectedTemplates = (query.data ?? []).filter((x) => selectIds?.has(x.foodTemplateId));
+
+  // Templates are not bound to a day, so their row strips follow the user's
+  // CURRENT macro tracking (unlike day entries, which follow frozen targets).
+  const { data: macroPrefs } = useMacroPreferences();
+  const extraMacros = useMemo(
+    () =>
+      (macroPrefs ?? [])
+        .filter((p) => p.isTracked && (p.macroKey === 'alcohol' || p.macroKey === 'sugar' || p.macroKey === 'water'))
+        .map((p) => p.macroKey),
+    [macroPrefs],
+  );
+  const toggleSelect = (id: number) =>
+    setSelectIds((prev) => {
+      const next = new Set(prev ?? []);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const quickAdd = useMutation({
     mutationFn: (tpl: FoodTemplateResponse) => {
@@ -92,6 +123,69 @@ export function MealTemplates() {
       .then((r) => setUsedIn(r.data))
       .catch(() => setUsedIn([]));
   };
+
+  // Bulk add: one batch call, one recalculation, template links preserved.
+  const bulkAdd = useMutation({
+    mutationFn: (tpls: FoodTemplateResponse[]) =>
+      dailyLogService.confirmParsedFoods(toDateString(), {
+        items: tpls.map((tpl) => ({
+          foodName: tpl.templateName,
+          portionDescription: tpl.portionDescription,
+          quantity: tpl.defaultQuantity,
+          caloriesKcal: round1(tpl.caloriesKcal * tpl.defaultQuantity),
+          proteinGrams: round1(tpl.proteinGrams * tpl.defaultQuantity),
+          fatGrams: round1(tpl.fatGrams * tpl.defaultQuantity),
+          carbsGrams: round1(tpl.carbsGrams * tpl.defaultQuantity),
+          alcoholGrams: round1(tpl.alcoholGrams * tpl.defaultQuantity),
+          sugarGrams: tpl.sugarGrams !== null ? round1(tpl.sugarGrams * tpl.defaultQuantity) : null,
+          waterMl: tpl.waterMl !== null ? round1(tpl.waterMl * tpl.defaultQuantity) : null,
+          foodTemplateId: tpl.foodTemplateId,
+        })),
+      }),
+    onSuccess: (_res, tpls) => {
+      invalidateDayData(queryClient);
+      setSelectIds(null);
+      toast('success', t('select.added_to_today', 'Added to today ({{n}})', { n: tpls.length }));
+    },
+    onError: (err) =>
+      toast('error', extractApiError(err, t('templates.save_error', 'Could not save. Check your connection and try again.'))),
+  });
+
+  const bulkDelete = useMutation({
+    mutationFn: async (tpls: FoodTemplateResponse[]) => {
+      // Sequential: each delete also detaches the template from any routines.
+      for (const tpl of tpls) await foodTemplateService.remove(tpl.foodTemplateId);
+      return tpls.length;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.foodTemplates() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.routines() });
+      setConfirmingBulkDelete(false);
+      setSelectIds(null);
+      toast('success', t('templates.deleted', 'Deleted'));
+    },
+    onError: (err) => {
+      // Some may have been deleted before the failure: refresh to show reality.
+      queryClient.invalidateQueries({ queryKey: queryKeys.foodTemplates() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.routines() });
+      setConfirmingBulkDelete(false);
+      toast('error', extractApiError(err, t('templates.save_error', 'Could not save. Check your connection and try again.')));
+    },
+  });
+
+  const selectionActions: SelectionAction[] = [
+    {
+      icon: 'plus',
+      label: t('select.action_add_today', 'To today'),
+      onSelect: () => bulkAdd.mutate(selectedTemplates),
+    },
+    {
+      icon: 'trash',
+      label: t('common.delete', 'Delete'),
+      destructive: true,
+      onSelect: () => setConfirmingBulkDelete(true),
+    },
+  ];
 
   return (
     <div className="space-y-3">
@@ -146,9 +240,18 @@ export function MealTemplates() {
                 value={t('templates.kcal_value', '{{kcal}} kcal', {
                   kcal: fmt(tpl.caloriesKcal * tpl.defaultQuantity),
                 })}
-                ariaLabel={t('templates.row_aria', '{{name}}, open options', { name: tpl.templateName })}
+                ariaLabel={
+                  selecting
+                    ? t('select.entry_aria', '{{name}}, toggle selection', { name: tpl.templateName })
+                    : t('templates.row_tap_aria', '{{name}}, tap to edit, hold to select', { name: tpl.templateName })
+                }
                 autoBadge={tpl.autoAddToNewDay}
-                onOpen={() => setSelected(tpl)}
+                selectMode={selecting}
+                selected={selectIds?.has(tpl.foodTemplateId) ?? false}
+                onTap={() => (selecting ? toggleSelect(tpl.foodTemplateId) : setEditing(tpl))}
+                onLongPress={() =>
+                  selecting ? toggleSelect(tpl.foodTemplateId) : setSelectIds(new Set([tpl.foodTemplateId]))
+                }
                 trailing={
                   <IconButton
                     icon="plus"
@@ -174,6 +277,19 @@ export function MealTemplates() {
                     protein={tpl.proteinGrams * tpl.defaultQuantity}
                     fat={tpl.fatGrams * tpl.defaultQuantity}
                     carbs={tpl.carbsGrams * tpl.defaultQuantity}
+                    extras={extraMacros.map((key) => ({
+                      key,
+                      value:
+                        key === 'alcohol'
+                          ? round1(tpl.alcoholGrams * tpl.defaultQuantity)
+                          : key === 'sugar'
+                            ? tpl.sugarGrams !== null
+                              ? round1(tpl.sugarGrams * tpl.defaultQuantity)
+                              : null
+                            : tpl.waterMl !== null
+                              ? round1(tpl.waterMl * tpl.defaultQuantity)
+                              : null,
+                    }))}
                   />
                 }
               />
@@ -187,23 +303,30 @@ export function MealTemplates() {
         </Card>
       )}
 
-      <ActionSheet
-        open={selected !== null}
-        onClose={() => setSelected(null)}
-        title={selected?.templateName}
-        actions={[
-          {
-            icon: 'pencil',
-            label: t('common.edit', 'Edit'),
-            onSelect: () => setEditing(selected),
-          },
-          {
-            icon: 'trash',
-            label: t('common.delete', 'Delete'),
-            destructive: true,
-            onSelect: () => selected && openDelete(selected),
-          },
-        ]}
+      {query.data && total > 0 && !selecting && (
+        <p className="px-1 text-[12px] text-ink-3">
+          {t('select.hint_templates', 'Tap to edit, + to log it. Hold to select several.')}
+        </p>
+      )}
+
+      {selecting && (
+        <SelectionBar
+          count={selectedTemplates.length}
+          actions={selectionActions}
+          onClear={() => setSelectIds(null)}
+          busy={bulkAdd.isPending || bulkDelete.isPending}
+        />
+      )}
+
+      <ConfirmSheet
+        open={confirmingBulkDelete}
+        onClose={() => setConfirmingBulkDelete(false)}
+        title={t('select.delete_templates_title', 'Delete {{n}} templates?', { n: selectedTemplates.length })}
+        body={t('select.delete_templates_body', 'They also disappear from any routine that uses them. Entries already logged stay as they are.')}
+        confirmLabel={t('common.delete', 'Delete')}
+        cancelLabel={t('common.cancel', 'Cancel')}
+        loading={bulkDelete.isPending}
+        onConfirm={() => bulkDelete.mutate(selectedTemplates)}
       />
 
       <ConfirmSheet
@@ -222,7 +345,17 @@ export function MealTemplates() {
         onConfirm={() => deleteTarget && del.mutate(deleteTarget)}
       />
 
-      {editing && <MealTemplateSheet template={editing} onClose={() => setEditing(null)} />}
+      {editing && (
+        <MealTemplateSheet
+          template={editing}
+          onClose={() => setEditing(null)}
+          onDelete={() => {
+            const target = editing;
+            setEditing(null);
+            openDelete(target);
+          }}
+        />
+      )}
       {creating && <MealTemplateSheet template={null} onClose={() => setCreating(false)} />}
 
       <Fab label={t('templates.fab_new', 'New')} onClick={() => setCreating(true)} />

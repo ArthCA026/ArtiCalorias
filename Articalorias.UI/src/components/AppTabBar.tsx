@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/utils/cn';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { useHaptics } from '@/hooks/useHaptics';
+import { useBodyStaleDays, BODY_VERY_STALE_DAYS } from '@/hooks/useBodyStaleDays';
 
 interface TabDef {
   to: string;
@@ -20,7 +21,7 @@ const tabs: TabDef[] = [
   { to: '/profile', icon: 'user', labelKey: 'tabs.profile', fallback: 'Profile' },
 ];
 
-function TabButton({ tab }: { tab: TabDef }) {
+function TabButton({ tab, attention }: { tab: TabDef; attention?: boolean }) {
   const { t } = useTranslation();
   const haptics = useHaptics();
   return (
@@ -38,7 +39,15 @@ function TabButton({ tab }: { tab: TabDef }) {
             isActive ? 'text-primary' : 'text-ink-3',
           )}
         >
-          <Icon name={tab.icon} size={23} strokeWidth={isActive ? 2.4 : 2} />
+          <span className="relative">
+            <Icon name={tab.icon} size={23} strokeWidth={isActive ? 2.4 : 2} />
+            {attention && (
+              <span
+                aria-hidden="true"
+                className="absolute -top-0.5 -right-1 h-2 w-2 rounded-full bg-warning"
+              />
+            )}
+          </span>
           <span className="text-[10px] font-semibold leading-none">{t(tab.labelKey, tab.fallback)}</span>
         </span>
       )}
@@ -50,9 +59,14 @@ function TabButton({ tab }: { tab: TabDef }) {
  * Bottom navigation: four 72x48 destinations. The primary action is not
  * here anymore; each page shows its own labeled floating button
  * ("Log", "New") so the action always matches the screen.
+ * The Profile tab grows a quiet dot when body data is over a month old:
+ * a standing pointer toward updating it, without a popup in the way.
  */
 export function AppTabBar() {
   const { t } = useTranslation();
+  const staleDays = useBodyStaleDays();
+  const bodyVeryStale = staleDays !== null && staleDays > BODY_VERY_STALE_DAYS;
+
   return (
     <nav
       className="fixed bottom-0 inset-x-0 z-40 bg-tabbar pb-safe"
@@ -60,7 +74,7 @@ export function AppTabBar() {
     >
       <div className="mx-auto max-w-md flex items-center justify-around px-2 pt-1.5 pb-1.5">
         {tabs.map((tab) => (
-          <TabButton key={tab.to} tab={tab} />
+          <TabButton key={tab.to} tab={tab} attention={tab.to === '/profile' && bodyVeryStale} />
         ))}
       </div>
     </nav>

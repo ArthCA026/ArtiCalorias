@@ -113,15 +113,18 @@ export function MeasurementSheet({ open, onClose, measurement, profile }: Measur
       setError(extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
   });
 
-  const dateLabel = useMemo(
-    () =>
-      new Intl.DateTimeFormat(i18n.language, {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'long',
-      }).format(parseDate(date)),
-    [date, i18n.language],
-  );
+  // Dates outside the current year carry their year (same rule as the Body
+  // list and chart), so editing an old measurement is never ambiguous.
+  const dateLabel = useMemo(() => {
+    const d = parseDate(date);
+    const sameYear = d.getFullYear() === parseDate(today).getFullYear();
+    return new Intl.DateTimeFormat(i18n.language, {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'long',
+      ...(sameYear ? {} : { year: 'numeric' }),
+    }).format(d);
+  }, [date, today, i18n.language]);
 
   return (
     <Sheet

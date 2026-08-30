@@ -100,6 +100,27 @@ public class BodyMeasurementService : IBodyMeasurementService
         return true;
     }
 
+    public async Task<int> DeleteBatchAsync(long userId, IReadOnlyList<DateOnly> dates, DateOnly localToday, CancellationToken ct = default)
+    {
+        if (dates.Count == 0)
+            return 0;
+
+        var rows = await _db.BodyMeasurements
+            .Where(m => m.UserId == userId && dates.Contains(m.MeasuredOn))
+            .ToListAsync(ct);
+
+        if (rows.Count == 0)
+            return 0;
+
+        _db.BodyMeasurements.RemoveRange(rows);
+        await _db.SaveChangesAsync(ct);
+
+        // One profile sync for the whole batch: if the newest measurement fell,
+        // the profile follows whichever measurement now leads.
+        await SyncProfileToNewestAsync(userId, localToday, explicitBodyFatProvided: false, ct);
+        return rows.Count;
+    }
+
     public async Task RecordFromProfileAsync(long userId, CancellationToken ct = default)
     {
         var profile = await _db.UserProfiles.AsNoTracking().FirstOrDefaultAsync(p => p.UserId == userId, ct);

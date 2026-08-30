@@ -15,12 +15,10 @@ import { CalorieModeSheet } from '@/components/ui/CalorieModeSheet';
 import { calorieModeShortLabel } from '@/components/ui/calorieModeLabels';
 import {
   BodySheet,
-  GoalSheet,
   ProteinSheet,
   RemindersSheet,
   SleepNeatSheet,
 } from '@/components/profile/ProfileSheets';
-import { MacrosSheet } from '@/components/profile/MacrosSheet';
 import { useMacroPreferences } from '@/hooks/useMacroPreferences';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme, type Theme } from '@/hooks/useTheme';
@@ -35,20 +33,24 @@ import { profileService } from '@/services/profileService';
 import { dailyLogService } from '@/services/dailyLogService';
 import { userService } from '@/services/userService';
 import { queryKeys, invalidateDayData } from '@/lib/queryKeys';
-import { toDateString, qtyStr } from '@/utils/format';
+import { toDateString, qtyStr, parseDate } from '@/utils/format';
 import { profileToRequest } from '@/utils/profile';
 import { extractApiError } from '@/utils/apiError';
 import { formatWeight } from '@/utils/units';
 import { matchPreset, GOAL_PRESETS } from '@/utils/goalUtils';
+import { effectiveAutoProteinGrams } from '@/config/proteinPresets';
+import { useBodyStaleDays, BODY_VERY_STALE_DAYS } from '@/hooks/useBodyStaleDays';
 import { FEATURES } from '@/config/features';
 import type { UserProfileRequest } from '@/types';
 
-type OpenSheet = 'body' | 'goal' | 'protein' | 'macros' | 'mode' | 'reminders' | 'sleep-neat' | null;
+type OpenSheet = 'body' | 'protein' | 'mode' | 'reminders' | 'sleep-neat' | null;
 type ConfirmKind = 'streak-reset' | 'clear-history' | 'delete-account' | 'bmr-review' | null;
 
 export default function ProfilePage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const shortDate = (d: string) =>
+    new Intl.DateTimeFormat(i18n.language, { day: 'numeric', month: 'short' }).format(parseDate(d));
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, logout } = useAuth();
@@ -123,6 +125,19 @@ export default function ProfilePage() {
 
   const goalLabel = (() => {
     if (!profile) return '';
+    // A dated target is the most meaningful summary when one is set.
+    if (profile.goalTargetDate) {
+      if (profile.goalTargetBodyFatPercent !== null)
+        return t('profile.goal_target_bf_value', '{{bf}}% by {{date}}', {
+          bf: profile.goalTargetBodyFatPercent,
+          date: shortDate(profile.goalTargetDate),
+        });
+      if (profile.goalTargetWeightKg !== null)
+        return t('profile.goal_target_weight_value', '{{weight}} by {{date}}', {
+          weight: formatWeight(profile.goalTargetWeightKg, weightUnit, 0),
+          date: shortDate(profile.goalTargetDate),
+        });
+    }
     const m = matchPreset(String(Math.round(profile.dailyBaseGoalKcal)));
     if (!m.isCustom) {
       const preset = GOAL_PRESETS.find((p) => p.key === m.preset);
@@ -130,6 +145,13 @@ export default function ProfilePage() {
     }
     return t('profile.goal_custom_value', 'Custom');
   })();
+
+  const proteinTracked = profile
+    ? profile.proteinGoalGrams !== null || profile.autoCalculateProteinGoal
+    : true;
+
+  const staleDays = useBodyStaleDays();
+  const bodyVeryStale = staleDays !== null && staleDays > BODY_VERY_STALE_DAYS;
 
   /**
    * After a body save: the user changed weight or height but left a MANUAL
@@ -221,16 +243,23 @@ export default function ProfilePage() {
                 title={t('profile.row_goal', 'Goal')}
                 right={goalLabel}
                 chevron
-                onClick={() => setSheet('goal')}
+                onClick={() => navigate('/profile/goal')}
               />
               <ListRow
-                icon="zap"
+                icon="drumstick"
                 title={t('profile.row_protein', 'Protein target')}
-                right={
-                  profile.proteinGoalGrams !== null
-                    ? `${Math.round(profile.proteinGoalGrams)} g`
-                    : t('profile.auto', 'Auto')
-                }
+                right={(() => {
+                  if (!proteinTracked) return t('profile.protein_off', 'Off');
+                  if (profile.proteinGoalGrams !== null) return `${Math.round(profile.proteinGoalGrams)} g`;
+                  const autoGrams = effectiveAutoProteinGrams(
+                    profile.currentWeightKg,
+                    profile.age,
+                    profile.proteinGoalGramsPerKg,
+                  );
+                  return autoGrams !== null
+                    ? t('profile.protein_auto_value', '{{g}} g auto', { g: autoGrams })
+                    : t('profile.auto', 'Auto');
+                })()}
                 chevron
                 onClick={() => setSheet('protein')}
               />
@@ -238,16 +267,26 @@ export default function ProfilePage() {
                 icon="sliders"
                 title={t('profile.row_macros', 'Macro tracking')}
                 right={
-                  trackedMacroCount > 0
-                    ? t('profile.macros_tracked_n', '{{n}} tracked', { n: trackedMacroCount })
-                    : t('profile.macros_tracked_none', 'Protein only')
+                  trackedMacroCount + (proteinTracked ? 1 : 0) > 0
+                    ? t('profile.macros_tracked_n', '{{n}} tracked', {
+                        n: trackedMacroCount + (proteinTracked ? 1 : 0),
+                      })
+                    : t('profile.macros_none', 'None')
                 }
                 chevron
-                onClick={() => setSheet('macros')}
+                onClick={() => navigate('/profile/macros')}
               />
               <ListRow
                 icon="scale"
+                iconClassName={bodyVeryStale ? 'bg-warning-soft text-warning' : undefined}
                 title={t('profile.row_body', 'Body details')}
+                subtitle={
+                  bodyVeryStale ? (
+                    <span className="text-warning font-semibold">
+                      {t('profile.body_stale_subtitle', 'Not updated in over a month')}
+                    </span>
+                  ) : undefined
+                }
                 right={
                   profile.currentWeightKg !== null
                     ? formatWeight(profile.currentWeightKg, weightUnit)
@@ -419,14 +458,6 @@ export default function ProfilePage() {
             onSave={(patch) =>
               save.mutate(patch, { onSuccess: () => maybeNudgeBmrReview(patch) })
             }
-            saving={save.isPending}
-          />
-          <MacrosSheet open={sheet === 'macros'} onClose={() => setSheet(null)} />
-          <GoalSheet
-            open={sheet === 'goal'}
-            onClose={() => setSheet(null)}
-            profile={profile}
-            onSave={(patch) => save.mutate(patch)}
             saving={save.isPending}
           />
           <ProteinSheet

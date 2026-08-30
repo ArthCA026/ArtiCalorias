@@ -60,8 +60,7 @@ public class DailyLogService : IDailyLogService
         var profile = await _db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId)
             ?? throw new InvalidOperationException("User profile not found. Complete onboarding first.");
 
-        var proteinGoal = profile.ProteinGoalGrams
-            ?? (profile.AutoCalculateProteinGoal && profile.CurrentWeightKg.HasValue ? profile.CurrentWeightKg.Value * 2.0m : 0m);
+        var proteinGoal = ProteinMath.GoalGrams(profile);
 
         var (weekStart, weekEnd) = GetWeekRange(date);
 
@@ -150,25 +149,7 @@ public class DailyLogService : IDailyLogService
             var foodSortOrder = 1;
             foreach (var template in autoAddFoodTemplates)
             {
-                var foodEntry = new FoodEntry
-                {
-                    DailyLogId = dailyLog.DailyLogId,
-                    FoodTemplateId = template.FoodTemplateId,
-                    FoodName = template.TemplateName,
-                    PortionDescription = template.PortionDescription,
-                    Quantity = template.DefaultQuantity,
-                    CaloriesKcal = template.CaloriesKcal,
-                    ProteinGrams = template.ProteinGrams,
-                    FatGrams = template.FatGrams,
-                    CarbsGrams = template.CarbsGrams,
-                    AlcoholGrams = template.AlcoholGrams,
-                    SugarGrams = template.SugarGrams,
-                    WaterMl = template.WaterMl,
-                    SortOrder = foodSortOrder++,
-                    CreatedAtUtc = DateTime.UtcNow,
-                    UpdatedAtUtc = DateTime.UtcNow,
-                };
-                _db.FoodEntries.Add(foodEntry);
+                _db.FoodEntries.Add(FoodTemplateMath.ToEntry(template, dailyLog.DailyLogId, foodSortOrder++));
                 autoAddedFood = true;
             }
 
@@ -196,7 +177,14 @@ public class DailyLogService : IDailyLogService
 
     public async Task DeleteByDateAsync(long userId, DateOnly date)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        // "Current day" on the user's calendar, not UTC's: behind-UTC users in
+        // the evening would otherwise be able to delete their live today.
+        var tz = await _db.UserProfiles
+            .AsNoTracking()
+            .Where(p => p.UserId == userId)
+            .Select(p => p.TimeZoneId)
+            .FirstOrDefaultAsync();
+        var today = LocalDates.TodayFor(tz);
         if (date == today)
             throw new InvalidOperationException("You cannot delete the current day.");
 

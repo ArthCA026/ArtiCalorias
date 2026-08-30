@@ -69,10 +69,20 @@ public class RecalculationService : IRecalculationService
         // mode) share the same values without an extra DB round-trip per step.
         var profileData = await _db.UserProfiles
             .Where(p => p.UserId == log.UserId)
-            .Select(p => new { p.BiologicalSex, p.MinCaloriesSafeguardEnabled })
+            .Select(p => new { p.BiologicalSex, p.MinCaloriesSafeguardEnabled, p.TimeZoneId })
             .FirstOrDefaultAsync();
         var biologicalSex = profileData?.BiologicalSex;
         var safeguardEnabled = profileData?.MinCaloriesSafeguardEnabled ?? true;
+
+        // Resolve the freeze reference ("what date is TODAY?") on the USER's
+        // calendar, never the server's UTC clock. For a user behind UTC, UTC
+        // flips to tomorrow in their late afternoon; with UTC as the reference
+        // their real today matched the frozen-past-day rule in Step 8, so
+        // editing a finished day (or even normal evening logging) silently
+        // stopped updating today's weekly-adjusted budget. Callers that know
+        // the client's exact local date (fasting, refresh-snapshot) still pass
+        // it in and win over this fallback.
+        referenceToday ??= LocalDates.TodayFor(profileData?.TimeZoneId);
 
         // ── Step 2: Recompute food intake totals ──
         log.TotalFoodCaloriesKcal = log.FoodEntries.Sum(f => f.CaloriesKcal);
@@ -247,8 +257,7 @@ public class RecalculationService : IRecalculationService
             return;
 
         // Mirror the snapshot logic used in DailyLogService.GetOrCreateAsync.
-        var proteinGoal = profile.ProteinGoalGrams
-            ?? (profile.AutoCalculateProteinGoal && profile.CurrentWeightKg.HasValue ? profile.CurrentWeightKg.Value * 2.0m : 0m);
+        var proteinGoal = ProteinMath.GoalGrams(profile);
 
         log.SnapshotWeightKg          = profile.CurrentWeightKg;
         log.SnapshotHeightCm          = profile.HeightCm;
@@ -405,8 +414,8 @@ public class RecalculationService : IRecalculationService
         // Past days that already have a value must keep it frozen — their adjusted budget
         // reflected the week's reality at that point in time and must not be retroactively
         // rewritten when food or activities are changed on any day in the same week.
-        // referenceToday is the user's local date supplied by the caller; falls back to
-        // the server UTC clock for food/activity saves (where timezone ambiguity is fine).
+        // referenceToday is always resolved by the pipeline (client date when the
+        // endpoint knows it, profile timezone otherwise); UTC is a last resort only.
         var today = referenceToday ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var isPastDay = log.LogDate < today;
         var alreadySet = log.SuggestedDailyAverageRemainingKcal != 0m;

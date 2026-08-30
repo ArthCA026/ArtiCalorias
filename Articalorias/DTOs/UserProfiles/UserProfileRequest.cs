@@ -33,6 +33,20 @@ public class UserProfileRequest
 
     public bool AutoCalculateProteinGoal { get; set; }
 
+    /// <summary>Preset g/kg multiplier behind an auto protein goal.</summary>
+    [Range(0.5, 4)]
+    public decimal? ProteinGoalGramsPerKg { get; set; }
+
+    // Optional "reach X by DATE" goal metadata behind DailyBaseGoalKcal.
+    // At most one of weight / body fat may be set, always alongside a date.
+    [Range(0.1, 500)]
+    public decimal? GoalTargetWeightKg { get; set; }
+
+    [Range(1, 75)]
+    public decimal? GoalTargetBodyFatPercent { get; set; }
+
+    public DateOnly? GoalTargetDate { get; set; }
+
     [StringLength(100)]
     public string? Country { get; set; }
 

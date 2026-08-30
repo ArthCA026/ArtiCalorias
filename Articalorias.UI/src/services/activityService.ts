@@ -30,6 +30,13 @@ export const activityService = {
     return api.delete(`/activities/daily/${date}/${activityEntryId}`);
   },
 
+  /** Multi-select delete: one recalculation for the whole selection. */
+  removeBatch(date: string, activityEntryIds: number[]) {
+    return api.post<{ deleted: number }>(`/dailylog/${date}/activities/delete-batch`, {
+      activityEntryIds,
+    });
+  },
+
   // --- Activity templates ---
 
   getTemplates() {

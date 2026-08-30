@@ -88,29 +88,31 @@ export function WaterCard({ date, log }: WaterCardProps) {
           </div>
         </div>
         <div className="flex shrink-0 gap-1.5">
+          {/* Icons over numbers: a glass (250 ml) and a bottle (500 ml) read
+              instantly; the exact ml lives in the aria label and the entry. */}
           <button
             type="button"
             disabled={add.isPending}
             onClick={() => add.mutate(250)}
             className={cn(
-              'pressable rounded-full bg-water-soft px-3 py-2 text-[12px] font-bold text-water',
+              'pressable inline-flex items-center gap-0.5 rounded-full bg-water-soft px-3 py-2 text-[13px] font-bold text-water',
               add.isPending && 'opacity-50',
             )}
             aria-label={t('water.add_glass_aria', 'Add a 250 ml glass of water')}
           >
-            +250
+            +<Icon name="glassWater" size={16} />
           </button>
           <button
             type="button"
             disabled={add.isPending}
             onClick={() => add.mutate(500)}
             className={cn(
-              'pressable rounded-full bg-water-soft px-3 py-2 text-[12px] font-bold text-water',
+              'pressable inline-flex items-center gap-0.5 rounded-full bg-water-soft px-3 py-2 text-[13px] font-bold text-water',
               add.isPending && 'opacity-50',
             )}
             aria-label={t('water.add_bottle_aria', 'Add a 500 ml bottle of water')}
           >
-            +500
+            +<Icon name="bottle" size={16} />
           </button>
         </div>
       </div>

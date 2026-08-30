@@ -52,6 +52,19 @@ public class MeasurementsController : ControllerBase
         return deleted ? NoContent() : NotFound();
     }
 
+    /// <summary>
+    /// Multi-select delete: removes several days' measurements and syncs the
+    /// profile to the surviving newest measurement once.
+    /// </summary>
+    [HttpPost("delete-batch")]
+    public async Task<IActionResult> DeleteBatch([FromBody] DeleteMeasurementsRequest request, [FromQuery] DateOnly? today, CancellationToken ct)
+    {
+        var userId = GetUserId();
+        var localToday = await ResolveLocalTodayAsync(userId, today);
+        var deleted = await _measurements.DeleteBatchAsync(userId, request.Dates, localToday, ct);
+        return Ok(new { deleted });
+    }
+
     private async Task<DateOnly> ResolveLocalTodayAsync(long userId, DateOnly? clientToday)
     {
         var profile = await _profileService.GetByUserIdAsync(userId);

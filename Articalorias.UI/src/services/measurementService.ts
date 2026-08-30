@@ -23,4 +23,13 @@ export const measurementService = {
       params: { today: toDateString() },
     });
   },
+
+  /** Multi-select delete: one profile sync for the whole selection. */
+  removeBatch(dates: string[]) {
+    return api.post<{ deleted: number }>(
+      '/measurements/delete-batch',
+      { dates },
+      { params: { today: toDateString() } },
+    );
+  },
 };

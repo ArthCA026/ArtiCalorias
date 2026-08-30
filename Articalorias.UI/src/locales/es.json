@@ -45,7 +45,17 @@
     "custom_value_aria": "Objetivo personalizado de {{macro}}",
     "applies_hint": "Los cambios cuentan desde hoy. Los días anteriores siguen mostrando exactamente lo que se registraba entonces.",
     "custom_error": "Escribe un valor mayor que cero para {{macro}} o cámbialo a Auto.",
-    "saved": "Seguimiento actualizado. Aplica desde hoy."
+    "saved": "Seguimiento actualizado. Aplica desde hoy.",
+    "sheet_intro_v2": "Elige qué quieres ver junto a las calorías. Cada macro activado tiene su barra en tu día y su propia meta.",
+    "protein_target_value": "Meta: {{g}} g al día.",
+    "protein_target_auto": "Meta: automática, 2 g por kg de peso corporal.",
+    "protein_adjust": "Ajustar",
+    "page_subtitle": "Lo que sigues aparece junto a las calorías en tu día",
+    "protein_target_auto_value": "Meta: {{g}} g al día, siguiendo tu peso.",
+    "protein_target_pending": "La meta se activa cuando añadas tu peso.",
+    "alc_short": "Alc",
+    "sugar_short": "Azúcar",
+    "water_short": "Agua"
   },
   "tabs": {
     "today": "Hoy",
@@ -218,7 +228,13 @@
     "fasting_has_food_error": "Este día tiene comidas registradas. Elimínalas primero para marcarlo como día de ayuno.",
     "open_calendar_aria": "Abrir el calendario para ir a otro día",
     "week_day_open_aria": "Abrir {{date}}",
-    "week_tap_hint": "Toca un día para abrirlo y editarlo."
+    "week_tap_hint": "Toca un día para abrirlo y editarlo.",
+    "entry_tap_aria": "{{name}}, toca para editar, mantén pulsado para seleccionar",
+    "delete_entry": "Borrar esta comida",
+    "delete_activity_entry": "Borrar esta actividad",
+    "locked_eaten": "kcal comidas hoy",
+    "locked_status": "Tu presupuesto aparece cuando pongas tu peso y estatura",
+    "near_limit_v3": "Solo quedan {{kcal}} {{unit}} de presupuesto."
   },
   "day": {
     "past_hint": "Editando un día pasado",
@@ -259,7 +275,8 @@
     "open_calendar_aria": "Abrir el calendario para ir a otro día",
     "prev_day": "Día anterior",
     "next_day": "Día siguiente",
-    "macros_untracked_then": "Sin seguimiento ese día: {{macros}}. El seguimiento cuenta desde el día en que lo activas."
+    "macros_untracked_then": "Sin seguimiento ese día: {{macros}}. El seguimiento cuenta desde el día en que lo activas.",
+    "locked_eaten": "kcal comidas ese día"
   },
   "streak": {
     "chip_aria": "Racha de registro: {{n}} días",
@@ -282,7 +299,7 @@
     "lose-very-slow": "Recorte mínimo",
     "maintain": "Mantener peso",
     "gain": "Ganar peso",
-    "recommended": "Popular"
+    "recommended": "Recomendado"
   },
   "protein": {
     "light": "Ligero",
@@ -408,7 +425,15 @@
     "bmr_review_title": "¿Revisar tus valores manuales?",
     "bmr_review_body": "Cambiaron tus datos corporales, pero tu TMB o grasa corporal son manuales y quedaron igual. Números medidos con otro peso pueden estar desfasados.",
     "bmr_review_confirm": "Revisarlos ahora",
-    "bmr_review_keep": "Dejarlos como están"
+    "bmr_review_keep": "Dejarlos como están",
+    "goal_target_bf_value": "{{bf}}% para el {{date}}",
+    "goal_target_weight_value": "{{weight}} para el {{date}}",
+    "protein_off": "Apagado",
+    "protein_turn_off": "Dejar de seguir la proteína",
+    "macros_none": "Ninguno",
+    "protein_auto_value": "{{g}} g auto",
+    "protein_no_weight_hint": "Aún no hay peso en tu perfil: la meta se enciende sola en cuanto añadas uno.",
+    "body_stale_subtitle": "Sin actualizar desde hace más de un mes"
   },
   "premium": {
     "title": "ArtiCalorias Plus",
@@ -455,7 +480,6 @@
     "body_sub": "Esto dimensiona tu presupuesto diario de calorías. Puedes cambiarlo todo después.",
     "goal_title": "¿Cuál es tu objetivo?",
     "goal_sub": "La mayoria elige un ritmo constante. Lento y constante gana.",
-    "goal_popular": "El 62% elige este",
     "protein_title": "La proteína también importa",
     "protein_sub": "Te sacia y protege el músculo. Elige lo que encaje con tu rutina.",
     "summary_title": "Tu plan esta listo",
@@ -478,7 +502,16 @@
     "special_toggle": "Detalles especiales (opcional)",
     "special_hint": "¿Conoces tu TMB o grasa corporal medidas? Escríbelas y usamos tus números en vez de fórmulas. Déjalo vacío para calcularlo automáticamente.",
     "special_bmr": "TMB",
-    "special_bf": "Grasa corporal"
+    "special_bf": "Grasa corporal",
+    "goal_sub_v2": "Elige un ritmo semanal, o apunta a un peso con fecha y nosotros fijamos el ritmo.",
+    "protein_none": "Sin meta de proteína",
+    "protein_none_sub": "Solo calorías. Puedes activarla cuando quieras en Perfil.",
+    "macros_title": "¿Algo más que quieras vigilar?",
+    "macros_sub": "Cada uno tiene su barra en tu día, con una meta puesta para ti. La mayoría empieza sin ninguno y añade después.",
+    "macros_hint": "Nada es obligatorio. Todo lo de aquí se cambia en Perfil, en Seguimiento de macros.",
+    "summary_macros": "Macros extra",
+    "summary_goal_target_bf": "{{bf}}% de grasa para el {{date}}",
+    "summary_goal_target_weight": "{{weight}} para el {{date}}"
   },
   "auth": {
     "tagline": "Conteo de calorías que encaja con tu semana",
@@ -737,7 +770,11 @@
     "delete_routine_title": "¿Eliminar rutina?",
     "delete_routine_body": "Esto elimina la rutina. Las plantillas que contiene se conservan.",
     "fab_new": "Nuevo",
-    "min_suffix": "min"
+    "min_suffix": "min",
+    "row_tap_aria": "{{name}}, toca para editar, mantén pulsado para seleccionar",
+    "routine_tap_aria": "{{name}}, toca para editar",
+    "delete_this": "Borrar esta plantilla",
+    "delete_this_routine": "Borrar esta rutina"
   },
   "tour": {
     "aria": "Recorrido por la app",
@@ -810,6 +847,83 @@
     "card_title": "Cuerpo",
     "card_aria": "Abrir tu página de cuerpo: peso y grasa corporal en el tiempo",
     "card_delta": "{{delta}} en 30d",
-    "card_empty": "Sigue tu peso en el tiempo"
+    "card_empty": "Sigue tu peso en el tiempo",
+    "history_subtitle_v2": "Toca una para corregirla. Mantén pulsado para seleccionar varias."
+  },
+  "goalplan": {
+    "mode_aria": "Cómo definir tu objetivo",
+    "mode_pace": "Ritmo semanal",
+    "mode_target": "Meta con fecha",
+    "needs_weight": "Planificar con fecha necesita tu peso actual. Añádelo y la app convierte tu meta en un presupuesto diario.",
+    "metric_aria": "Tipo de meta",
+    "target_bf_label": "Grasa corporal meta",
+    "target_weight_label": "Peso meta",
+    "target_date_label": "Para cuándo",
+    "current_bf": "Ahora: {{bf}}% de grasa corporal",
+    "current_weight": "Ahora: {{weight}}",
+    "weight_too_low": "Ese peso queda por debajo del rango saludable para tu estatura (menos de {{min}}). Elige una meta de al menos {{min}}.",
+    "bf_too_low": "Bajar de {{floor}}% de grasa corporal entra en la grasa esencial y no es una meta segura. Elige {{floor}}% o más.",
+    "bad_date": "Elige una fecha entre una semana y dos años a partir de hoy.",
+    "too_fast_loss": "Eso requiere {{pace}}, más rápido que el límite seguro para tu cuerpo ({{safe}}). Un ritmo extremo cuesta músculo y rebota.",
+    "too_fast_gain": "Eso requiere {{pace}}, más rápido que un ritmo de ganancia limpia ({{safe}}). La mayoría del extra sería grasa, no músculo.",
+    "use_safe_date": "Alcanzable para el {{date}}. Usar esa fecha",
+    "plan_title_bf": "{{bf}}% de grasa corporal (unos {{weight}}) para el {{date}}",
+    "plan_title_weight": "{{weight}} para el {{date}}",
+    "plan_maintenance": "Ya casi estás ahí. Esto equivale a calorías de mantenimiento.",
+    "kcal_per_day": "{{kcal}} kcal/día",
+    "custom_mode_aria": "Unidad del ritmo personalizado",
+    "custom_mode_kg": "{{unit}}/semana",
+    "custom_mode_kcal": "kcal/día",
+    "custom_kcal_label": "Cambio diario (kcal/día)",
+    "custom_kcal_hint": "Negativo para déficit, positivo para superávit",
+    "equiv_kcal": "Eso es aproximadamente {{kcal}} kcal al día.",
+    "equiv_pace": "Eso es aproximadamente {{pace}}."
+  },
+  "select": {
+    "bar_aria": "Acciones para los elementos seleccionados",
+    "clear": "Cancelar selección",
+    "hint": "Toca para editar. Mantén pulsado para seleccionar varios.",
+    "hint_templates": "Toca para editar, + para registrarlo. Mantén pulsado para seleccionar varios.",
+    "entry_aria": "{{name}}, alternar selección",
+    "action_template": "Plantilla",
+    "action_add_today": "A hoy",
+    "added_to_today": "Añadidos a hoy ({{n}})",
+    "saved_templates": "Guardados en Plantillas ({{n}})",
+    "delete_meals_title": "¿Borrar {{n}} comidas?",
+    "delete_meals_body": "Se eliminan de este día y tus totales se actualizan. No se puede deshacer.",
+    "delete_activities_title": "¿Borrar {{n}} actividades?",
+    "delete_activities_body": "Se eliminan de este día y tu gasto se actualiza. No se puede deshacer.",
+    "delete_templates_title": "¿Borrar {{n}} plantillas?",
+    "delete_templates_body": "También desaparecen de cualquier rutina que las use. Lo ya registrado se queda como está.",
+    "delete_measurements_title": "¿Borrar {{n}} mediciones?",
+    "delete_measurements_body": "Desaparecen de la gráfica. Si se va la más reciente, tu perfil sigue a la última que quede."
+  },
+  "alcohol": {
+    "beer_name": "Cerveza",
+    "cocktail_name": "Cóctel",
+    "beer_portion": "330 ml",
+    "cocktail_portion": "1 copa",
+    "add_beer_aria": "Añadir una cerveza de 330 ml",
+    "add_cocktail_aria": "Añadir un cóctel",
+    "bar_aria": "Alcohol frente a tu límite",
+    "over_limit": "Pasaste tu límite de este día."
+  },
+  "bodynudge": {
+    "title": "Chequeo semanal: ¿cómo va tu cuerpo?",
+    "body": "Tu última medición tiene {{n}} días. Un peso fresco mantiene honestos tu presupuesto y tus proyecciones. Toma diez segundos.",
+    "confirm": "Actualizarlo ahora",
+    "later": "Esta semana no"
+  },
+  "sort": {
+    "newest": "Más reciente primero",
+    "oldest": "Más antiguo primero",
+    "kcal": "Más calorías primero",
+    "button_aria": "Cambiar el orden de la lista. Actual: {{order}}",
+    "sheet_title": "Ordenar las listas por"
+  },
+  "goalpage": {
+    "subtitle": "Define el presupuesto diario de calorías sobre el que se construye todo",
+    "applies_hint": "Aplica desde hoy. Los días pasados conservan el objetivo con el que se vivieron.",
+    "saved": "Objetivo actualizado. Aplica desde hoy."
   }
 }

@@ -50,12 +50,30 @@ public class UserService : IUserService
 
     public async Task DeleteAccountAsync(long userId)
     {
+        // One transaction: account deletion is all-or-nothing. Each
+        // ExecuteDelete otherwise commits on its own, and a failure halfway
+        // used to leave a half-deleted account - reminders and templates
+        // gone, login still working.
+        await using var tx = await _db.Database.BeginTransactionAsync();
+
         await _db.PushSubscriptions
             .Where(p => p.UserId == userId)
             .ExecuteDeleteAsync();
 
         await _db.NotificationSchedules
             .Where(n => n.UserId == userId)
+            .ExecuteDeleteAsync();
+
+        // Routines before templates (their items reference both template
+        // kinds; the items themselves cascade off the routine). FoodTemplate
+        // and FavoriteRoutine have NO cascade from User, so forgetting either
+        // makes the final user delete throw an FK conflict.
+        await _db.FavoriteRoutines
+            .Where(r => r.UserId == userId)
+            .ExecuteDeleteAsync();
+
+        await _db.FoodTemplates
+            .Where(f => f.UserId == userId)
             .ExecuteDeleteAsync();
 
         await _db.ActivityTemplates
@@ -74,8 +92,11 @@ public class UserService : IUserService
             .Where(p => p.UserId == userId)
             .ExecuteDeleteAsync();
 
+        // RefreshTokens and UserStreaks cascade off the user row itself.
         await _db.Users
             .Where(u => u.UserId == userId)
             .ExecuteDeleteAsync();
+
+        await tx.CommitAsync();
     }
 }

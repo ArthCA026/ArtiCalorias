@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/Progress';
 import { Icon } from '@/components/ui/Icon';
 import { isLoggedDay } from '@/components/progress/weekMath';
-import { MACRO_META, dayTargetFor, formatMacroAmount, macroLabel, macroTotalFor } from '@/utils/macros';
+import { MACRO_META, PROTEIN_META, dayTargetFor, formatMacroAmount, macroLabel, macroTotalFor } from '@/utils/macros';
 import { cn } from '@/utils/cn';
 import type { DailyLogResponse, MacroKey } from '@/types';
 
@@ -85,7 +85,7 @@ export function MacrosWeekCard({ days }: MacrosWeekCardProps) {
       <div className="mt-3 space-y-3">
         {rows.map((r) => {
           const meta = r.key === 'protein'
-            ? { icon: 'zap' as const, color: 'var(--t-protein)', unit: 'g' as const }
+            ? { icon: PROTEIN_META.icon, color: PROTEIN_META.color, unit: 'g' as const }
             : MACRO_META[r.key];
           const label = r.key === 'protein' ? t('today.protein', 'Protein') : macroLabel(t, r.key);
           const fmt = (v: number) =>

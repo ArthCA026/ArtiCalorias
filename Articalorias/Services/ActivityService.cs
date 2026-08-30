@@ -111,6 +111,29 @@ public class ActivityService : IActivityService
         await _recalculation.RecalculateFullPipelineAsync(dailyLogId);
     }
 
+    public async Task<int> DeleteEntriesBatchAsync(long userId, long dailyLogId, IReadOnlyList<long> activityEntryIds)
+    {
+        if (activityEntryIds.Count == 0)
+            return 0;
+
+        // Ownership and same-day scoping in the query itself: a foreign or
+        // misplaced id silently drops out instead of deleting someone's data.
+        var entries = await _db.ActivityEntries
+            .Where(a => activityEntryIds.Contains(a.ActivityEntryId)
+                && a.DailyLogId == dailyLogId
+                && a.DailyLog.UserId == userId)
+            .ToListAsync();
+
+        if (entries.Count == 0)
+            return 0;
+
+        _db.ActivityEntries.RemoveRange(entries);
+        await _db.SaveChangesAsync();
+
+        await _recalculation.RecalculateFullPipelineAsync(dailyLogId);
+        return entries.Count;
+    }
+
     // ── Activity templates (catalog) ──
 
     public async Task<IReadOnlyList<ActivityTemplate>> GetTemplatesAsync(long? userId)

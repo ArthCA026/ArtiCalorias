@@ -116,8 +116,7 @@ public static class MacroTargets
                 return Math.Min(50m, Math.Round(budget * 0.10m / 4m));
             case Carbs:
             {
-                var proteinGoal = profile.ProteinGoalGrams
-                    ?? (profile.AutoCalculateProteinGoal ? weight.Value * 2.0m : 0m);
+                var proteinGoal = ProteinMath.GoalGrams(profile);
                 var fatTarget = Math.Round(budget * 0.30m / 9m);
                 var carbsKcal = budget - proteinGoal * 4m - fatTarget * 9m;
                 return Math.Max(Math.Round(carbsKcal / 4m), 0m);

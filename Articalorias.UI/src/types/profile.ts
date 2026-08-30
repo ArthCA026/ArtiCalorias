@@ -11,6 +11,13 @@ export interface UserProfileResponse {
   dailyBaseGoalKcal: number;
   proteinGoalGrams: number | null;
   autoCalculateProteinGoal: boolean;
+  /** Preset g/kg multiplier behind an auto protein goal (null = legacy 2.0). */
+  proteinGoalGramsPerKg: number | null;
+  /** Optional "reach X by DATE" goal behind dailyBaseGoalKcal. */
+  goalTargetWeightKg: number | null;
+  goalTargetBodyFatPercent: number | null;
+  /** yyyy-MM-dd */
+  goalTargetDate: string | null;
   country: string | null;
   isOnboardingCompleted: boolean;
   /** The user finished or skipped the first-run tutorial. */
@@ -38,6 +45,13 @@ export interface UserProfileRequest {
   dailyBaseGoalKcal?: number | null;
   proteinGoalGrams?: number | null;
   autoCalculateProteinGoal: boolean;
+  /** Preset g/kg multiplier behind an auto protein goal. */
+  proteinGoalGramsPerKg?: number | null;
+  /** Optional "reach X by DATE" goal behind dailyBaseGoalKcal. */
+  goalTargetWeightKg?: number | null;
+  goalTargetBodyFatPercent?: number | null;
+  /** yyyy-MM-dd */
+  goalTargetDate?: string | null;
   country?: string | null;
   calorieDisplayMode: 'net' | 'goal' | 'adjusted';
   minCaloriesSafeguardEnabled: boolean;

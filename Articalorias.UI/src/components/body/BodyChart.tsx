@@ -24,11 +24,27 @@ interface BodyChartProps {
 
 const W = 344;
 const H = 180;
-const PAD_L = 34;
+const PAD_L = 40;
 const PAD_R = 10;
 const PAD_T = 12;
 const PAD_B = 22;
 const PROJECTION_DAYS = 28;
+
+/**
+ * Rounded tick values covering [min, max]: picks a 1/2/2.5/5 × 10^n step so
+ * labels read "70, 72.5, 75", never "71.3, 73.8". At most `count` + 1 ticks.
+ */
+function niceTicks(min: number, max: number, count: number): number[] {
+  const span = Math.max(max - min, 1e-6);
+  const rawStep = span / count;
+  const mag = 10 ** Math.floor(Math.log10(rawStep));
+  const norm = rawStep / mag;
+  const step = (norm >= 5 ? 5 : norm >= 2.5 ? 2.5 : norm >= 2 ? 2 : 1) * mag;
+  const ticks: number[] = [];
+  for (let v = Math.ceil(min / step) * step; v <= max + 1e-9; v += step)
+    ticks.push(Math.round(v * 100) / 100);
+  return ticks;
+}
 
 /**
  * Weight / body-fat line over time. Hand-rolled SVG in the app's chart
@@ -88,7 +104,24 @@ export function BodyChart({ metric, points, weightUnit, goalKgPerDay }: BodyChar
         }
       : null;
 
-    return { coords, solid, linePath, estPath, projection, vMin, vMax, x, y };
+    // Y guides: rounded steps instead of the raw min/max, so the scale is
+    // readable at a glance without turning into a dense grid.
+    const yTicks = niceTicks(vMin, vMax, 3).map((v) => ({ v, yy: y(v) }));
+
+    // X guides: first and last date always; up to two interior dates when the
+    // span has room for them (labels are ~44px wide on a 344px canvas).
+    const spanDays = spanMs / 86400000;
+    const xTicks: { date: string; xx: number }[] = [];
+    if (spanDays >= 21) {
+      for (const frac of spanDays >= 45 ? [1 / 3, 2 / 3] : [0.5]) {
+        const ms = t0 + spanMs * frac;
+        const d = new Date(ms);
+        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        xTicks.push({ date: iso, xx: PAD_L + ((ms - t0) / spanMs) * (W - PAD_L - PAD_R) });
+      }
+    }
+
+    return { coords, solid, linePath, estPath, projection, vMin, vMax, x, y, yTicks, xTicks };
   }, [points, metric, goalKgPerDay, weightUnit]);
 
   if (!model) return null;
@@ -98,8 +131,19 @@ export function BodyChart({ metric, points, weightUnit, goalKgPerDay }: BodyChar
       ? `${(Math.round(v * 10) / 10).toLocaleString(i18n.language)} ${weightLabel(weightUnit)}`
       : `${Math.round(v * 10) / 10}%`;
 
+  // When the visible span crosses a year boundary, every axis label carries
+  // its (short) year: "12 Aug" vs "12 Aug 25" — otherwise two identical-
+  // looking dates could be twelve months apart.
+  const multiYear =
+    parseDate(model.coords[0].date).getFullYear() !==
+    parseDate(model.coords[model.coords.length - 1].date).getFullYear();
   const fmtDate = (d: string) =>
-    new Intl.DateTimeFormat(i18n.language, { day: 'numeric', month: 'short' }).format(parseDate(d));
+    new Intl.DateTimeFormat(
+      i18n.language,
+      multiYear
+        ? { day: 'numeric', month: 'short', year: '2-digit' }
+        : { day: 'numeric', month: 'short' },
+    ).format(parseDate(d));
 
   const color = metric === 'weight' ? 'var(--t-primary)' : 'var(--t-protein)';
   const hasEstimates = model.coords.some((c) => c.estimated);
@@ -151,14 +195,22 @@ export function BodyChart({ metric, points, weightUnit, goalKgPerDay }: BodyChar
         }
         onPointerDown={onPick}
       >
-        {/* Y guides: top / bottom values only, quiet grid */}
-        {[model.vMax, model.vMin].map((v, i) => {
-          const yy = i === 0 ? PAD_T : H - PAD_B;
+        {/* Y guides: rounded values on a quiet grid; the top one names the
+            unit so the whole axis is self-describing. */}
+        {model.yTicks.map(({ v, yy }, i) => {
+          const valueLabel = metric === 'weight'
+            ? String(Math.round(v * 10) / 10)
+            : (Math.round(v * 10) / 10).toFixed(1);
+          const isTop = i === model.yTicks.length - 1;
           return (
-            <g key={i}>
+            <g key={v}>
               <line x1={PAD_L} x2={W - PAD_R} y1={yy} y2={yy} stroke="var(--t-hairline)" strokeWidth="1" />
-              <text x={PAD_L - 5} y={yy + 4} textAnchor="end" fontSize="9" fill="var(--t-ink-3)">
-                {metric === 'weight' ? Math.round(v) : (Math.round(v * 10) / 10).toFixed(1)}
+              <text x={PAD_L - 5} y={yy + 3} textAnchor="end" fontSize="9" fill="var(--t-ink-3)">
+                {isTop
+                  ? metric === 'weight'
+                    ? `${valueLabel} ${weightLabel(weightUnit)}`
+                    : `${valueLabel}%`
+                  : valueLabel}
               </text>
             </g>
           );
@@ -205,10 +257,19 @@ export function BodyChart({ metric, points, weightUnit, goalKgPerDay }: BodyChar
           <line x1={sel.cx} x2={sel.cx} y1={PAD_T} y2={H - PAD_B} stroke={color} strokeOpacity="0.3" strokeWidth="1" />
         )}
 
-        {/* X labels: first and last recorded dates */}
+        {/* X labels: first and last dates anchored to the edges, plus one or
+            two interior dates (with tick marks) when the span has room. */}
         <text x={PAD_L} y={H - 7} fontSize="9" fill="var(--t-ink-3)">
           {fmtDate(model.coords[0].date)}
         </text>
+        {model.xTicks.map(({ date, xx }) => (
+          <g key={date}>
+            <line x1={xx} x2={xx} y1={H - PAD_B} y2={H - PAD_B + 3} stroke="var(--t-ink-3)" strokeWidth="1" />
+            <text x={xx} y={H - 7} textAnchor="middle" fontSize="9" fill="var(--t-ink-3)">
+              {fmtDate(date)}
+            </text>
+          </g>
+        ))}
         <text x={W - PAD_R} y={H - 7} textAnchor="end" fontSize="9" fill="var(--t-ink-3)">
           {fmtDate(model.coords[model.coords.length - 1].date)}
         </text>

@@ -10,14 +10,6 @@ import { Icon } from '@/components/ui/Icon';
 import { InlineError } from '@/components/ui/States';
 import { useUnits } from '@/hooks/useUnits';
 import { kgToDisplay, displayToKg, weightLabel, cmToFtIn, ftInToCm } from '@/utils/units';
-import {
-  GOAL_PRESETS,
-  formatKgPerWeekShort,
-  kgPerWeekToKcal,
-  validateCustomKg,
-  matchPreset,
-  type GoalPresetKey,
-} from '@/utils/goalUtils';
 import { PROTEIN_PRESETS, getAgeProteinMinimum } from '@/config/proteinPresets';
 import { cn } from '@/utils/cn';
 import { useNotificationSettings } from '@/hooks/useNotificationSettings';
@@ -148,7 +140,9 @@ export function BodySheet({ open, onClose, profile, onSave, saving, initialAdvan
                 <DecimalField
                   aria-label={t('profile.height_in_aria', 'Height, inches')}
                   suffix="in"
-                  placeholder="10"
+                  // Single digit on purpose: the inches field is only half a
+                  // grid column wide, so a two-digit placeholder gets clipped.
+                  placeholder="8"
                   value={heightIn}
                   onValueChange={setHeightIn}
                   containerClassName="flex-1"
@@ -305,127 +299,8 @@ export function BodySheet({ open, onClose, profile, onSave, saving, initialAdvan
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Goal                                                                */
-/* ------------------------------------------------------------------ */
-
-const GOAL_KEYS: GoalPresetKey[] = ['lose-fast', 'lose-moderate', 'lose-slow', 'maintain', 'gain'];
-
-export function GoalSheet({ open, onClose, profile, onSave, saving }: EditSheetProps) {
-  const { t } = useTranslation();
-  const { weightUnit } = useUnits();
-  const current = matchPreset(String(Math.round(profile.dailyBaseGoalKcal)));
-  const [selectedKey, setSelectedKey] = useState<GoalPresetKey | 'custom'>(
-    current.isCustom ? 'custom' : (current.preset as GoalPresetKey),
-  );
-  const [showCustom, setShowCustom] = useState(current.isCustom);
-  const [customKg, setCustomKg] = useState('');
-  const [customError, setCustomError] = useState<string | null>(null);
-
-  // Re-derive on every open: the goal may have been saved since mount.
-  /* eslint-disable react-hooks/set-state-in-effect -- bounded open-transition reset */
-  useEffect(() => {
-    if (!open) return;
-    const m = matchPreset(String(Math.round(profile.dailyBaseGoalKcal)));
-    setSelectedKey(m.isCustom ? 'custom' : (m.preset as GoalPresetKey));
-    setShowCustom(m.isCustom);
-    setCustomKg('');
-    setCustomError(null);
-  }, [open, profile.dailyBaseGoalKcal]);
-  /* eslint-enable react-hooks/set-state-in-effect */
-
-  const presets = GOAL_KEYS.map((k) => GOAL_PRESETS.find((p) => p.key === k)!);
-
-  const save = () => {
-    if (selectedKey === 'custom') {
-      const err = validateCustomKg(customKg, weightUnit);
-      if (err) {
-        setCustomError(err);
-        return;
-      }
-      const kg = weightUnit === 'lbs' ? Number(customKg) / 2.20462 : Number(customKg);
-      onSave({ dailyBaseGoalKcal: kgPerWeekToKcal(kg) });
-    } else {
-      const preset = presets.find((p) => p.key === selectedKey)!;
-      onSave({ dailyBaseGoalKcal: Number(preset.kcal) });
-    }
-  };
-
-  return (
-    <Sheet open={open} onClose={onClose} title={t('profile.goal_title', 'Your goal')}>
-      <div className="space-y-2" role="radiogroup" aria-label={t('profile.goal_title', 'Your goal')}>
-        {presets.map((p) => {
-          const active = selectedKey === p.key;
-          return (
-            <button
-              key={p.key}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => {
-                setSelectedKey(p.key);
-                setShowCustom(false);
-              }}
-              className={cn(
-                'pressable w-full rounded-card px-4 py-3 text-left flex items-center gap-3',
-                active ? 'bg-primary-soft ring-2 ring-primary/60' : 'bg-inset',
-              )}
-            >
-              <span className="flex-1">
-                <span className="flex items-center gap-2">
-                  <span className="text-[15px] font-bold text-ink">{t(`goal.${p.key}`, p.label)}</span>
-                  {p.key === 'lose-moderate' && (
-                    <span className="text-[10px] font-extrabold uppercase tracking-wide bg-primary text-on-primary rounded-full px-2 py-0.5">
-                      {t('goal.recommended', 'Popular')}
-                    </span>
-                  )}
-                </span>
-                <span className="block text-[12px] text-ink-2 mt-0.5">
-                  {formatKgPerWeekShort(p.kgPerWeek, weightUnit)}
-                </span>
-              </span>
-              {active && <Icon name="checkCircle" size={20} className="text-primary" />}
-            </button>
-          );
-        })}
-      </div>
-
-      {!showCustom ? (
-        <button
-          type="button"
-          className="pressable mt-3 text-sm font-semibold text-primary-soft-ink py-1"
-          onClick={() => {
-            setShowCustom(true);
-            setSelectedKey('custom');
-          }}
-        >
-          {t('profile.goal_custom_link', 'Set a custom pace')}
-        </button>
-      ) : (
-        <div className="mt-3">
-          <DecimalField
-            label={t('profile.goal_custom_label', 'Weekly change ({{unit}}/week)', {
-              unit: weightLabel(weightUnit),
-            })}
-            placeholder={weightUnit === 'lbs' ? '-1.1' : '-0.5'}
-            value={customKg}
-            onValueChange={(v) => {
-              setCustomKg(v);
-              setCustomError(null);
-              setSelectedKey('custom');
-            }}
-            error={customError}
-            hint={t('profile.goal_custom_hint', 'Negative to lose, positive to gain')}
-          />
-        </div>
-      )}
-
-      <Button variant="primary" size="lg" fullWidth className="mt-4" loading={saving} onClick={save}>
-        {t('common.save', 'Save')}
-      </Button>
-    </Sheet>
-  );
-}
+/* The goal chooser moved to its own page (/profile/goal): the pace-vs-target
+   planner outgrew a bottom sheet. See src/pages/GoalPage.tsx. */
 
 /* ------------------------------------------------------------------ */
 /* Protein                                                             */
@@ -438,8 +313,16 @@ export function ProteinSheet({ open, onClose, profile, onSave, saving }: EditShe
   const gramsFor = (perKg: number) =>
     weight !== null ? Math.round(weight * Math.max(perKg, ageMin)) : null;
 
-  const [selected, setSelected] = useState<string>('everyday');
-  const [showCustom, setShowCustom] = useState(false);
+  // Preselect the stored preset when the profile is in auto mode.
+  const storedPreset =
+    profile.autoCalculateProteinGoal && profile.proteinGoalGramsPerKg !== null
+      ? PROTEIN_PRESETS.find((p) => p.gramsPerKg === profile.proteinGoalGramsPerKg)?.id
+      : undefined;
+
+  const [selected, setSelected] = useState<string>(storedPreset ?? 'everyday');
+  const [showCustom, setShowCustom] = useState(
+    !profile.autoCalculateProteinGoal && profile.proteinGoalGrams !== null,
+  );
   const [customGrams, setCustomGrams] = useState(
     profile.proteinGoalGrams !== null ? String(Math.round(profile.proteinGoalGrams)) : '',
   );
@@ -450,8 +333,9 @@ export function ProteinSheet({ open, onClose, profile, onSave, saving }: EditShe
   useEffect(() => {
     if (!open) return;
     setCustomGrams(profile.proteinGoalGrams !== null ? String(Math.round(profile.proteinGoalGrams)) : '');
+    setShowCustom(!profile.autoCalculateProteinGoal && profile.proteinGoalGrams !== null);
     setError(null);
-  }, [open, profile.proteinGoalGrams]);
+  }, [open, profile.proteinGoalGrams, profile.autoCalculateProteinGoal]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const save = () => {
@@ -461,15 +345,16 @@ export function ProteinSheet({ open, onClose, profile, onSave, saving }: EditShe
         setError(t('profile.protein_custom_error', 'Enter a value between 40 and 300 grams.'));
         return;
       }
-      onSave({ proteinGoalGrams: g, autoCalculateProteinGoal: false });
+      onSave({ proteinGoalGrams: g, autoCalculateProteinGoal: false, proteinGoalGramsPerKg: null });
     } else {
+      // A preset stores its multiplier: the goal follows the weight from now
+      // on, and if there is no weight yet it activates the moment one is set.
       const preset = PROTEIN_PRESETS.find((p) => p.id === selected)!;
-      const g = gramsFor(preset.gramsPerKg);
-      if (g === null) {
-        setError(t('profile.protein_needs_weight', 'Add your weight first so we can compute grams, or set a custom target.'));
-        return;
-      }
-      onSave({ proteinGoalGrams: g, autoCalculateProteinGoal: false });
+      onSave({
+        proteinGoalGrams: null,
+        autoCalculateProteinGoal: true,
+        proteinGoalGramsPerKg: preset.gramsPerKg,
+      });
     }
   };
 
@@ -535,11 +420,32 @@ export function ProteinSheet({ open, onClose, profile, onSave, saving }: EditShe
         </div>
       )}
 
+      {!showCustom && weight === null && (
+        <p className="mt-3 text-[13px] text-ink-3 leading-relaxed">
+          {t('profile.protein_no_weight_hint', 'No weight on your profile yet: the target switches on by itself the moment you add one.')}
+        </p>
+      )}
+
       {error && <InlineError message={error} />}
 
       <Button variant="primary" size="lg" fullWidth className="mt-4" loading={saving} onClick={save}>
         {t('common.save', 'Save')}
       </Button>
+
+      {/* Protein is optional like any other macro: turning it off clears the
+          goal, hides the bar from today on, and past days keep theirs. */}
+      {(profile.proteinGoalGrams !== null || profile.autoCalculateProteinGoal) && (
+        <Button
+          variant="ghost"
+          size="md"
+          fullWidth
+          className="mt-2"
+          loading={saving}
+          onClick={() => onSave({ proteinGoalGrams: null, autoCalculateProteinGoal: false })}
+        >
+          {t('profile.protein_turn_off', 'Stop tracking protein')}
+        </Button>
+      )}
     </Sheet>
   );
 }

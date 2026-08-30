@@ -21,4 +21,11 @@ export const foodService = {
   remove(date: string, foodEntryId: number) {
     return api.delete(`/dailylog/${date}/foods/${foodEntryId}`);
   },
+
+  /** Multi-select delete: one recalculation for the whole selection. */
+  removeBatch(date: string, foodEntryIds: number[]) {
+    return api.post<{ deleted: number }>(`/dailylog/${date}/foods/delete-batch`, {
+      foodEntryIds,
+    });
+  },
 };

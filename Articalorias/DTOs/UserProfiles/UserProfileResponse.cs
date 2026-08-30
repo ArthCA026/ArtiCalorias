@@ -14,6 +14,13 @@ public class UserProfileResponse
     public decimal DailyBaseGoalKcal { get; set; }
     public decimal? ProteinGoalGrams { get; set; }
     public bool AutoCalculateProteinGoal { get; set; }
+    /// <summary>Preset g/kg multiplier behind an auto protein goal.</summary>
+    public decimal? ProteinGoalGramsPerKg { get; set; }
+
+    // Optional "reach X by DATE" goal metadata behind DailyBaseGoalKcal.
+    public decimal? GoalTargetWeightKg { get; set; }
+    public decimal? GoalTargetBodyFatPercent { get; set; }
+    public DateOnly? GoalTargetDate { get; set; }
     public string? Country { get; set; }
     public bool IsOnboardingCompleted { get; set; }
     /// <summary>The user finished or skipped the first-run tutorial.</summary>

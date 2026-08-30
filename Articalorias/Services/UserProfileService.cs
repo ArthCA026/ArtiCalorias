@@ -25,6 +25,17 @@ public class UserProfileService : IUserProfileService
     {
         var existing = await _db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId);
 
+        // Body-graph rule: a profile save only lands on the Body graph when the
+        // body data itself moved. Every unrelated save (calorie display mode,
+        // safeguard toggle, reminders, goal pace) also funnels through this
+        // method, and recording those spammed the graph with one identical
+        // "profile" point per day.
+        var oldWeight = existing?.CurrentWeightKg;
+        var oldBodyFat = existing?.BodyFatPercent;
+        var oldAutoBodyFat = existing?.AutoCalculateBodyFat ?? true;
+
+        NormalizeGoal(profile);
+
         if (existing is null)
         {
             profile.UserId = userId;
@@ -48,6 +59,10 @@ public class UserProfileService : IUserProfileService
             existing.DailyBaseGoalKcal = profile.DailyBaseGoalKcal;
             existing.ProteinGoalGrams = profile.ProteinGoalGrams;
             existing.AutoCalculateProteinGoal = profile.AutoCalculateProteinGoal;
+            existing.ProteinGoalGramsPerKg = profile.ProteinGoalGramsPerKg;
+            existing.GoalTargetWeightKg = profile.GoalTargetWeightKg;
+            existing.GoalTargetBodyFatPercent = profile.GoalTargetBodyFatPercent;
+            existing.GoalTargetDate = profile.GoalTargetDate;
             existing.Country = profile.Country;
             if (profile.TimeZoneId is not null)
             {
@@ -67,17 +82,60 @@ public class UserProfileService : IUserProfileService
 
             await _db.SaveChangesAsync();
 
-            // Every profile save with a weight also lands on the Body graph
-            // (today's point), so the two views can never tell different stories.
-            await _measurements.RecordFromProfileAsync(userId);
+            if (BodyDataChanged(existing, oldWeight, oldBodyFat, oldAutoBodyFat))
+                await _measurements.RecordFromProfileAsync(userId);
 
             return existing;
         }
 
         await _db.SaveChangesAsync();
-        await _measurements.RecordFromProfileAsync(userId);
+        if (BodyDataChanged(profile, oldWeight, oldBodyFat, oldAutoBodyFat))
+            await _measurements.RecordFromProfileAsync(userId);
 
         return existing ?? profile;
+    }
+
+    /// <summary>
+    /// Whether this save changed what the Body graph records: the weight, or a
+    /// MANUALLY entered body fat. Auto-calculated body fat is a formula output
+    /// (it moves when age or height moves) and is never stored as if measured,
+    /// so it cannot justify a new graph point on its own.
+    /// </summary>
+    private static bool BodyDataChanged(UserProfile saved, decimal? oldWeight, decimal? oldBodyFat, bool oldAutoBodyFat)
+    {
+        if (saved.CurrentWeightKg != oldWeight)
+            return true;
+
+        var manualBodyFatChanged = !saved.AutoCalculateBodyFat
+            && (saved.BodyFatPercent != oldBodyFat || oldAutoBodyFat);
+        return manualBodyFatChanged && saved.BodyFatPercent.HasValue;
+    }
+
+    /// <summary>
+    /// Hard safety rails on the goal, whatever client sent it. The daily
+    /// adjustment is clamped to the app-wide pace limits (−1.50 kg/week loss,
+    /// +1.00 kg/week gain, at 7 700 kcal/kg). Target metadata is kept
+    /// consistent: a target needs its date, only one target kind survives,
+    /// and a plain pace goal carries no leftover target fields.
+    /// </summary>
+    private static void NormalizeGoal(UserProfile p)
+    {
+        p.DailyBaseGoalKcal = Math.Clamp(p.DailyBaseGoalKcal, -1650m, 1100m);
+
+        if (p.GoalTargetDate is null)
+        {
+            p.GoalTargetWeightKg = null;
+            p.GoalTargetBodyFatPercent = null;
+        }
+        else if (p.GoalTargetWeightKg is null && p.GoalTargetBodyFatPercent is null)
+        {
+            p.GoalTargetDate = null;
+        }
+        else if (p.GoalTargetWeightKg is not null)
+        {
+            // Weight target wins when a confused client sends both kinds.
+            p.GoalTargetBodyFatPercent = null;
+        }
     }
 
     private static void ValidateSleepNeatHours(decimal sleepHours, decimal neatHours)

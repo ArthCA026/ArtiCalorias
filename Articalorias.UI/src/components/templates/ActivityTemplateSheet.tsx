@@ -22,10 +22,12 @@ interface ActivityTemplateSheetProps {
   /** null = create mode */
   template: ActivityTemplateResponse | null;
   onClose: () => void;
+  /** Edit mode only: hands deletion back to the list (confirm + routine info). */
+  onDelete?: () => void;
 }
 
 /** Create or edit an activity template. Duration and MET are required by the API. */
-export function ActivityTemplateSheet({ template, onClose }: ActivityTemplateSheetProps) {
+export function ActivityTemplateSheet({ template, onClose, onDelete }: ActivityTemplateSheetProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -156,6 +158,11 @@ export function ActivityTemplateSheet({ template, onClose }: ActivityTemplateShe
         >
           {t('common.save', 'Save')}
         </Button>
+        {template && onDelete && (
+          <Button variant="ghost" size="md" fullWidth onClick={onDelete}>
+            <span className="text-danger">{t('templates.delete_this', 'Delete this template')}</span>
+          </Button>
+        )}
       </div>
     </Sheet>
   );

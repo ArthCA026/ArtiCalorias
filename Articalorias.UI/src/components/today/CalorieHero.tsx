@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
-import { ProgressRing, ProgressBar } from '@/components/ui/Progress';
+import { ProgressRing } from '@/components/ui/Progress';
 import { Icon } from '@/components/ui/Icon';
 import { CalorieModeTag } from '@/components/ui/CalorieModeTag';
+import { MacroBars } from '@/components/today/MacroSummaryCard';
 import { budgetFor, isSurplusGoalDay } from '@/utils/calorieMath';
 import { cn } from '@/utils/cn';
 import type { CalorieMode } from '@/hooks/useCalorieMode';
@@ -31,6 +32,32 @@ export function CalorieHero({ dash, mode, isToday, onOpenDetails }: CalorieHeroP
   const { t } = useTranslation();
 
   const eaten = dash.totalFoodCaloriesKcal;
+
+  // No weight or height = no budget, so there is nothing honest for a ring,
+  // a mode switch or a details ledger to say. Show only what IS real (what
+  // was eaten, plus any tracked macro amounts) until the profile unlocks the
+  // rest; the banner above this card carries the call to action.
+  if (!dash.hasCalorieBudgetEstimate) {
+    return (
+      <Card className="pt-5 pb-4">
+        <div className="flex flex-col items-center">
+          <span className="text-[32px] font-extrabold text-ink leading-none tabular-nums">
+            {Math.round(eaten).toLocaleString()}
+          </span>
+          <span className="mt-1.5 text-[13px] font-medium text-ink-2">
+            {isToday
+              ? t('today.locked_eaten', 'kcal eaten today')
+              : t('day.locked_eaten', 'kcal eaten that day')}
+          </span>
+          <span className="mt-3 flex items-center gap-1.5 rounded-full bg-inset px-4 py-2 text-[13px] font-semibold text-ink-2">
+            <Icon name="lock" size={13} className="text-ink-3" />
+            {t('today.locked_status', 'Your budget appears once your weight and height are set')}
+          </span>
+        </div>
+        <MacroBars log={dash} className="mt-4 w-full" />
+      </Card>
+    );
+  }
   const budget = Math.max(budgetFor(dash, mode), 1);
   const remaining = budget - eaten;
   const progress = eaten / budget;
@@ -56,9 +83,7 @@ export function CalorieHero({ dash, mode, isToday, onOpenDetails }: CalorieHeroP
   // celebrate animation nudges an action that is no longer possible.
   let statusText: string;
   let statusTone: 'ok' | 'push' | 'calm' = 'calm';
-  if (!dash.hasCalorieBudgetEstimate) {
-    statusText = t('today.no_budget', 'Add weight and height to unlock your budget');
-  } else if (dash.isFastingDay) {
+  if (dash.isFastingDay) {
     // A deliberate fast: no nudges to eat, no alarm about the untouched ring.
     statusText = isToday
       ? t('today.fasting_status', 'Fasting today. Your streak is safe and the deficit counts toward your week.')
@@ -84,10 +109,14 @@ export function CalorieHero({ dash, mode, isToday, onOpenDetails }: CalorieHeroP
     }
   } else if (!over) {
     if (isToday) {
+      // On a deficit or maintenance day the budget is a CEILING: being a few
+      // kcal under it is exactly where the user wants to land, so the close-
+      // to-the-line message must read as "nearly used up", never as a target
+      // still to be reached ("to go" invited people to eat the difference).
       statusText = nearGoal
-        ? t('today.almost_there', 'Almost there: {{kcal}} {{unit}} to go', { kcal: e(remaining), unit })
+        ? t('today.near_limit_v3', 'Only {{kcal}} {{unit}} of budget left.', { kcal: e(remaining), unit })
         : t('today.left_today', '{{kcal}} {{unit}} left today', { kcal: e(remaining), unit });
-      statusTone = nearGoal ? 'push' : 'calm';
+      statusTone = 'calm';
     } else {
       statusText = nearGoal
         ? t('day.just_under', 'Closed the day {{kcal}} {{unit}} under. Nicely done.', { kcal: e(remaining), unit })
@@ -108,20 +137,15 @@ export function CalorieHero({ dash, mode, isToday, onOpenDetails }: CalorieHeroP
 
   // The word under the big number, adapted to the goal direction: "over" is a
   // warning on a deficit day but "past goal" (an achievement) on a surplus day.
-  const ringSubLabel = !dash.hasCalorieBudgetEstimate
-    ? t('today.ring_eaten', '{{unit}} eaten', { unit })
-    : over
-      ? isSurplusGoal
-        ? t('today.ring_past_goal', '{{unit}} past goal', { unit })
-        : t('today.ring_over', '{{unit}} over', { unit })
-      : isToday
-        ? t('today.ring_left', '{{unit}} left', { unit })
-        : isSurplusGoal
-          ? t('day.ring_short', '{{unit}} short', { unit })
-          : t('day.ring_under', '{{unit}} under', { unit });
-
-  const protein = dash.totalProteinGrams;
-  const proteinGoal = dash.snapshotProteinGoalGrams;
+  const ringSubLabel = over
+    ? isSurplusGoal
+      ? t('today.ring_past_goal', '{{unit}} past goal', { unit })
+      : t('today.ring_over', '{{unit}} over', { unit })
+    : isToday
+      ? t('today.ring_left', '{{unit}} left', { unit })
+      : isSurplusGoal
+        ? t('day.ring_short', '{{unit}} short', { unit })
+        : t('day.ring_under', '{{unit}} under', { unit });
 
   return (
     <Card className="relative flex flex-col items-center pt-5 pb-4">
@@ -151,7 +175,7 @@ export function CalorieHero({ dash, mode, isToday, onOpenDetails }: CalorieHeroP
           label={t('today.ring_aria', 'Calorie progress')}
         >
           <span className="text-[32px] font-extrabold text-ink leading-none tabular-nums">
-            {dash.hasCalorieBudgetEstimate ? e(remaining) : e(eaten)}
+            {e(remaining)}
           </span>
           <span className="text-[13px] font-medium text-ink-2 mt-1.5">{ringSubLabel}</span>
         </ProgressRing>
@@ -168,25 +192,10 @@ export function CalorieHero({ dash, mode, isToday, onOpenDetails }: CalorieHeroP
         </span>
       </button>
 
-      {dash.hasProteinGoal && (
-        <div className="mt-4 w-full">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
-              <Icon name="zap" size={14} className="text-protein" />
-              {t('today.protein', 'Protein')}
-            </span>
-            <span className="text-[13px] font-bold text-ink tabular-nums">
-              {Math.round(protein)}g
-              <span className="text-ink-3 font-medium"> / {Math.round(proteinGoal)}g</span>
-            </span>
-          </div>
-          <ProgressBar
-            progress={proteinGoal > 0 ? protein / proteinGoal : 0}
-            color="var(--t-protein)"
-            label={t('today.protein_aria', 'Protein progress')}
-          />
-        </div>
-      )}
+      {/* Protein and the other tracked nutrient macros share this card so the
+          meal list stays visible without scrolling. Water keeps its own card
+          (it carries the quick-add cups). */}
+      <MacroBars log={dash} className="mt-4 w-full" />
     </Card>
   );
 }

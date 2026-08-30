@@ -1,22 +1,27 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useLocation, useNavigate } from 'react-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { IconButton } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { ConfirmSheet } from '@/components/ui/ActionSheet';
+import { SelectionBar } from '@/components/ui/SelectionBar';
 import { Fab } from '@/components/ui/Fab';
 import { Icon } from '@/components/ui/Icon';
 import { EmptyState, ErrorState } from '@/components/ui/States';
 import { SkeletonCard } from '@/components/ui/Skeleton';
+import { useToast } from '@/components/ui/Toast';
 import { BodyChart, type ChartPoint } from '@/components/body/BodyChart';
 import { MeasurementSheet } from '@/components/body/MeasurementSheet';
 import { measurementService } from '@/services/measurementService';
 import { profileService } from '@/services/profileService';
-import { queryKeys } from '@/lib/queryKeys';
+import { queryKeys, invalidateDayData } from '@/lib/queryKeys';
 import { useUnits } from '@/hooks/useUnits';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
+import { useLongPress } from '@/hooks/useLongPress';
 import { kgToDisplay, formatWeight } from '@/utils/units';
+import { extractApiError } from '@/utils/apiError';
 import { addDays, parseDate, toDateString } from '@/utils/format';
 import { cn } from '@/utils/cn';
 import type { BodyMeasurement } from '@/types';
@@ -40,14 +45,24 @@ const RANGES: { key: RangeKey; days: number | null }[] = [
 export default function BodyPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const { weightUnit } = useUnits();
   const today = toDateString();
 
   const [metric, setMetric] = useState<Metric>('weight');
   const [range, setRange] = useState<RangeKey>('3m');
-  const [sheetOpen, setSheetOpen] = useState(false);
+  // The weekly check-in deep-links straight into the add sheet.
+  const [sheetOpen, setSheetOpen] = useState(
+    () => Boolean((location.state as { add?: boolean } | null)?.add),
+  );
   const [editing, setEditing] = useState<BodyMeasurement | null>(null);
   const [showAll, setShowAll] = useState(false);
+  // Multi-select over the measurement list (hold a row to start): bulk clean-up
+  // of imported or duplicated points without one confirm dialog per day.
+  const [selectDates, setSelectDates] = useState<Set<string> | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const query = useQuery({
     queryKey: queryKeys.measurements(),
@@ -61,6 +76,35 @@ export default function BodyPage() {
   });
   const showSkeleton = useDelayedBoolean(query.isLoading, 300);
   const measurements = useMemo(() => query.data ?? [], [query.data]);
+
+  // Stale dates (rows deleted elsewhere) are inert: everything below derives
+  // from the LIVE list, so they simply stop matching anything.
+  const selecting = selectDates !== null;
+  const selectedRows = measurements.filter((m) => selectDates?.has(m.measuredOn));
+  const toggleSelect = (d: string) =>
+    setSelectDates((prev) => {
+      const next = new Set(prev ?? []);
+      if (next.has(d)) next.delete(d);
+      else next.add(d);
+      return next;
+    });
+
+  const deleteBatch = useMutation({
+    mutationFn: (dates: string[]) => measurementService.removeBatch(dates),
+    onSuccess: () => {
+      setConfirmingDelete(false);
+      setSelectDates(null);
+      queryClient.invalidateQueries({ queryKey: queryKeys.measurements() });
+      // Deleting the newest measurement moves the profile (and today's burn).
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile() });
+      invalidateDayData(queryClient);
+      toast('success', t('today.deleted', 'Deleted'));
+    },
+    onError: (err) => {
+      setConfirmingDelete(false);
+      toast('error', extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.')));
+    },
+  });
 
   const rangeStart = useMemo(() => {
     const days = RANGES.find((r) => r.key === range)?.days ?? null;
@@ -138,6 +182,23 @@ export default function BodyPage() {
     () => new Intl.DateTimeFormat(i18n.language, { weekday: 'short', day: 'numeric', month: 'short' }),
     [i18n.language],
   );
+
+  // Same disambiguation rule as the chart's x axis: a date from any year
+  // other than the current one carries its year, so "Sat, 12 Aug" can never
+  // silently mean twelve months ago. Current-year rows stay clean.
+  const dateFmtWithYear = useMemo(
+    () =>
+      new Intl.DateTimeFormat(i18n.language, {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }),
+    [i18n.language],
+  );
+  const currentYear = parseDate(today).getFullYear();
+  const fmtFor = (dateStr: string) =>
+    parseDate(dateStr).getFullYear() === currentYear ? dateFmt : dateFmtWithYear;
 
   const signedWeight = (kg: number) => {
     const v = Math.round(kgToDisplay(Math.abs(kg), weightUnit) * 10) / 10;
@@ -242,7 +303,7 @@ export default function BodyPage() {
                 {t('body.history_title', 'Measurements')}
               </p>
               <p className="mt-0.5 text-[12px] text-ink-3">
-                {t('body.history_subtitle', 'Tap one to correct or delete it')}
+                {t('body.history_subtitle_v2', 'Tap one to correct it. Hold to select several.')}
               </p>
             </div>
 
@@ -260,42 +321,27 @@ export default function BodyPage() {
             ) : (
               <>
                 {listRows.map((m, i) => (
-                  <button
+                  <MeasurementRow
                     key={m.measuredOn}
-                    type="button"
-                    onClick={() => {
-                      setEditing(m);
-                      setSheetOpen(true);
+                    measurement={m}
+                    isFirst={i === 0}
+                    isToday={m.measuredOn === today}
+                    dateFmt={fmtFor(m.measuredOn)}
+                    weightUnit={weightUnit}
+                    selectMode={selecting}
+                    selected={selectDates?.has(m.measuredOn) ?? false}
+                    onTap={() => {
+                      if (selecting) {
+                        toggleSelect(m.measuredOn);
+                      } else {
+                        setEditing(m);
+                        setSheetOpen(true);
+                      }
                     }}
-                    className={cn(
-                      'pressable w-full flex items-center gap-3 px-4 py-2.5 text-left active:bg-press',
-                      i > 0 && 'border-t border-hairline/60',
-                    )}
-                  >
-                    <span className="flex-1 min-w-0">
-                      <span className="block text-[14px] font-semibold text-ink capitalize">
-                        {m.measuredOn === today
-                          ? t('progress.today_row', 'Today')
-                          : dateFmt.format(parseDate(m.measuredOn))}
-                      </span>
-                      {m.source === 'history' && (
-                        <span className="block text-[11px] text-ink-3">
-                          {t('body.source_history', 'From your log history')}
-                        </span>
-                      )}
-                    </span>
-                    {m.weightKg != null && (
-                      <span className="text-[14px] font-bold text-ink tabular-nums">
-                        {formatWeight(m.weightKg, weightUnit)}
-                      </span>
-                    )}
-                    {m.bodyFatPercent != null && (
-                      <span className="rounded-full bg-protein-soft px-2 py-0.5 text-[12px] font-bold text-protein tabular-nums">
-                        {m.bodyFatPercent}%
-                      </span>
-                    )}
-                    <Icon name="chevronRight" size={16} className="text-ink-3 shrink-0" />
-                  </button>
+                    onLongPress={() =>
+                      selecting ? toggleSelect(m.measuredOn) : setSelectDates(new Set([m.measuredOn]))
+                    }
+                  />
                 ))}
                 {!showAll && measurements.length > listRows.length && (
                   <button
@@ -312,12 +358,43 @@ export default function BodyPage() {
         </>
       )}
 
-      <Fab
-        label={t('body.add_fab', 'Add')}
-        onClick={() => {
-          setEditing(null);
-          setSheetOpen(true);
-        }}
+      {!selecting && (
+        <Fab
+          label={t('body.add_fab', 'Add')}
+          onClick={() => {
+            setEditing(null);
+            setSheetOpen(true);
+          }}
+        />
+      )}
+
+      {selecting && (
+        <SelectionBar
+          count={selectedRows.length}
+          actions={[
+            {
+              icon: 'trash',
+              label: t('common.delete', 'Delete'),
+              destructive: true,
+              onSelect: () => setConfirmingDelete(true),
+            },
+          ]}
+          onClear={() => setSelectDates(null)}
+          busy={deleteBatch.isPending}
+        />
+      )}
+
+      <ConfirmSheet
+        open={confirmingDelete}
+        onClose={() => setConfirmingDelete(false)}
+        title={t('select.delete_measurements_title', 'Delete {{n}} measurements?', {
+          n: selectedRows.length,
+        })}
+        body={t('select.delete_measurements_body', 'They disappear from the graph. If the newest one goes, your profile follows the latest one that remains.')}
+        confirmLabel={t('common.delete', 'Delete')}
+        cancelLabel={t('common.cancel', 'Cancel')}
+        loading={deleteBatch.isPending}
+        onConfirm={() => deleteBatch.mutate(selectedRows.map((m) => m.measuredOn))}
       />
 
       <MeasurementSheet
@@ -326,6 +403,80 @@ export default function BodyPage() {
         measurement={editing}
         profile={profile}
       />
+    </div>
+  );
+}
+
+function MeasurementRow({
+  measurement: m,
+  isFirst,
+  isToday,
+  dateFmt,
+  weightUnit,
+  selectMode,
+  selected,
+  onTap,
+  onLongPress,
+}: {
+  measurement: BodyMeasurement;
+  isFirst: boolean;
+  isToday: boolean;
+  dateFmt: Intl.DateTimeFormat;
+  weightUnit: 'kg' | 'lbs';
+  selectMode: boolean;
+  selected: boolean;
+  onTap: () => void;
+  onLongPress: () => void;
+}) {
+  const { t } = useTranslation();
+  const handlers = useLongPress({ onLongPress, onTap });
+  return (
+    <div
+      role={selectMode ? 'checkbox' : 'button'}
+      aria-checked={selectMode ? selected : undefined}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onTap();
+      }}
+      {...handlers}
+      className={cn(
+        'pressable w-full flex items-center gap-3 px-4 py-2.5 text-left active:bg-press cursor-pointer',
+        !isFirst && 'border-t border-hairline/60',
+        selectMode && selected && 'bg-primary-soft/60',
+      )}
+    >
+      {selectMode && (
+        <span
+          aria-hidden="true"
+          className={cn(
+            'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+            selected ? 'bg-primary border-primary text-on-primary' : 'border-ink-3/50 text-transparent',
+          )}
+        >
+          <Icon name="check" size={14} strokeWidth={3} />
+        </span>
+      )}
+      <span className="flex-1 min-w-0">
+        <span className="block text-[14px] font-semibold text-ink capitalize">
+          {isToday ? t('progress.today_row', 'Today') : dateFmt.format(parseDate(m.measuredOn))}
+        </span>
+        {m.source === 'history' && (
+          <span className="block text-[11px] text-ink-3">
+            {t('body.source_history', 'From your log history')}
+          </span>
+        )}
+      </span>
+      {m.weightKg != null && (
+        <span className="text-[14px] font-bold text-ink tabular-nums">
+          {formatWeight(m.weightKg, weightUnit)}
+        </span>
+      )}
+      {m.bodyFatPercent != null && (
+        <span className="rounded-full bg-protein-soft px-2 py-0.5 text-[12px] font-bold text-protein tabular-nums">
+          {m.bodyFatPercent}%
+        </span>
+      )}
+      {!selectMode && <Icon name="chevronRight" size={16} className="text-ink-3 shrink-0" />}
     </div>
   );
 }

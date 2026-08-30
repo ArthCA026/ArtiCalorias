@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { IconButton } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/States';
-import { ActionSheet, ConfirmSheet } from '@/components/ui/ActionSheet';
+import { ConfirmSheet } from '@/components/ui/ActionSheet';
 import { ItemRow, ItemMeta } from '@/components/ui/ItemRow';
 import { Fab } from '@/components/ui/Fab';
 import { useToast } from '@/components/ui/Toast';
@@ -26,7 +26,6 @@ export function Routines() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [selected, setSelected] = useState<FavoriteRoutineResponse | null>(null);
   const [editing, setEditing] = useState<FavoriteRoutineResponse | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<FavoriteRoutineResponse | null>(null);
@@ -134,8 +133,8 @@ export function Routines() {
                 <ItemRow
                   key={routine.favoriteRoutineId}
                   title={routine.routineName}
-                  ariaLabel={t('templates.row_aria', '{{name}}, open options', { name: routine.routineName })}
-                  onOpen={() => setSelected(routine)}
+                  ariaLabel={t('templates.routine_tap_aria', '{{name}}, tap to edit', { name: routine.routineName })}
+                  onTap={() => setEditing(routine)}
                   trailing={
                     <IconButton
                       icon="plus"
@@ -159,25 +158,6 @@ export function Routines() {
         </Card>
       )}
 
-      <ActionSheet
-        open={selected !== null}
-        onClose={() => setSelected(null)}
-        title={selected?.routineName}
-        actions={[
-          {
-            icon: 'pencil',
-            label: t('common.edit', 'Edit'),
-            onSelect: () => setEditing(selected),
-          },
-          {
-            icon: 'trash',
-            label: t('common.delete', 'Delete'),
-            destructive: true,
-            onSelect: () => selected && setDeleteTarget(selected),
-          },
-        ]}
-      />
-
       <ConfirmSheet
         open={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
@@ -189,7 +169,17 @@ export function Routines() {
         onConfirm={() => deleteTarget && del.mutate(deleteTarget)}
       />
 
-      {editing && <RoutineSheet routine={editing} onClose={() => setEditing(null)} />}
+      {editing && (
+        <RoutineSheet
+          routine={editing}
+          onClose={() => setEditing(null)}
+          onDelete={() => {
+            const target = editing;
+            setEditing(null);
+            setDeleteTarget(target);
+          }}
+        />
+      )}
       {creating && <RoutineSheet routine={null} onClose={() => setCreating(false)} />}
 
       <Fab label={t('templates.fab_new', 'New')} onClick={() => setCreating(true)} />

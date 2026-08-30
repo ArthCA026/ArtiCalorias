@@ -161,6 +161,32 @@ public class FoodEntryService : IFoodEntryService
         await _streak.RecalculateForUserAsync(userId);
     }
 
+    public async Task<int> DeleteBatchAsync(long userId, long dailyLogId, IReadOnlyList<long> foodEntryIds)
+    {
+        if (foodEntryIds.Count == 0)
+            return 0;
+
+        // Ownership and same-day scoping in the query itself: a foreign or
+        // misplaced id silently drops out instead of deleting someone's data.
+        var entries = await _db.FoodEntries
+            .Where(f => foodEntryIds.Contains(f.FoodEntryId)
+                && f.DailyLogId == dailyLogId
+                && f.DailyLog.UserId == userId)
+            .ToListAsync();
+
+        if (entries.Count == 0)
+            return 0;
+
+        _db.FoodEntries.RemoveRange(entries);
+        await _db.SaveChangesAsync();
+
+        // One pipeline pass for the whole batch, exactly like batch create.
+        await _recalculation.RecalculateFullPipelineAsync(dailyLogId);
+        await _streak.RecalculateForUserAsync(userId);
+
+        return entries.Count;
+    }
+
     private async Task<long> GetUserIdForLogAsync(long dailyLogId) =>
         await _db.DailyLogs
             .AsNoTracking()

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -6,13 +6,15 @@ import { CalorieHero } from '@/components/today/CalorieHero';
 import { DayDetailsSheet } from '@/components/today/DayDetailsSheet';
 import { MealsList, ActivitiesList } from '@/components/today/EntryLists';
 import { ChecklistCard } from '@/components/today/ChecklistCard';
-import { MacroSummaryCard } from '@/components/today/MacroSummaryCard';
 import { WaterCard } from '@/components/today/WaterCard';
+import { AlcoholCard } from '@/components/today/AlcoholCard';
 import { TodaySkeleton } from '@/components/today/TodaySkeleton';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { ActionSheet } from '@/components/ui/ActionSheet';
 import { ErrorState } from '@/components/ui/States';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
+import { IconButton } from '@/components/ui/Button';
 import { Fab } from '@/components/ui/Fab';
 import { useLogSheet } from '@/components/log/LogSheetContext';
 import { dailyLogService } from '@/services/dailyLogService';
@@ -24,6 +26,22 @@ import { usePersistedState } from '@/hooks/usePersistedState';
 type ListTab = 'meals' | 'activities';
 
 const isListTab = (v: string): v is ListTab => v === 'meals' || v === 'activities';
+
+/**
+ * How the day's entries are ordered. A lasting preference (localStorage, not
+ * per-session): people read their log one habitual way.
+ *  - newest: what you just logged lands on top, immediate feedback (default);
+ *  - oldest: chronological, the day reads like a diary (the old behavior);
+ *  - kcal:   heaviest hitters first, "where did my calories go?".
+ * SortOrder is the server's insertion sequence, so it doubles as a timestamp.
+ */
+type DaySort = 'newest' | 'oldest' | 'kcal';
+const SORT_KEY = 'ac-day-sort';
+
+const loadSort = (): DaySort => {
+  const v = localStorage.getItem(SORT_KEY);
+  return v === 'oldest' || v === 'kcal' ? v : 'newest';
+};
 
 interface DayViewProps {
   /** yyyy-MM-dd, today or a past day */
@@ -47,6 +65,14 @@ export function DayView({ date, isToday }: DayViewProps) {
   // (meals or activities) that was in front when you left.
   const [listTab, setListTab] = usePersistedState<ListTab>('ac-tab-day', 'meals', isListTab);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [sort, setSort] = useState<DaySort>(loadSort);
+  const [sortSheetOpen, setSortSheetOpen] = useState(false);
+
+  const changeSort = (s: DaySort) => {
+    localStorage.setItem(SORT_KEY, s);
+    setSort(s);
+    setSortSheetOpen(false);
+  };
 
   const query = useQuery({
     queryKey: queryKeys.dashboard(date),
@@ -57,6 +83,41 @@ export function DayView({ date, isToday }: DayViewProps) {
   const dash = query.data;
 
   const onChanged = () => invalidateDayData(queryClient);
+
+  const sortedMeals = useMemo(() => {
+    const list = [...(dash?.foodEntries ?? [])];
+    if (sort === 'oldest') return list.sort((a, b) => a.sortOrder - b.sortOrder);
+    if (sort === 'kcal')
+      return list.sort((a, b) => b.caloriesKcal - a.caloriesKcal || b.sortOrder - a.sortOrder);
+    return list.sort((a, b) => b.sortOrder - a.sortOrder);
+  }, [dash?.foodEntries, sort]);
+
+  const sortedActivities = useMemo(() => {
+    const list = [...(dash?.activityEntries ?? [])];
+    if (sort === 'oldest') return list.sort((a, b) => a.sortOrder - b.sortOrder);
+    if (sort === 'kcal')
+      return list.sort(
+        (a, b) => b.calculatedCaloriesKcal - a.calculatedCaloriesKcal || b.sortOrder - a.sortOrder,
+      );
+    return list.sort((a, b) => b.sortOrder - a.sortOrder);
+  }, [dash?.activityEntries, sort]);
+
+  const sortLabel =
+    sort === 'oldest'
+      ? t('sort.oldest', 'Oldest first')
+      : sort === 'kcal'
+        ? t('sort.kcal', 'Highest calories')
+        : t('sort.newest', 'Newest first');
+
+  // Extra tracked macros for the meal-row strips, from the day's own frozen
+  // targets: a past day shows the columns it was lived under.
+  const extraMacros = useMemo(
+    () =>
+      (dash?.macroTargets ?? [])
+        .map((m) => m.macroKey)
+        .filter((k) => k === 'alcohol' || k === 'sugar' || k === 'water'),
+    [dash?.macroTargets],
+  );
 
   return (
     <div className="space-y-4">
@@ -114,34 +175,42 @@ export function DayView({ date, isToday }: DayViewProps) {
             <ChecklistCard hasGoal={dash.hasCalorieBudgetEstimate} />
           )}
 
-          <MacroSummaryCard log={dash} />
-
           <WaterCard date={date} log={dash} />
 
-          <div data-tour="lists">
-            <SegmentedControl<ListTab>
-              aria-label={t('today.list_switch', 'Meals or activities')}
-              options={[
-                {
-                  value: 'meals',
-                  label: `${t('today.meals', 'Meals')} (${dash.foodEntries.length})`,
-                  icon: 'meal',
-                },
-                {
-                  value: 'activities',
-                  label: `${t('today.activities', 'Activities')} (${dash.activityEntries.length})`,
-                  icon: 'activity',
-                },
-              ]}
-              value={listTab}
-              onChange={setListTab}
+          <AlcoholCard date={date} log={dash} />
+
+          <div data-tour="lists" className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <SegmentedControl<ListTab>
+                aria-label={t('today.list_switch', 'Meals or activities')}
+                options={[
+                  {
+                    value: 'meals',
+                    label: `${t('today.meals', 'Meals')} (${dash.foodEntries.length})`,
+                    icon: 'meal',
+                  },
+                  {
+                    value: 'activities',
+                    label: `${t('today.activities', 'Activities')} (${dash.activityEntries.length})`,
+                    icon: 'activity',
+                  },
+                ]}
+                value={listTab}
+                onChange={setListTab}
+              />
+            </div>
+            <IconButton
+              icon="arrowUpDown"
+              label={t('sort.button_aria', 'Change list order. Current: {{order}}', { order: sortLabel })}
+              onClick={() => setSortSheetOpen(true)}
             />
           </div>
 
           {listTab === 'meals' ? (
             <MealsList
               date={date}
-              entries={dash.foodEntries}
+              entries={sortedMeals}
+              extraMacros={extraMacros}
               isToday={isToday}
               isFastingDay={dash.isFastingDay}
               onChanged={onChanged}
@@ -149,12 +218,35 @@ export function DayView({ date, isToday }: DayViewProps) {
           ) : (
             <ActivitiesList
               date={date}
-              entries={dash.activityEntries}
+              entries={sortedActivities}
               hasCalorieEstimate={dash.hasCalorieEstimate}
               isToday={isToday}
               onChanged={onChanged}
             />
           )}
+
+          <ActionSheet
+            open={sortSheetOpen}
+            onClose={() => setSortSheetOpen(false)}
+            title={t('sort.sheet_title', 'Order the lists by')}
+            actions={[
+              {
+                icon: sort === 'newest' ? 'check' : 'clock',
+                label: t('sort.newest', 'Newest first'),
+                onSelect: () => changeSort('newest'),
+              },
+              {
+                icon: sort === 'oldest' ? 'check' : 'calendar',
+                label: t('sort.oldest', 'Oldest first'),
+                onSelect: () => changeSort('oldest'),
+              },
+              {
+                icon: sort === 'kcal' ? 'check' : 'flame',
+                label: t('sort.kcal', 'Highest calories'),
+                onSelect: () => changeSort('kcal'),
+              },
+            ]}
+          />
 
           <DayDetailsSheet
             open={detailsOpen}

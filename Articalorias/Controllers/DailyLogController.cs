@@ -65,6 +65,19 @@ public class DailyLogController : ControllerBase
 
         var foods = await _foodEntryService.GetByDailyLogAsync(log.DailyLogId);
         var activities = await _activityService.GetEntriesByDailyLogAsync(log.DailyLogId);
+
+        // Self-heal: the stored day totals can drift from the entries after an
+        // out-of-band data repair (SQL fix scripts touch entries but cannot run
+        // the pipeline). Totals and entries share decimal(10,2), so equality is
+        // exact whenever the pipeline last ran; a mismatch means drift and the
+        // day (plus its week) trues itself up once on view.
+        if (log.TotalFoodCaloriesKcal != foods.Sum(f => f.CaloriesKcal)
+            || log.TotalActivityCaloriesKcal != activities.Sum(a => a.CalculatedCaloriesKcal))
+        {
+            await _recalculation.RecalculateFullPipelineAsync(log.DailyLogId);
+            log = (await _dailyLogService.GetSummaryByDateAsync(userId, date))!;
+        }
+
         var profile = await _profileService.GetByUserIdAsync(userId);
 
         return Ok(MapToDashboard(log, foods, activities, profile?.FirstFoodLoggedAtUtc.HasValue ?? false));
@@ -332,6 +345,35 @@ public class DailyLogController : ControllerBase
     {
         await _foodEntryService.DeleteAsync(foodEntryId);
         return NoContent();
+    }
+
+    /// <summary>
+    /// Multi-select delete for one day's meals: one recalculation for the whole
+    /// selection instead of a full week cascade per entry.
+    /// </summary>
+    [HttpPost("{date}/foods/delete-batch")]
+    public async Task<IActionResult> DeleteFoodBatch(DateOnly date, [FromBody] DeleteFoodEntriesRequest request)
+    {
+        var userId = GetUserId();
+        var log = await _dailyLogService.GetSummaryByDateAsync(userId, date);
+        if (log is null)
+            return NotFound();
+
+        var deleted = await _foodEntryService.DeleteBatchAsync(userId, log.DailyLogId, request.FoodEntryIds);
+        return Ok(new { deleted });
+    }
+
+    /// <summary>Multi-select delete for one day's activities (single recalculation).</summary>
+    [HttpPost("{date}/activities/delete-batch")]
+    public async Task<IActionResult> DeleteActivityBatch(DateOnly date, [FromBody] DeleteActivityEntriesRequest request)
+    {
+        var userId = GetUserId();
+        var log = await _dailyLogService.GetSummaryByDateAsync(userId, date);
+        if (log is null)
+            return NotFound();
+
+        var deleted = await _activityService.DeleteEntriesBatchAsync(userId, log.DailyLogId, request.ActivityEntryIds);
+        return Ok(new { deleted });
     }
 
     [HttpDelete("{date}")]

@@ -37,3 +37,18 @@ export function getAgeProteinMinimum(age: number): number {
   if (age >= 50) return AGE_PROTEIN_MINIMUMS.FROM_50;
   return AGE_PROTEIN_MINIMUMS.UNDER_50;
 }
+
+/**
+ * The grams an AUTO protein goal works out to right now, mirroring the
+ * backend (ProteinMath.GoalGrams): weight x max(stored g/kg, age minimum).
+ * Null = no weight yet; the goal activates when the weight arrives.
+ * A null multiplier is the legacy 2.0 g/kg auto mode.
+ */
+export function effectiveAutoProteinGrams(
+  weightKg: number | null,
+  age: number | null,
+  gramsPerKg: number | null,
+): number | null {
+  if (weightKg === null || weightKg <= 0) return null;
+  return Math.round(weightKg * Math.max(gramsPerKg ?? 2.0, getAgeProteinMinimum(age ?? 30)));
+}

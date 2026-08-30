@@ -13,6 +13,8 @@ import TemplatesPage from '@/pages/TemplatesPage';
 import ProgressPage from '@/pages/ProgressPage';
 import BodyPage from '@/pages/BodyPage';
 import ProfilePage from '@/pages/ProfilePage';
+import MacrosPage from '@/pages/MacrosPage';
+import GoalPage from '@/pages/GoalPage';
 import PremiumPage from '@/pages/PremiumPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 
@@ -49,6 +51,8 @@ const router = createBrowserRouter([
           { path: '/progress', element: <ProgressPage /> },
           { path: '/progress/body', element: <BodyPage /> },
           { path: '/profile', element: <ProfilePage /> },
+          { path: '/profile/macros', element: <MacrosPage /> },
+          { path: '/profile/goal', element: <GoalPage /> },
         ],
       },
       // Legacy routes from the previous UI

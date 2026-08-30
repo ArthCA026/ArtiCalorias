@@ -18,6 +18,19 @@ export const MACRO_META: Record<
   water: { icon: 'glassWater', color: 'var(--t-water)', unit: 'ml', labelKey: 'macros.water_full', fallback: 'Water' },
 };
 
+/**
+ * Protein's face. It is not a MacroKey (its goal lives on the profile with its
+ * own snapshot pipeline) but it renders in the same bar grid as the others,
+ * so its icon and color are defined once, here, next to them.
+ */
+export const PROTEIN_META = {
+  icon: 'drumstick' as IconName,
+  color: 'var(--t-protein)',
+  unit: 'g' as const,
+  labelKey: 'today.protein',
+  fallback: 'Protein',
+};
+
 export function macroLabel(t: TFunction, key: MacroKey): string {
   return t(MACRO_META[key].labelKey, MACRO_META[key].fallback);
 }

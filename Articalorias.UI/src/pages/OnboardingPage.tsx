@@ -24,16 +24,18 @@ import {
   ftInToCm,
   cmToFtIn,
   weightUnitFor,
+  formatWeight,
   type UnitSystem,
 } from '@/utils/units';
-import {
-  GOAL_PRESETS,
-  formatKgPerWeekShort,
-  type GoalPresetKey,
-} from '@/utils/goalUtils';
+import { GOAL_PRESETS, matchPreset } from '@/utils/goalUtils';
+import { GoalPlanner, type GoalSelection } from '@/components/goal/GoalPlanner';
 import { PROTEIN_PRESETS, getAgeProteinMinimum, type ProteinPresetId } from '@/config/proteinPresets';
+import { MACRO_META, macroLabel } from '@/utils/macros';
+import { macroService } from '@/services/macroService';
+import { parseDate } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 import { cn } from '@/utils/cn';
+import type { MacroKey } from '@/types';
 
 /**
  * Onboarding wizard. Endowed progress: the bar starts at 25% because
@@ -42,8 +44,8 @@ import { cn } from '@/utils/cn';
  * preselected, so finishing takes under a minute.
  */
 
-const GOAL_KEYS: GoalPresetKey[] = ['lose-fast', 'lose-moderate', 'lose-slow', 'maintain', 'gain'];
-const TOTAL_STEPS = 5; // account (done), body, goal, protein, reminders
+const TOTAL_STEPS = 6; // account (done), body, goal, protein, macros, reminders
+const ONBOARDING_MACROS: MacroKey[] = ['carbs', 'fat', 'sugar', 'water', 'alcohol'];
 
 const num = (raw: string): number | null => {
   if (raw.trim() === '') return null;
@@ -59,7 +61,7 @@ export default function OnboardingPage() {
   const { system, setSystem, weightUnit } = useUnits();
   const imperial = system === 'imperial';
 
-  const [step, setStep] = useState(0); // 0=body, 1=goal, 2=protein, 3=reminders, 4=summary
+  const [step, setStep] = useState(0); // 0=body, 1=goal, 2=protein, 3=macros, 4=reminders, 5=summary
   const push = usePushNotifications();
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
@@ -72,8 +74,10 @@ export default function OnboardingPage() {
   const [showSpecial, setShowSpecial] = useState(false);
   const [manualBmr, setManualBmr] = useState('');
   const [manualBf, setManualBf] = useState('');
-  const [goalKey, setGoalKey] = useState<GoalPresetKey>('lose-moderate');
-  const [proteinId, setProteinId] = useState<ProteinPresetId>('everyday');
+  const [goalSelection, setGoalSelection] = useState<GoalSelection | null>(null);
+  // 'none' = the user prefers not to track protein at all.
+  const [proteinId, setProteinId] = useState<ProteinPresetId | 'none'>('everyday');
+  const [trackedMacros, setTrackedMacros] = useState<Set<MacroKey>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -120,10 +124,9 @@ export default function OnboardingPage() {
   const bmrOverride = num(manualBmr);
   const bfOverride = num(manualBf);
 
-  const goal = GOAL_PRESETS.find((p) => p.key === goalKey)!;
-  const proteinPreset = PROTEIN_PRESETS.find((p) => p.id === proteinId)!;
+  const proteinPreset = proteinId === 'none' ? null : PROTEIN_PRESETS.find((p) => p.id === proteinId)!;
   const proteinGrams =
-    weightKg !== null
+    proteinPreset !== null && weightKg !== null
       ? Math.round(weightKg * Math.max(proteinPreset.gramsPerKg, getAgeProteinMinimum(a ?? 30)))
       : null;
 
@@ -138,16 +141,51 @@ export default function OnboardingPage() {
   const maintenancePreview = bmrPreview !== null && weightKg !== null
     ? Math.round(bmrPreview + 4.8 * weightKg)
     : null;
-  const budgetPreview = maintenancePreview !== null
-    ? maintenancePreview + Number(goal.kcal)
+  const budgetPreview = maintenancePreview !== null && goalSelection !== null
+    ? maintenancePreview + goalSelection.dailyBaseGoalKcal
     : null;
+
+  // Deurenberg estimate (same formula the server auto-calculates with) so the
+  // planner can offer a body-fat target even before the profile exists. A
+  // manually typed body fat always wins over the estimate.
+  const bfPreview = (() => {
+    if (bfOverride !== null && bfOverride > 0) return bfOverride;
+    if (weightKg === null || h === null || h <= 0 || a === null || sex === '') return null;
+    const bmi = weightKg / (h / 100) ** 2;
+    const est = Math.round((1.2 * bmi + 0.23 * a - 10.8 * (sex === 'M' ? 1 : 0) - 5.4) * 10) / 10;
+    return est >= 0 && est <= 100 ? est : null;
+  })();
+
+  const goalSummaryLabel = (() => {
+    if (goalSelection === null) return '';
+    if (goalSelection.goalTargetDate) {
+      const dateLabel = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(
+        parseDate(goalSelection.goalTargetDate),
+      );
+      return goalSelection.goalTargetBodyFatPercent !== null
+        ? t('onboarding.summary_goal_target_bf', '{{bf}}% body fat by {{date}}', {
+            bf: goalSelection.goalTargetBodyFatPercent,
+            date: dateLabel,
+          })
+        : t('onboarding.summary_goal_target_weight', '{{weight}} by {{date}}', {
+            weight: formatWeight(goalSelection.goalTargetWeightKg ?? 0, weightUnit, 0),
+            date: dateLabel,
+          });
+    }
+    const m = matchPreset(String(Math.round(goalSelection.dailyBaseGoalKcal)));
+    if (!m.isCustom) {
+      const preset = GOAL_PRESETS.find((p) => p.key === m.preset);
+      if (preset) return t(`goal.${preset.key}`, preset.label);
+    }
+    return t('profile.goal_custom_value', 'Custom');
+  })();
 
   const hasManualBmr = bmrOverride !== null && bmrOverride > 0;
   const hasManualBf = bfOverride !== null && bfOverride > 0;
 
   const save = useMutation({
-    mutationFn: () =>
-      profileService
+    mutationFn: async () => {
+      const profile = await profileService
         .update({
           currentWeightKg: weightKg,
           heightCm: h,
@@ -157,15 +195,44 @@ export default function OnboardingPage() {
           bmrKcal: hasManualBmr ? bmrOverride : null,
           autoCalculateBodyFat: !hasManualBf,
           bodyFatPercent: hasManualBf ? bfOverride : null,
-          dailyBaseGoalKcal: Number(goal.kcal),
-          proteinGoalGrams: proteinGrams,
-          autoCalculateProteinGoal: proteinGrams === null,
+          dailyBaseGoalKcal: goalSelection?.dailyBaseGoalKcal ?? -500,
+          goalTargetWeightKg: goalSelection?.goalTargetWeightKg ?? null,
+          goalTargetBodyFatPercent: goalSelection?.goalTargetBodyFatPercent ?? null,
+          goalTargetDate: goalSelection?.goalTargetDate ?? null,
+          // 'none' = protein off from day one. A preset stores its g/kg
+          // multiplier in AUTO mode, so the target derives from the weight
+          // now, activates by itself if the weight arrives later, and keeps
+          // following the body from then on.
+          proteinGoalGrams: null,
+          autoCalculateProteinGoal: proteinId !== 'none',
+          proteinGoalGramsPerKg: proteinPreset?.gramsPerKg ?? null,
           calorieDisplayMode: 'adjusted',
           minCaloriesSafeguardEnabled: true,
           sleepHours: 8,
           neatHours: 3,
         })
-        .then((r) => r.data),
+        .then((r) => r.data);
+
+      // Macro choices go in BEFORE the first day is created (the Today
+      // dashboard freezes its targets at creation). A failure here is not
+      // fatal: tracking can always be turned on later in Profile.
+      if (trackedMacros.size > 0) {
+        try {
+          await macroService.updatePreferences({
+            items: ONBOARDING_MACROS.map((key) => ({
+              macroKey: key,
+              isTracked: trackedMacros.has(key),
+              targetMode: 'auto',
+              customTargetValue: null,
+            })),
+          });
+        } catch {
+          /* non-critical */
+        }
+      }
+
+      return profile;
+    },
     onSuccess: (profile) => {
       queryClient.setQueryData(queryKeys.profile(), profile);
       navigate('/today', { replace: true });
@@ -175,13 +242,16 @@ export default function OnboardingPage() {
   });
 
   const stepValid =
-    step !== 0 ||
-    ((w === null || (w > 0 && w < 1200)) &&
-      (h === null || (h > 0 && h < 300)) &&
-      (inch === null || (inch >= 0 && inch < 12)) &&
-      (a === null || (a >= 1 && a <= 150)) &&
-      (bmrOverride === null || (bmrOverride >= 500 && bmrOverride <= 8000)) &&
-      (bfOverride === null || (bfOverride >= 1 && bfOverride <= 75)));
+    step === 0
+      ? (w === null || (w > 0 && w < 1200)) &&
+        (h === null || (h > 0 && h < 300)) &&
+        (inch === null || (inch >= 0 && inch < 12)) &&
+        (a === null || (a >= 1 && a <= 150)) &&
+        (bmrOverride === null || (bmrOverride >= 500 && bmrOverride <= 8000)) &&
+        (bfOverride === null || (bfOverride >= 1 && bfOverride <= 75))
+      : step === 1
+        ? goalSelection !== null
+        : true;
 
   const progress = (step + 1) / (TOTAL_STEPS + 1);
 
@@ -205,7 +275,7 @@ export default function OnboardingPage() {
         </button>
       </header>
       <p className="mt-2 text-[12px] font-semibold text-primary-soft-ink text-center">
-        {step < 4
+        {step < 5
           ? t('onboarding.progress_note', 'Account created. You are already {{pct}}% done.', {
               pct: Math.round(progress * 100),
             })
@@ -258,7 +328,9 @@ export default function OnboardingPage() {
                       <DecimalField
                         aria-label={t('profile.height_in_aria', 'Height, inches')}
                         suffix="in"
-                        placeholder="10"
+                        // Single digit on purpose: the inches field is only half a
+                        // grid column wide, so a two-digit placeholder gets clipped.
+                        placeholder="8"
                         value={heightIn}
                         onValueChange={setHeightIn}
                         containerClassName="flex-1"
@@ -345,43 +417,22 @@ export default function OnboardingPage() {
                 {t('onboarding.goal_title', 'What is your goal?')}
               </h1>
               <p className="text-sm text-ink-2 mt-1">
-                {t('onboarding.goal_sub', 'Most members pick a steady pace. Slow and consistent wins.')}
+                {t('onboarding.goal_sub_v2', 'Pick a weekly pace, or aim at a weight by a date and we set the pace for you.')}
               </p>
             </div>
-            <div className="space-y-2" role="radiogroup" aria-label={t('onboarding.goal_title', 'What is your goal?')}>
-              {GOAL_KEYS.map((key) => {
-                const p = GOAL_PRESETS.find((g) => g.key === key)!;
-                const active = goalKey === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    onClick={() => setGoalKey(key)}
-                    className={cn(
-                      'pressable w-full rounded-card px-4 py-3 text-left flex items-center gap-3',
-                      active ? 'bg-primary-soft ring-2 ring-primary/60' : 'bg-card',
-                    )}
-                  >
-                    <span className="flex-1">
-                      <span className="flex items-center gap-2">
-                        <span className="text-[15px] font-bold text-ink">{t(`goal.${p.key}`, p.label)}</span>
-                        {key === 'lose-moderate' && (
-                          <span className="text-[10px] font-extrabold uppercase tracking-wide bg-primary text-on-primary rounded-full px-2 py-0.5">
-                            {t('onboarding.goal_popular', '62% choose this')}
-                          </span>
-                        )}
-                      </span>
-                      <span className="block text-[12px] text-ink-2 mt-0.5">
-                        {formatKgPerWeekShort(p.kgPerWeek, weightUnit)}
-                      </span>
-                    </span>
-                    {active && <Icon name="checkCircle" size={20} className="text-primary" />}
-                  </button>
-                );
-              })}
-            </div>
+            <GoalPlanner
+              currentWeightKg={weightKg}
+              heightCm={h}
+              bodyFatPercent={bfPreview}
+              biologicalSex={sex || null}
+              weightUnit={weightUnit}
+              initialGoalKcal={goalSelection?.goalTargetDate ? -550 : (goalSelection?.dailyBaseGoalKcal ?? -550)}
+              initialTargetWeightKg={goalSelection?.goalTargetWeightKg}
+              initialTargetBfPercent={goalSelection?.goalTargetBodyFatPercent}
+              initialTargetDate={goalSelection?.goalTargetDate}
+              onChange={setGoalSelection}
+              optionClassName="bg-card"
+            />
           </div>
         )}
 
@@ -424,13 +475,93 @@ export default function OnboardingPage() {
                   </button>
                 );
               })}
+              {/* Protein is optional, exactly like the other macros. */}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={proteinId === 'none'}
+                onClick={() => setProteinId('none')}
+                className={cn(
+                  'pressable w-full rounded-card px-4 py-3 text-left flex items-center gap-3',
+                  proteinId === 'none' ? 'bg-primary-soft ring-2 ring-primary/60' : 'bg-card',
+                )}
+              >
+                <span className="flex-1">
+                  <span className="text-[15px] font-bold text-ink">
+                    {t('onboarding.protein_none', 'No protein target')}
+                  </span>
+                  <span className="block text-[12px] text-ink-2 mt-0.5">
+                    {t('onboarding.protein_none_sub', 'Track calories only. You can turn it on any time in Profile.')}
+                  </span>
+                </span>
+                {proteinId === 'none' && <Icon name="checkCircle" size={20} className="text-primary" />}
+              </button>
             </div>
           </div>
         )}
 
-        {step === 3 && <RemindersStep push={push} />}
+        {step === 3 && (
+          <div className="space-y-4">
+            <div>
+              <h1 className="text-xl font-extrabold text-ink">
+                {t('onboarding.macros_title', 'Anything else to keep an eye on?')}
+              </h1>
+              <p className="text-sm text-ink-2 mt-1">
+                {t('onboarding.macros_sub', 'Each one gets its own bar on your day, with a target set for you. Most people start with none and add later.')}
+              </p>
+            </div>
+            <div className="space-y-2">
+              {ONBOARDING_MACROS.map((key) => {
+                const meta = MACRO_META[key];
+                const active = trackedMacros.has(key);
+                const isLimit = key === 'sugar' || key === 'alcohol';
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={active}
+                    onClick={() =>
+                      setTrackedMacros((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(key)) next.delete(key);
+                        else next.add(key);
+                        return next;
+                      })
+                    }
+                    className={cn(
+                      'pressable w-full rounded-card px-4 py-3 text-left flex items-center gap-3',
+                      active ? 'bg-primary-soft ring-2 ring-primary/60' : 'bg-card',
+                    )}
+                  >
+                    <span
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-inset"
+                      style={{ color: meta.color }}
+                    >
+                      <Icon name={meta.icon} size={18} />
+                    </span>
+                    <span className="flex-1">
+                      <span className="text-[15px] font-bold text-ink">{macroLabel(t, key)}</span>
+                      <span className="block text-[12px] text-ink-2 mt-0.5">
+                        {isLimit
+                          ? t('macros.kind_limit', 'A limit: warns when you go over')
+                          : t('macros.kind_hit', 'A goal: fill the bar to reach it')}
+                      </span>
+                    </span>
+                    {active && <Icon name="checkCircle" size={20} className="text-primary shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[13px] text-ink-3 leading-relaxed">
+              {t('onboarding.macros_hint', 'Nothing is mandatory. Every choice here can be changed in Profile, under Macro tracking.')}
+            </p>
+          </div>
+        )}
 
-        {step === 4 && (
+        {step === 4 && <RemindersStep push={push} />}
+
+        {step === 5 && (
           <div className="space-y-4">
             <div className="text-center">
               <span className="inline-flex w-14 h-14 rounded-2xl bg-primary-soft text-primary-soft-ink items-center justify-center animate-pop">
@@ -447,7 +578,7 @@ export default function OnboardingPage() {
               <SummaryRow
                 icon="target"
                 label={t('onboarding.summary_goal', 'Goal')}
-                value={t(`goal.${goal.key}`, goal.label)}
+                value={goalSummaryLabel}
               />
               {budgetPreview !== null && (
                 <SummaryRow
@@ -458,9 +589,16 @@ export default function OnboardingPage() {
               )}
               {proteinGrams !== null && (
                 <SummaryRow
-                  icon="zap"
+                  icon="drumstick"
                   label={t('onboarding.summary_protein', 'Protein target')}
                   value={`${proteinGrams} g`}
+                />
+              )}
+              {trackedMacros.size > 0 && (
+                <SummaryRow
+                  icon="sliders"
+                  label={t('onboarding.summary_macros', 'Extra macros')}
+                  value={t('profile.macros_tracked_n', '{{n}} tracked', { n: trackedMacros.size })}
                 />
               )}
               {weightKg !== null && (
@@ -483,7 +621,7 @@ export default function OnboardingPage() {
       {error && <InlineError message={error} className="mb-2" />}
 
       <div className="mt-6">
-        {step < 3 ? (
+        {step < 4 ? (
           <Button
             variant="primary"
             size="lg"
@@ -493,14 +631,14 @@ export default function OnboardingPage() {
           >
             {t('common.continue', 'Continue')}
           </Button>
-        ) : step === 3 ? (
+        ) : step === 4 ? (
           // Reminders are opt-in: once enabled the button turns primary, and
           // declining is one calm tap, never a guilt trip.
           <Button
             variant={push.subscribed || !push.supported ? 'primary' : 'ghost'}
             size="lg"
             fullWidth
-            onClick={() => setStep(4)}
+            onClick={() => setStep(5)}
           >
             {push.subscribed || !push.supported
               ? t('common.continue', 'Continue')

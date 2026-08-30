@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { profileService } from '@/services/profileService';
 import { queryKeys } from '@/lib/queryKeys';
-import type { UserProfileResponse, UserProfileRequest } from '@/types';
+import { profileToRequest } from '@/utils/profile';
+import type { UserProfileResponse } from '@/types';
 
 export type CalorieMode = 'net' | 'goal' | 'adjusted';
 
@@ -10,28 +11,6 @@ const FALLBACK: CalorieMode = 'adjusted';
 
 function isValidMode(v: string | null): v is CalorieMode {
   return v === 'net' || v === 'goal' || v === 'adjusted';
-}
-
-/** Maps a loaded profile response back to a save request, preserving all fields. */
-function profileToRequest(p: UserProfileResponse): UserProfileRequest {
-  return {
-    currentWeightKg: p.currentWeightKg,
-    heightCm: p.heightCm,
-    age: p.age,
-    biologicalSex: p.biologicalSex,
-    bmrKcal: p.bmrKcal,
-    bodyFatPercent: p.bodyFatPercent,
-    autoCalculateBMR: p.autoCalculateBMR,
-    autoCalculateBodyFat: p.autoCalculateBodyFat,
-    dailyBaseGoalKcal: p.dailyBaseGoalKcal,
-    proteinGoalGrams: p.proteinGoalGrams,
-    autoCalculateProteinGoal: p.autoCalculateProteinGoal,
-    country: p.country,
-    calorieDisplayMode: p.calorieDisplayMode,
-    minCaloriesSafeguardEnabled: p.minCaloriesSafeguardEnabled,
-    sleepHours: p.sleepHours,
-    neatHours: p.neatHours,
-  };
 }
 
 export function useCalorieMode() {

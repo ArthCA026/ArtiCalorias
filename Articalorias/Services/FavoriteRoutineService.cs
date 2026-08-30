@@ -164,26 +164,7 @@ public class FavoriteRoutineService : IFavoriteRoutineService
                     continue;
                 }
 
-                var entry = new FoodEntry
-                {
-                    DailyLogId = log.DailyLogId,
-                    FoodTemplateId = item.FoodTemplate.FoodTemplateId,
-                    FoodName = item.FoodTemplate.TemplateName,
-                    PortionDescription = item.FoodTemplate.PortionDescription,
-                    Quantity = item.FoodTemplate.DefaultQuantity,
-                    CaloriesKcal = item.FoodTemplate.CaloriesKcal,
-                    ProteinGrams = item.FoodTemplate.ProteinGrams,
-                    FatGrams = item.FoodTemplate.FatGrams,
-                    CarbsGrams = item.FoodTemplate.CarbsGrams,
-                    AlcoholGrams = item.FoodTemplate.AlcoholGrams,
-                    SugarGrams = item.FoodTemplate.SugarGrams,
-                    WaterMl = item.FoodTemplate.WaterMl,
-                    SortOrder = ++maxFoodSort,
-                    CreatedAtUtc = DateTime.UtcNow,
-                    UpdatedAtUtc = DateTime.UtcNow,
-                };
-
-                _db.FoodEntries.Add(entry);
+                _db.FoodEntries.Add(FoodTemplateMath.ToEntry(item.FoodTemplate, log.DailyLogId, ++maxFoodSort));
                 addedFood = true;
                 addedCount++;
             }

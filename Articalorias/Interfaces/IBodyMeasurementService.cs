@@ -20,6 +20,13 @@ public interface IBodyMeasurementService
     Task<bool> DeleteAsync(long userId, DateOnly date, DateOnly localToday, CancellationToken ct = default);
 
     /// <summary>
+    /// Deletes several days' measurements in one pass, syncing the profile to
+    /// the surviving newest measurement once at the end. Returns the number of
+    /// rows actually deleted.
+    /// </summary>
+    Task<int> DeleteBatchAsync(long userId, IReadOnlyList<DateOnly> dates, DateOnly localToday, CancellationToken ct = default);
+
+    /// <summary>
     /// Records the profile's current weight/body-fat as today's measurement
     /// (source "profile"). Called by the profile save path so manual profile
     /// edits and the Body page can never disagree.

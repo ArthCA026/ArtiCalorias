@@ -60,6 +60,26 @@ export function formatKgPerWeekShort(kg: number, unit: WeightUnit = "kg"): strin
 export const CUSTOM_KG_MIN = -1.50;
 export const CUSTOM_KG_MAX =  1.00;
 
+/** The same limits expressed as a daily kcal adjustment (7700 kcal/kg). */
+export const CUSTOM_KCAL_MIN = kgPerWeekToKcal(CUSTOM_KG_MIN); // -1650
+export const CUSTOM_KCAL_MAX = kgPerWeekToKcal(CUSTOM_KG_MAX); // +1100
+
+/** Validates a raw custom kcal/day string. Returns an error message or null. */
+export function validateCustomKcal(value: string): string | null {
+  if (!value.trim()) return "Enter a value.";
+  const n = parseFloat(value.replace(",", "."));
+  if (isNaN(n)) return "Enter a valid number.";
+  if (n < CUSTOM_KCAL_MIN) return `Minimum is ${CUSTOM_KCAL_MIN} kcal/day.`;
+  if (n > CUSTOM_KCAL_MAX) return `Maximum is +${CUSTOM_KCAL_MAX} kcal/day.`;
+  return null;
+}
+
+/** "-550" | "+320" | "0" — a signed daily kcal adjustment, compact. */
+export function formatSignedKcal(kcal: number): string {
+  const r = Math.round(kcal);
+  return r > 0 ? `+${r.toLocaleString()}` : r.toLocaleString();
+}
+
 /** Validates a raw custom kg/week string. Returns an error message or null. */
 export function validateCustomKg(value: string, unit: WeightUnit = "kg"): string | null {
   if (!value.trim()) return "Enter a value.";
@@ -84,6 +104,121 @@ export function getCustomKgHint(value: string): { text: string; icon: "warning" 
   if (n > -0.10 && n < 0.10) return { text: "This is close to maintenance.", icon: "info" };
   if (n > 0) return { text: "This will increase your calorie target for weight gain.", icon: "info" };
   return null;
+}
+
+// ─── Goal-by-date ("reach X by DATE") helpers ─────────────────────────────────
+//
+// The planner turns a target (weight or body fat %) plus a date into the same
+// kg/week pace the presets use, then guards it with medically informed limits:
+//   loss: at most 1% of current body weight per week, hard-capped at the
+//         app-wide 1.50 kg/week (faster loss risks muscle, gallstones, LEA).
+//   gain: at most 0.50% of body weight per week, hard-capped at 1.00 kg/week
+//         (faster surplus is mostly fat gain).
+// Body-fat targets are additionally floored at essential fat levels.
+
+/** Fastest medically reasonable LOSS pace (kg/week, positive number). */
+export function maxSafeLossKgPerWeek(currentWeightKg: number): number {
+  return Math.min(currentWeightKg * 0.01, Math.abs(CUSTOM_KG_MIN));
+}
+
+/** Fastest reasonable GAIN pace (kg/week, positive number). */
+export function maxSafeGainKgPerWeek(currentWeightKg: number): number {
+  return Math.min(currentWeightKg * 0.005, CUSTOM_KG_MAX);
+}
+
+/** Essential body-fat floor: targets below this are refused outright. */
+export function minBodyFatPercentFor(sex: string | null | undefined): number {
+  return sex === 'M' ? 5 : 12;
+}
+
+/**
+ * Converts a body-fat % target into the weight that reaches it with lean mass
+ * held constant (the only defensible assumption for a planning tool):
+ *   leanKg = current × (1 − bf/100);  targetKg = leanKg / (1 − targetBf/100)
+ */
+export function weightForBodyFatTarget(
+  currentWeightKg: number,
+  currentBfPercent: number,
+  targetBfPercent: number,
+): number {
+  const leanKg = currentWeightKg * (1 - currentBfPercent / 100);
+  return Math.round((leanKg / (1 - targetBfPercent / 100)) * 10) / 10;
+}
+
+export interface TargetPlan {
+  /** Signed pace needed to land on the date (negative = losing). */
+  kgPerWeek: number;
+  /** Same pace as a signed daily kcal adjustment. */
+  kcalPerDay: number;
+  /** Whole weeks (fractional) between today and the target date. */
+  weeks: number;
+  /** null = pace is inside safe limits; otherwise the verdict for the UI. */
+  verdict: 'too-fast-loss' | 'too-fast-gain' | null;
+  /** Date (yyyy-MM-dd) the target IS reachable by at the fastest safe pace. */
+  safeDate: string | null;
+  /** The fastest safe signed pace for this direction (kg/week). */
+  safeKgPerWeek: number;
+}
+
+/**
+ * The whole plan for "weigh targetKg by dateStr". Pure math, no clamping:
+ * the caller decides whether an unsafe verdict blocks saving (it should).
+ */
+export function planForTarget(
+  currentWeightKg: number,
+  targetWeightKg: number,
+  todayStr: string,
+  dateStr: string,
+): TargetPlan | null {
+  const days = daysBetweenDates(todayStr, dateStr);
+  if (days < 7) return null; // Under a week is noise, not a plan.
+
+  const weeks = days / 7;
+  const deltaKg = targetWeightKg - currentWeightKg;
+  const kgPerWeek = deltaKg / weeks;
+  const losing = deltaKg < 0;
+
+  const safeMagnitude = losing
+    ? maxSafeLossKgPerWeek(currentWeightKg)
+    : maxSafeGainKgPerWeek(currentWeightKg);
+  const safeKgPerWeek = losing ? -safeMagnitude : safeMagnitude;
+
+  const unsafe = Math.abs(kgPerWeek) > safeMagnitude + 1e-9;
+  let safeDate: string | null = null;
+  if (unsafe && safeMagnitude > 0) {
+    const safeWeeks = Math.ceil(Math.abs(deltaKg) / safeMagnitude);
+    safeDate = addDaysToDateString(todayStr, safeWeeks * 7);
+  }
+
+  return {
+    kgPerWeek: Math.round(kgPerWeek * 100) / 100,
+    kcalPerDay: kgPerWeekToKcal(kgPerWeek),
+    weeks,
+    verdict: unsafe ? (losing ? 'too-fast-loss' : 'too-fast-gain') : null,
+    safeDate,
+    safeKgPerWeek: Math.round(safeKgPerWeek * 100) / 100,
+  };
+}
+
+/** Longest planning horizon the UI offers (2 years is a plan; 5 is a wish). */
+export const TARGET_MAX_DAYS = 730;
+
+function daysBetweenDates(a: string, b: string): number {
+  return Math.round((dateFrom(b).getTime() - dateFrom(a).getTime()) / 86400000);
+}
+
+function addDaysToDateString(dateStr: string, days: number): string {
+  const d = dateFrom(dateStr);
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function dateFrom(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
 }
 
 // ─── Preset matching ───────────────────────────────────────────────────────────

@@ -29,10 +29,12 @@ interface RoutineSheetProps {
   /** null = create mode */
   routine: FavoriteRoutineResponse | null;
   onClose: () => void;
+  /** Edit mode only: hands deletion back to the list (confirm sheet there). */
+  onDelete?: () => void;
 }
 
 /** Create or edit a routine: name it, then tap templates in the order they should be added. */
-export function RoutineSheet({ routine, onClose }: RoutineSheetProps) {
+export function RoutineSheet({ routine, onClose, onDelete }: RoutineSheetProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -237,6 +239,11 @@ export function RoutineSheet({ routine, onClose }: RoutineSheetProps) {
         >
           {t('common.save', 'Save')}
         </Button>
+        {routine && onDelete && (
+          <Button variant="ghost" size="md" fullWidth onClick={onDelete}>
+            <span className="text-danger">{t('templates.delete_this_routine', 'Delete this routine')}</span>
+          </Button>
+        )}
       </div>
     </Sheet>
   );

@@ -24,10 +24,12 @@ interface MealTemplateSheetProps {
   /** null = create mode (shows the AI fill path) */
   template: FoodTemplateResponse | null;
   onClose: () => void;
+  /** Edit mode only: hands deletion back to the list (confirm + routine info). */
+  onDelete?: () => void;
 }
 
 /** Create or edit a meal template. Macros are stored per 1 portion. */
-export function MealTemplateSheet({ template, onClose }: MealTemplateSheetProps) {
+export function MealTemplateSheet({ template, onClose, onDelete }: MealTemplateSheetProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -224,6 +226,11 @@ export function MealTemplateSheet({ template, onClose }: MealTemplateSheetProps)
         >
           {t('common.save', 'Save')}
         </Button>
+        {template && onDelete && (
+          <Button variant="ghost" size="md" fullWidth onClick={onDelete}>
+            <span className="text-danger">{t('templates.delete_this', 'Delete this template')}</span>
+          </Button>
+        )}
       </div>
     </Sheet>
   );

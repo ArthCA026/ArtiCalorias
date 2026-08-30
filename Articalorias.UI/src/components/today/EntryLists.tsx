@@ -3,13 +3,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Sheet } from '@/components/ui/Sheet';
-import { ActionSheet } from '@/components/ui/ActionSheet';
+import { ConfirmSheet } from '@/components/ui/ActionSheet';
 import { Button } from '@/components/ui/Button';
 import { Field, DecimalField } from '@/components/ui/Field';
 import { QuantityField, QuickAmountSheet } from '@/components/ui/QuantityField';
-import { MacroStrip } from '@/components/ui/MacroStrip';
+import { MacroStrip, type MacroStripExtra } from '@/components/ui/MacroStrip';
 import { ItemRow, ItemMeta } from '@/components/ui/ItemRow';
 import { AmountChip } from '@/components/ui/AmountChip';
+import { SelectionBar, type SelectionAction } from '@/components/ui/SelectionBar';
 import { Icon } from '@/components/ui/Icon';
 import { EmptyState, InlineError } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
@@ -18,15 +19,48 @@ import { MarkFastingButton, FastingState } from '@/components/today/FastingContr
 import { foodService } from '@/services/foodService';
 import { activityService } from '@/services/activityService';
 import { foodTemplateService } from '@/services/foodTemplateService';
+import { dailyLogService } from '@/services/dailyLogService';
 import { queryKeys } from '@/lib/queryKeys';
 import { extractApiError } from '@/utils/apiError';
-import { fmt, round1, qtyStr } from '@/utils/format';
-import type { ActivityEntryResponse, FoodEntryResponse, UpdateFoodEntryRequest } from '@/types';
+import { fmt, round1, qtyStr, toDateString } from '@/utils/format';
+import type { ActivityEntryResponse, FoodEntryResponse, MacroKey, UpdateFoodEntryRequest } from '@/types';
 
 const num = (raw: string): number => {
   const n = Number(raw.replace(',', '.'));
   return Number.isFinite(n) ? n : 0;
 };
+
+/**
+ * Interaction model shared by both lists (and mirrored on Templates):
+ *  - one tap opens the item's edit sheet directly;
+ *  - holding an item starts multi-select, then taps toggle;
+ *  - the floating bar carries the bulk actions (save as templates, copy to
+ *    today from a past day, delete) and the X leaves select mode.
+ * Bulk deletes always confirm; a single delete lives inside the edit sheet.
+ */
+
+/**
+ * Multi-select state. The set may hold ids of rows that have since been
+ * deleted elsewhere; every consumer filters against the LIVE list, so stale
+ * ids are inert rather than pruned (no state-sync effect needed).
+ */
+function useSelection<TId>() {
+  const [ids, setIds] = useState<Set<TId> | null>(null);
+
+  return {
+    selecting: ids !== null,
+    ids: ids ?? new Set<TId>(),
+    start: (id: TId) => setIds(new Set([id])),
+    toggle: (id: TId) =>
+      setIds((prev) => {
+        const next = new Set(prev ?? []);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      }),
+    clear: () => setIds(null),
+  };
+}
 
 /* ------------------------------------------------------------------ */
 /* Meals                                                               */
@@ -35,6 +69,8 @@ const num = (raw: string): number => {
 interface MealsListProps {
   date: string;
   entries: FoodEntryResponse[];
+  /** Extra tracked macros (alcohol/sugar/water) appended to each row's strip */
+  extraMacros?: MacroKey[];
   /** Drives the empty state tense: still open today, closed on a past day */
   isToday: boolean;
   /** The day is a marked deliberate fast (only meaningful when empty) */
@@ -44,30 +80,56 @@ interface MealsListProps {
 
 function MealRow({
   entry,
-  onOpen,
+  extraMacros,
+  selectMode,
+  selected,
+  onTap,
+  onLongPress,
   onQty,
 }: {
   entry: FoodEntryResponse;
-  onOpen: () => void;
+  extraMacros: MacroKey[];
+  selectMode: boolean;
+  selected: boolean;
+  onTap: () => void;
+  onLongPress: () => void;
   onQty: () => void;
 }) {
   const { t } = useTranslation();
   const qty = entry.quantity && entry.quantity > 0 ? entry.quantity : 1;
+  // Null stays null: an entry logged before a macro was tracked shows a dash,
+  // never a fabricated zero.
+  const extras: MacroStripExtra[] = extraMacros.map((key) => ({
+    key,
+    value:
+      key === 'alcohol' ? entry.alcoholGrams : key === 'sugar' ? entry.sugarGrams : entry.waterMl,
+  }));
   return (
     <ItemRow
       title={entry.foodName}
       value={t('today.kcal_value', '{{kcal}} kcal', { kcal: fmt(entry.caloriesKcal) })}
-      ariaLabel={t('today.entry_aria', '{{name}}, open options', { name: entry.foodName })}
-      onOpen={onOpen}
+      ariaLabel={
+        selectMode
+          ? t('select.entry_aria', '{{name}}, toggle selection', { name: entry.foodName })
+          : t('today.entry_tap_aria', '{{name}}, tap to edit, hold to select', { name: entry.foodName })
+      }
+      selectMode={selectMode}
+      selected={selected}
+      onTap={onTap}
+      onLongPress={onLongPress}
       meta={
         <>
-          <AmountChip
-            label={qtyStr(qty)}
-            ariaLabel={t('today.change_qty_aria', 'Change quantity of {{name}}', {
-              name: entry.foodName,
-            })}
-            onEdit={onQty}
-          />
+          {selectMode ? (
+            <ItemMeta>{qtyStr(qty)}</ItemMeta>
+          ) : (
+            <AmountChip
+              label={qtyStr(qty)}
+              ariaLabel={t('today.change_qty_aria', 'Change quantity of {{name}}', {
+                name: entry.foodName,
+              })}
+              onEdit={onQty}
+            />
+          )}
           {entry.portionDescription && (
             <>
               <span className="text-ink-3 shrink-0" aria-hidden="true">
@@ -83,97 +145,124 @@ function MealRow({
           protein={entry.proteinGrams}
           fat={entry.fatGrams}
           carbs={entry.carbsGrams}
+          extras={extras}
         />
       }
     />
   );
 }
 
-export function MealsList({ date, entries, isToday, isFastingDay, onChanged }: MealsListProps) {
+export function MealsList({ date, entries, extraMacros = [], isToday, isFastingDay, onChanged }: MealsListProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { openLog } = useLogSheet();
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<FoodEntryResponse | null>(null);
   const [editing, setEditing] = useState<FoodEntryResponse | null>(null);
   const [qtyTarget, setQtyTarget] = useState<FoodEntryResponse | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const sel = useSelection<number>();
+  const selectedEntries = entries.filter((e) => sel.ids.has(e.foodEntryId));
 
   const saveError = () => t('log.save_error', 'Could not save. Check your connection and try again.');
 
-  const del = useMutation({
-    mutationFn: (entry: FoodEntryResponse) => foodService.remove(date, entry.foodEntryId),
+  const toTemplateRequest = (entry: FoodEntryResponse) => {
+    const qty = entry.quantity && entry.quantity > 0 ? entry.quantity : 1;
+    return {
+      templateName: entry.foodName,
+      portionDescription: entry.portionDescription?.slice(0, 100) || t('today.portion_default', '1 serving'),
+      defaultQuantity: qty,
+      caloriesKcal: round1(entry.caloriesKcal / qty),
+      proteinGrams: round1(entry.proteinGrams / qty),
+      fatGrams: round1(entry.fatGrams / qty),
+      carbsGrams: round1(entry.carbsGrams / qty),
+      alcoholGrams: round1(entry.alcoholGrams / qty),
+      sugarGrams: entry.sugarGrams !== null ? round1(entry.sugarGrams / qty) : null,
+      waterMl: entry.waterMl !== null ? round1(entry.waterMl / qty) : null,
+      autoAddToNewDay: false,
+    };
+  };
+
+  const saveTemplates = useMutation({
+    mutationFn: async (items: FoodEntryResponse[]) => {
+      // Sequential on purpose: template creation is cheap and this keeps the
+      // server-assigned ordering deterministic.
+      for (const entry of items) await foodTemplateService.create(toTemplateRequest(entry));
+      return items.length;
+    },
+    onSuccess: (n) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.foodTemplates() });
+      sel.clear();
+      toast('success', t('select.saved_templates', 'Saved to Templates ({{n}})', { n }));
+    },
+    onError: (err) => toast('error', extractApiError(err, saveError())),
+  });
+
+  // Copy a past day's meals onto today in one batch (single recalculation).
+  const addToToday = useMutation({
+    mutationFn: (items: FoodEntryResponse[]) =>
+      dailyLogService.confirmParsedFoods(toDateString(), {
+        items: items.map((e) => ({
+          foodName: e.foodName,
+          portionDescription: e.portionDescription,
+          quantity: e.quantity,
+          caloriesKcal: e.caloriesKcal,
+          proteinGrams: e.proteinGrams,
+          fatGrams: e.fatGrams,
+          carbsGrams: e.carbsGrams,
+          alcoholGrams: e.alcoholGrams,
+          sugarGrams: e.sugarGrams,
+          waterMl: e.waterMl,
+          notes: e.notes,
+        })),
+      }),
+    onSuccess: (_res, items) => {
+      onChanged();
+      sel.clear();
+      toast('success', t('select.added_to_today', 'Added to today ({{n}})', { n: items.length }));
+    },
+    onError: (err) => toast('error', extractApiError(err, saveError())),
+  });
+
+  const deleteBatch = useMutation({
+    mutationFn: (ids: number[]) => foodService.removeBatch(date, ids),
     onSuccess: () => {
+      setConfirmingDelete(false);
+      sel.clear();
       onChanged();
       toast('success', t('today.deleted', 'Deleted'));
     },
-    onError: (err) => toast('error', extractApiError(err, saveError())),
+    onError: (err) => {
+      setConfirmingDelete(false);
+      toast('error', extractApiError(err, saveError()));
+    },
   });
 
-  const saveTemplate = useMutation({
-    mutationFn: (entry: FoodEntryResponse) => {
-      const qty = entry.quantity && entry.quantity > 0 ? entry.quantity : 1;
-      return foodTemplateService.create({
-        templateName: entry.foodName,
-        portionDescription: entry.portionDescription?.slice(0, 100) || t('today.portion_default', '1 serving'),
-        defaultQuantity: qty,
-        caloriesKcal: round1(entry.caloriesKcal / qty),
-        proteinGrams: round1(entry.proteinGrams / qty),
-        fatGrams: round1(entry.fatGrams / qty),
-        carbsGrams: round1(entry.carbsGrams / qty),
-        alcoholGrams: round1(entry.alcoholGrams / qty),
-        sugarGrams: entry.sugarGrams !== null ? round1(entry.sugarGrams / qty) : null,
-        waterMl: entry.waterMl !== null ? round1(entry.waterMl / qty) : null,
-        autoAddToNewDay: false,
-      });
-    },
-    onSuccess: () => {
-      // The Templates screen must show the new template without a reload
-      queryClient.invalidateQueries({ queryKey: queryKeys.foodTemplates() });
-      toast('success', t('today.saved_as_template', 'Saved to Templates'));
-    },
-    onError: (err) => toast('error', extractApiError(err, saveError())),
-  });
+  const busy = saveTemplates.isPending || addToToday.isPending || deleteBatch.isPending;
 
-  // One-tap quantity change. Uses the API's scale-by-quantity so the
-  // server rescales every macro from the entry's stored base amount.
-  const quickQty = useMutation({
-    mutationFn: ({ entry, qty }: { entry: FoodEntryResponse; qty: number }) => {
-      const base: UpdateFoodEntryRequest = {
-        foodName: entry.foodName,
-        portionDescription: entry.portionDescription,
-        quantity: qty,
-        caloriesKcal: entry.caloriesKcal,
-        proteinGrams: entry.proteinGrams,
-        fatGrams: entry.fatGrams,
-        carbsGrams: entry.carbsGrams,
-        alcoholGrams: entry.alcoholGrams,
-        sugarGrams: entry.sugarGrams,
-        waterMl: entry.waterMl,
-        notes: entry.notes,
-      };
-      if (entry.quantity && entry.quantity > 0) {
-        return foodService.update(date, entry.foodEntryId, { ...base, scaleByQuantity: true });
-      }
-      // No stored quantity: treat current macros as the amount for 1 unit
-      return foodService.update(date, entry.foodEntryId, {
-        ...base,
-        caloriesKcal: round1(entry.caloriesKcal * qty),
-        proteinGrams: round1(entry.proteinGrams * qty),
-        fatGrams: round1(entry.fatGrams * qty),
-        carbsGrams: round1(entry.carbsGrams * qty),
-        alcoholGrams: round1(entry.alcoholGrams * qty),
-        sugarGrams: entry.sugarGrams !== null ? round1(entry.sugarGrams * qty) : null,
-        waterMl: entry.waterMl !== null ? round1(entry.waterMl * qty) : null,
-        scaleByQuantity: false,
-      });
+  const selectionActions: SelectionAction[] = [
+    {
+      icon: 'bookmark',
+      label: t('select.action_template', 'Template'),
+      onSelect: () => saveTemplates.mutate(selectedEntries),
     },
-    onSuccess: () => {
-      setQtyTarget(null);
-      onChanged();
-      toast('success', t('common.saved', 'Saved'));
+    // Copying makes sense from a closed day ("log yesterday's lunch again");
+    // on today itself it would only duplicate what is already there.
+    ...(!isToday
+      ? [
+          {
+            icon: 'copy' as const,
+            label: t('select.action_add_today', 'To today'),
+            onSelect: () => addToToday.mutate(selectedEntries),
+          },
+        ]
+      : []),
+    {
+      icon: 'trash',
+      label: t('common.delete', 'Delete'),
+      destructive: true,
+      onSelect: () => setConfirmingDelete(true),
     },
-    onError: (err) => toast('error', extractApiError(err, saveError())),
-  });
+  ];
 
   return (
     <section>
@@ -202,7 +291,11 @@ export function MealsList({ date, entries, isToday, isFastingDay, onChanged }: M
               <MealRow
                 key={e.foodEntryId}
                 entry={e}
-                onOpen={() => setSelected(e)}
+                extraMacros={extraMacros}
+                selectMode={sel.selecting}
+                selected={sel.ids.has(e.foodEntryId)}
+                onTap={() => (sel.selecting ? sel.toggle(e.foodEntryId) : setEditing(e))}
+                onLongPress={() => (sel.selecting ? sel.toggle(e.foodEntryId) : sel.start(e.foodEntryId))}
                 onQty={() => setQtyTarget(e)}
               />
             ))}
@@ -210,28 +303,30 @@ export function MealsList({ date, entries, isToday, isFastingDay, onChanged }: M
         )}
       </Card>
 
-      <ActionSheet
-        open={selected !== null}
-        onClose={() => setSelected(null)}
-        title={selected?.foodName}
-        actions={[
-          {
-            icon: 'pencil',
-            label: t('common.edit', 'Edit'),
-            onSelect: () => setEditing(selected),
-          },
-          {
-            icon: 'bookmark',
-            label: t('today.save_as_template', 'Save as template'),
-            onSelect: () => selected && saveTemplate.mutate(selected),
-          },
-          {
-            icon: 'trash',
-            label: t('common.delete', 'Delete'),
-            destructive: true,
-            onSelect: () => selected && del.mutate(selected),
-          },
-        ]}
+      {!sel.selecting && entries.length > 0 && (
+        <p className="mt-2 px-1 text-[12px] text-ink-3">
+          {t('select.hint', 'Tap to edit. Hold to select several.')}
+        </p>
+      )}
+
+      {sel.selecting && (
+        <SelectionBar
+          count={selectedEntries.length}
+          actions={selectionActions}
+          onClear={sel.clear}
+          busy={busy}
+        />
+      )}
+
+      <ConfirmSheet
+        open={confirmingDelete}
+        onClose={() => setConfirmingDelete(false)}
+        title={t('select.delete_meals_title', 'Delete {{n}} meals?', { n: selectedEntries.length })}
+        body={t('select.delete_meals_body', 'They are removed from this day and your totals update. This cannot be undone.')}
+        confirmLabel={t('common.delete', 'Delete')}
+        cancelLabel={t('common.cancel', 'Cancel')}
+        loading={deleteBatch.isPending}
+        onConfirm={() => deleteBatch.mutate(selectedEntries.map((e) => e.foodEntryId))}
       />
 
       {qtyTarget && (
@@ -243,8 +338,10 @@ export function MealsList({ date, entries, isToday, isFastingDay, onChanged }: M
           value={qtyTarget.quantity && qtyTarget.quantity > 0 ? qtyTarget.quantity : 1}
           min={0.1}
           step={qtyTarget.quantity && qtyTarget.quantity >= 1 ? 1 : 0.5}
-          saving={quickQty.isPending}
-          onSave={(qty) => quickQty.mutate({ entry: qtyTarget, qty })}
+          saving={false}
+          onSave={(qty) => {
+            quickQtySave(qtyTarget, qty);
+          }}
         />
       )}
 
@@ -258,6 +355,46 @@ export function MealsList({ date, entries, isToday, isFastingDay, onChanged }: M
       )}
     </section>
   );
+
+  // One-tap quantity change. Uses the API's scale-by-quantity so the
+  // server rescales every macro from the entry's stored base amount.
+  function quickQtySave(entry: FoodEntryResponse, qty: number) {
+    const base: UpdateFoodEntryRequest = {
+      foodName: entry.foodName,
+      portionDescription: entry.portionDescription,
+      quantity: qty,
+      caloriesKcal: entry.caloriesKcal,
+      proteinGrams: entry.proteinGrams,
+      fatGrams: entry.fatGrams,
+      carbsGrams: entry.carbsGrams,
+      alcoholGrams: entry.alcoholGrams,
+      sugarGrams: entry.sugarGrams,
+      waterMl: entry.waterMl,
+      notes: entry.notes,
+    };
+    const request =
+      entry.quantity && entry.quantity > 0
+        ? foodService.update(date, entry.foodEntryId, { ...base, scaleByQuantity: true })
+        : // No stored quantity: treat current macros as the amount for 1 unit
+          foodService.update(date, entry.foodEntryId, {
+            ...base,
+            caloriesKcal: round1(entry.caloriesKcal * qty),
+            proteinGrams: round1(entry.proteinGrams * qty),
+            fatGrams: round1(entry.fatGrams * qty),
+            carbsGrams: round1(entry.carbsGrams * qty),
+            alcoholGrams: round1(entry.alcoholGrams * qty),
+            sugarGrams: entry.sugarGrams !== null ? round1(entry.sugarGrams * qty) : null,
+            waterMl: entry.waterMl !== null ? round1(entry.waterMl * qty) : null,
+            scaleByQuantity: false,
+          });
+    request
+      .then(() => {
+        setQtyTarget(null);
+        onChanged();
+        toast('success', t('common.saved', 'Saved'));
+      })
+      .catch((err) => toast('error', extractApiError(err, saveError())));
+  }
 }
 
 interface EditFoodSheetProps {
@@ -270,6 +407,7 @@ interface EditFoodSheetProps {
 function EditFoodSheet({ date, entry, onClose, onChanged }: EditFoodSheetProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [name, setName] = useState(entry.foodName);
   const [qty, setQty] = useState(entry.quantity && entry.quantity > 0 ? entry.quantity : 1);
   const [kcal, setKcal] = useState(String(entry.caloriesKcal));
@@ -321,6 +459,43 @@ function EditFoodSheet({ date, entry, onClose, onChanged }: EditFoodSheetProps) 
     onError: (err) => setError(extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
   });
 
+  const del = useMutation({
+    mutationFn: () => foodService.remove(date, entry.foodEntryId),
+    onSuccess: () => {
+      onChanged();
+      toast('success', t('today.deleted', 'Deleted'));
+      onClose();
+    },
+    onError: (err) => setError(extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
+  });
+
+  // Templates what is ON SCREEN (unsaved edits included): what you see is
+  // what gets saved. Macros are stored per 1 portion, so divide by quantity.
+  const saveAsTemplate = useMutation({
+    mutationFn: () => {
+      const q = qty > 0 ? qty : 1;
+      return foodTemplateService.create({
+        templateName: name.trim() || entry.foodName,
+        portionDescription:
+          entry.portionDescription?.slice(0, 100) || t('today.portion_default', '1 serving'),
+        defaultQuantity: q,
+        caloriesKcal: round1(num(kcal) / q),
+        proteinGrams: round1(num(protein) / q),
+        fatGrams: round1(num(fat) / q),
+        carbsGrams: round1(num(carbs) / q),
+        alcoholGrams: round1(entry.alcoholGrams / q),
+        sugarGrams: hasSugar ? round1(num(sugar) / q) : null,
+        waterMl: hasWater ? round1(num(water) / q) : null,
+        autoAddToNewDay: false,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.foodTemplates() });
+      toast('success', t('today.saved_as_template', 'Saved to Templates'));
+    },
+    onError: (err) => setError(extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
+  });
+
   return (
     <Sheet open onClose={onClose} title={t('today.edit_meal', 'Edit meal')}>
       <div className="space-y-3.5">
@@ -368,6 +543,20 @@ function EditFoodSheet({ date, entry, onClose, onChanged }: EditFoodSheetProps) 
         >
           {t('common.save', 'Save')}
         </Button>
+        <Button
+          variant="soft"
+          size="md"
+          fullWidth
+          icon="bookmark"
+          loading={saveAsTemplate.isPending}
+          disabled={name.trim().length === 0}
+          onClick={() => saveAsTemplate.mutate()}
+        >
+          {t('today.save_as_template', 'Save as template')}
+        </Button>
+        <Button variant="ghost" size="md" fullWidth loading={del.isPending} onClick={() => del.mutate()}>
+          <span className="text-danger">{t('today.delete_entry', 'Delete this meal')}</span>
+        </Button>
       </div>
     </Sheet>
   );
@@ -389,12 +578,18 @@ interface ActivitiesListProps {
 function ActivityRow({
   entry,
   hasCalorieEstimate,
-  onOpen,
+  selectMode,
+  selected,
+  onTap,
+  onLongPress,
   onDuration,
 }: {
   entry: ActivityEntryResponse;
   hasCalorieEstimate: boolean;
-  onOpen: () => void;
+  selectMode: boolean;
+  selected: boolean;
+  onTap: () => void;
+  onLongPress: () => void;
   onDuration: () => void;
 }) {
   const { t } = useTranslation();
@@ -412,20 +607,33 @@ function ActivityRow({
           '–'
         )
       }
-      ariaLabel={t('today.entry_aria', '{{name}}, open options', { name: entry.activityName })}
-      onOpen={onOpen}
+      ariaLabel={
+        selectMode
+          ? t('select.entry_aria', '{{name}}, toggle selection', { name: entry.activityName })
+          : t('today.entry_tap_aria', '{{name}}, tap to edit, hold to select', { name: entry.activityName })
+      }
+      selectMode={selectMode}
+      selected={selected}
+      onTap={onTap}
+      onLongPress={onLongPress}
       meta={
         // A watch import without duration has no minutes to show or edit.
         entry.durationMinutes !== null ? (
-          <AmountChip
-            label={t('today.duration_meta', '{{min}} min', {
-              min: qtyStr(entry.durationMinutes),
-            })}
-            ariaLabel={t('today.change_duration_aria', 'Change duration of {{name}}', {
-              name: entry.activityName,
-            })}
-            onEdit={onDuration}
-          />
+          selectMode ? (
+            <ItemMeta>
+              {t('today.duration_meta', '{{min}} min', { min: qtyStr(entry.durationMinutes) })}
+            </ItemMeta>
+          ) : (
+            <AmountChip
+              label={t('today.duration_meta', '{{min}} min', {
+                min: qtyStr(entry.durationMinutes),
+              })}
+              ariaLabel={t('today.change_duration_aria', 'Change duration of {{name}}', {
+                name: entry.activityName,
+              })}
+              onEdit={onDuration}
+            />
+          )
         ) : undefined
       }
     />
@@ -437,53 +645,93 @@ export function ActivitiesList({ date, entries, hasCalorieEstimate, isToday, onC
   const { toast } = useToast();
   const { openLog } = useLogSheet();
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<ActivityEntryResponse | null>(null);
   const [editing, setEditing] = useState<ActivityEntryResponse | null>(null);
   const [durationTarget, setDurationTarget] = useState<ActivityEntryResponse | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const sel = useSelection<number>();
+  const selectedEntries = entries.filter((e) => sel.ids.has(e.activityEntryId));
 
   const saveError = () => t('log.save_error', 'Could not save. Check your connection and try again.');
 
-  const del = useMutation({
-    mutationFn: (entry: ActivityEntryResponse) =>
-      activityService.remove(date, entry.activityEntryId),
+  const saveTemplates = useMutation({
+    mutationFn: async (items: ActivityEntryResponse[]) => {
+      for (const entry of items)
+        await activityService.createTemplate({
+          templateName: entry.activityName,
+          autoAddToNewDay: false,
+          defaultDurationMinutes: entry.durationMinutes ?? 30,
+          defaultMET: entry.metValue ?? 3.5,
+        });
+      return items.length;
+    },
+    onSuccess: (n) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.activityTemplates() });
+      sel.clear();
+      toast('success', t('select.saved_templates', 'Saved to Templates ({{n}})', { n }));
+    },
+    onError: (err) => toast('error', extractApiError(err, saveError())),
+  });
+
+  // Copy a past day's activities onto today (single recalculation). MET-based
+  // entries re-derive their burn from today's weight; a flat watch import
+  // keeps its stated calories, since no MET exists to recompute from.
+  const addToToday = useMutation({
+    mutationFn: (items: ActivityEntryResponse[]) =>
+      dailyLogService.confirmParsedActivities(toDateString(), {
+        items: items.map((e) => ({
+          activityTemplateId: e.activityTemplateId,
+          activityName: e.activityName,
+          durationMinutes: e.durationMinutes,
+          metValue: e.metValue,
+          caloriesKcal: e.metValue === null ? e.calculatedCaloriesKcal : null,
+        })),
+      }),
+    onSuccess: (_res, items) => {
+      onChanged();
+      sel.clear();
+      toast('success', t('select.added_to_today', 'Added to today ({{n}})', { n: items.length }));
+    },
+    onError: (err) => toast('error', extractApiError(err, saveError())),
+  });
+
+  const deleteBatch = useMutation({
+    mutationFn: (ids: number[]) => activityService.removeBatch(date, ids),
     onSuccess: () => {
+      setConfirmingDelete(false);
+      sel.clear();
       onChanged();
       toast('success', t('today.deleted', 'Deleted'));
     },
-    onError: (err) => toast('error', extractApiError(err, saveError())),
+    onError: (err) => {
+      setConfirmingDelete(false);
+      toast('error', extractApiError(err, saveError()));
+    },
   });
 
-  const saveTemplate = useMutation({
-    mutationFn: (entry: ActivityEntryResponse) =>
-      activityService.createTemplate({
-        templateName: entry.activityName,
-        autoAddToNewDay: false,
-        defaultDurationMinutes: entry.durationMinutes ?? 30,
-        defaultMET: entry.metValue ?? 3.5,
-      }),
-    onSuccess: () => {
-      // The Templates screen must show the new template without a reload
-      queryClient.invalidateQueries({ queryKey: queryKeys.activityTemplates() });
-      toast('success', t('today.saved_as_template', 'Saved to Templates'));
-    },
-    onError: (err) => toast('error', extractApiError(err, saveError())),
-  });
+  const busy = saveTemplates.isPending || addToToday.isPending || deleteBatch.isPending;
 
-  // One-tap duration change: the server recalculates burned calories.
-  const quickDuration = useMutation({
-    mutationFn: ({ entry, minutes }: { entry: ActivityEntryResponse; minutes: number }) =>
-      activityService.update(date, entry.activityEntryId, {
-        activityName: entry.activityName,
-        durationMinutes: minutes,
-        metValue: entry.metValue,
-      }),
-    onSuccess: () => {
-      setDurationTarget(null);
-      onChanged();
-      toast('success', t('common.saved', 'Saved'));
+  const selectionActions: SelectionAction[] = [
+    {
+      icon: 'bookmark',
+      label: t('select.action_template', 'Template'),
+      onSelect: () => saveTemplates.mutate(selectedEntries),
     },
-    onError: (err) => toast('error', extractApiError(err, saveError())),
-  });
+    ...(!isToday
+      ? [
+          {
+            icon: 'copy' as const,
+            label: t('select.action_add_today', 'To today'),
+            onSelect: () => addToToday.mutate(selectedEntries),
+          },
+        ]
+      : []),
+    {
+      icon: 'trash',
+      label: t('common.delete', 'Delete'),
+      destructive: true,
+      onSelect: () => setConfirmingDelete(true),
+    },
+  ];
 
   return (
     <section>
@@ -507,7 +755,10 @@ export function ActivitiesList({ date, entries, hasCalorieEstimate, isToday, onC
                 key={a.activityEntryId}
                 entry={a}
                 hasCalorieEstimate={hasCalorieEstimate}
-                onOpen={() => setSelected(a)}
+                selectMode={sel.selecting}
+                selected={sel.ids.has(a.activityEntryId)}
+                onTap={() => (sel.selecting ? sel.toggle(a.activityEntryId) : setEditing(a))}
+                onLongPress={() => (sel.selecting ? sel.toggle(a.activityEntryId) : sel.start(a.activityEntryId))}
                 onDuration={() => setDurationTarget(a)}
               />
             ))}
@@ -525,28 +776,24 @@ export function ActivitiesList({ date, entries, hasCalorieEstimate, isToday, onC
         </p>
       )}
 
-      <ActionSheet
-        open={selected !== null}
-        onClose={() => setSelected(null)}
-        title={selected?.activityName}
-        actions={[
-          {
-            icon: 'pencil',
-            label: t('common.edit', 'Edit'),
-            onSelect: () => setEditing(selected),
-          },
-          {
-            icon: 'bookmark',
-            label: t('today.save_as_template', 'Save as template'),
-            onSelect: () => selected && saveTemplate.mutate(selected),
-          },
-          {
-            icon: 'trash',
-            label: t('common.delete', 'Delete'),
-            destructive: true,
-            onSelect: () => selected && del.mutate(selected),
-          },
-        ]}
+      {sel.selecting && (
+        <SelectionBar
+          count={selectedEntries.length}
+          actions={selectionActions}
+          onClear={sel.clear}
+          busy={busy}
+        />
+      )}
+
+      <ConfirmSheet
+        open={confirmingDelete}
+        onClose={() => setConfirmingDelete(false)}
+        title={t('select.delete_activities_title', 'Delete {{n}} activities?', { n: selectedEntries.length })}
+        body={t('select.delete_activities_body', 'They are removed from this day and your burn updates. This cannot be undone.')}
+        confirmLabel={t('common.delete', 'Delete')}
+        cancelLabel={t('common.cancel', 'Cancel')}
+        loading={deleteBatch.isPending}
+        onConfirm={() => deleteBatch.mutate(selectedEntries.map((e) => e.activityEntryId))}
       />
 
       {durationTarget && (
@@ -560,8 +807,21 @@ export function ActivitiesList({ date, entries, hasCalorieEstimate, isToday, onC
           max={1440}
           step={5}
           suffix={t('common.min_suffix', 'min')}
-          saving={quickDuration.isPending}
-          onSave={(minutes) => quickDuration.mutate({ entry: durationTarget, minutes })}
+          saving={false}
+          onSave={(minutes) => {
+            activityService
+              .update(date, durationTarget.activityEntryId, {
+                activityName: durationTarget.activityName,
+                durationMinutes: minutes,
+                metValue: durationTarget.metValue,
+              })
+              .then(() => {
+                setDurationTarget(null);
+                onChanged();
+                toast('success', t('common.saved', 'Saved'));
+              })
+              .catch((err) => toast('error', extractApiError(err, saveError())));
+          }}
         />
       )}
 
@@ -587,6 +847,7 @@ interface EditActivitySheetProps {
 function EditActivitySheet({ date, entry, onClose, onChanged }: EditActivitySheetProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   // A watch import can have no MET at all; its stored calories are the truth.
   const isFlatBurn = entry.metValue === null;
   const [name, setName] = useState(entry.activityName);
@@ -613,6 +874,32 @@ function EditActivitySheet({ date, entry, onClose, onChanged }: EditActivityShee
       onChanged();
       toast('success', t('common.saved', 'Saved'));
       onClose();
+    },
+    onError: (err) => setError(extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
+  });
+
+  const del = useMutation({
+    mutationFn: () => activityService.remove(date, entry.activityEntryId),
+    onSuccess: () => {
+      onChanged();
+      toast('success', t('today.deleted', 'Deleted'));
+      onClose();
+    },
+    onError: (err) => setError(extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
+  });
+
+  // Templates what is ON SCREEN (unsaved edits included), like the meal sheet.
+  const saveAsTemplate = useMutation({
+    mutationFn: () =>
+      activityService.createTemplate({
+        templateName: name.trim() || entry.activityName,
+        autoAddToNewDay: false,
+        defaultDurationMinutes: duration > 0 ? duration : 30,
+        defaultMET: num(met) >= 0.5 && num(met) <= 50 ? num(met) : 3.5,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.activityTemplates() });
+      toast('success', t('today.saved_as_template', 'Saved to Templates'));
     },
     onError: (err) => setError(extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
   });
@@ -674,6 +961,20 @@ function EditActivitySheet({ date, entry, onClose, onChanged }: EditActivityShee
           onClick={() => save.mutate()}
         >
           {t('common.save', 'Save')}
+        </Button>
+        <Button
+          variant="soft"
+          size="md"
+          fullWidth
+          icon="bookmark"
+          loading={saveAsTemplate.isPending}
+          disabled={name.trim().length === 0}
+          onClick={() => saveAsTemplate.mutate()}
+        >
+          {t('today.save_as_template', 'Save as template')}
+        </Button>
+        <Button variant="ghost" size="md" fullWidth loading={del.isPending} onClick={() => del.mutate()}>
+          <span className="text-danger">{t('today.delete_activity_entry', 'Delete this activity')}</span>
         </Button>
       </div>
     </Sheet>

@@ -8,17 +8,23 @@ import { StreakChip } from '@/components/today/StreakChip';
 import { StreakCelebration } from '@/components/today/StreakCelebration';
 import { AppTour } from '@/components/today/AppTour';
 import { Icon } from '@/components/ui/Icon';
+import { ConfirmSheet } from '@/components/ui/ActionSheet';
 import { useGetStreak } from '@/hooks/useStreak';
 import { dailyLogService } from '@/services/dailyLogService';
 import { profileService } from '@/services/profileService';
+import { measurementService } from '@/services/measurementService';
 import { queryKeys } from '@/lib/queryKeys';
-import { toDateString, parseDate } from '@/utils/format';
+import { toDateString, parseDate, mondayOf } from '@/utils/format';
 import type { UserProfileResponse } from '@/types';
 
 /** One celebration per calendar day, surviving reloads and remounts. */
 const CELEBRATED_KEY = 'ac-streak-celebrated';
 /** Local guard so the tour never re-flashes while the profile refetches. */
 const TUTORIAL_KEY = 'ac-tutorial-done';
+/** Week (Monday date) the body check-in was last offered: once a week, max. */
+const BODY_NUDGE_KEY = 'ac-body-nudge-week';
+/** Days without a measurement before the weekly check-in starts asking. */
+const BODY_STALE_DAYS = 7;
 
 export default function TodayPage() {
   const { t, i18n } = useTranslation();
@@ -91,6 +97,41 @@ export default function TodayPage() {
     localStorage.getItem(TUTORIAL_KEY) === null &&
     celebrating === null;
 
+  // ── Weekly body check-in ──────────────────────────────────────────────────
+  // Fresh body data keeps every budget honest, so once a week (never more:
+  // the guard stores the week it last asked) the app offers a weigh-in when
+  // the newest measurement is a week old or more. It stays quiet whenever the
+  // streak celebration is on screen or about to be (auto-add users see that
+  // on their first open of the day) and during the first-run tour.
+  const { data: measurements } = useQuery({
+    queryKey: queryKeys.measurements(),
+    queryFn: () => measurementService.getAll().then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+  const [bodyNudge, setBodyNudge] = useState<number | null>(null); // days stale
+
+  useEffect(() => {
+    if (bodyNudge !== null) return;
+    if (!measurements || measurements.length === 0) return; // no body data at all: the locked hero already asks
+    if (localStorage.getItem(BODY_NUDGE_KEY) === mondayOf(today)) return; // asked this week
+    const newest = measurements[measurements.length - 1].measuredOn;
+    const staleDays = Math.round(
+      (parseDate(today).getTime() - parseDate(newest).getTime()) / 86400000,
+    );
+    if (staleDays < BODY_STALE_DAYS) return;
+    if (celebrating !== null || tourEligible) return;
+    const celebrationImminent =
+      !!streak?.streakEnabled &&
+      streak.lastLoggedDate === today &&
+      hasLoggedToday &&
+      localStorage.getItem(CELEBRATED_KEY) !== today;
+    if (celebrationImminent) return;
+    localStorage.setItem(BODY_NUDGE_KEY, mondayOf(today));
+    // Reacting to async queries settling; fires at most once per week.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBodyNudge(staleDays);
+  }, [bodyNudge, measurements, celebrating, tourEligible, streak?.streakEnabled, streak?.lastLoggedDate, hasLoggedToday, today]);
+
   const finishTour = useMutation({
     mutationFn: () => profileService.markTutorialSeen(),
   });
@@ -153,6 +194,19 @@ export default function TodayPage() {
       )}
 
       {tourEligible && <AppTour onDone={onTourDone} />}
+
+      <ConfirmSheet
+        open={bodyNudge !== null}
+        onClose={() => setBodyNudge(null)}
+        title={t('bodynudge.title', 'Weekly check-in: how is your body doing?')}
+        body={t('bodynudge.body', 'Your last measurement is {{n}} days old. A fresh weight keeps your budget and projections honest. It takes ten seconds.', { n: bodyNudge ?? 0 })}
+        confirmLabel={t('bodynudge.confirm', 'Update it now')}
+        cancelLabel={t('bodynudge.later', 'Not this week')}
+        onConfirm={() => {
+          setBodyNudge(null);
+          navigate('/progress/body', { state: { add: true } });
+        }}
+      />
     </div>
   );
 }
