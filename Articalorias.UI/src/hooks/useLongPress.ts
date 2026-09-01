@@ -15,12 +15,24 @@ interface LongPressOptions {
  * scroll. Fires a haptic when the hold is recognized so the user knows
  * something happened before lifting their finger.
  *
+ * Touch quirk this hook owns: after `pointerup`, touch browsers synthesize a
+ * compatibility `click`, hit-tested against the DOM AS IT IS THEN. When the
+ * tap handler mounts an overlay (an edit sheet), that ghost click lands on
+ * the brand-new backdrop and closes it in the same breath it opened - taps
+ * "do nothing" on phones while working fine with a mouse (a real click
+ * targets the original row). Canceling `touchend` for any gesture we handled
+ * suppresses the synthesized click. Scrolls are unaffected: the browser
+ * fires `pointercancel` first, so nothing was handled.
+ *
  * Usage: <div {...longPressHandlers} />
  */
 export function useLongPress({ delay = 450, onLongPress, onTap }: LongPressOptions) {
   const timer = useRef<number | null>(null);
   const fired = useRef(false);
   const origin = useRef<{ x: number; y: number } | null>(null);
+  // pointerup runs BEFORE touchend, so it flags the consumed gesture here
+  // for the touchend handler to act on.
+  const consumedTouch = useRef(false);
   const haptics = useHaptics();
 
   return useMemo(() => {
@@ -34,6 +46,7 @@ export function useLongPress({ delay = 450, onLongPress, onTap }: LongPressOptio
     return {
       onPointerDown: (e: React.PointerEvent) => {
         fired.current = false;
+        consumedTouch.current = false;
         origin.current = { x: e.clientX, y: e.clientY };
         clear();
         timer.current = window.setTimeout(() => {
@@ -50,6 +63,9 @@ export function useLongPress({ delay = 450, onLongPress, onTap }: LongPressOptio
       },
       onPointerUp: () => {
         clear();
+        // Any gesture that ran to completion on this element (tap or the
+        // release after a long press) is ours; its ghost click must die.
+        if (origin.current !== null) consumedTouch.current = true;
         if (!fired.current && origin.current && onTap) onTap();
         origin.current = null;
       },
@@ -59,6 +75,10 @@ export function useLongPress({ delay = 450, onLongPress, onTap }: LongPressOptio
       },
       onPointerLeave: () => {
         clear();
+      },
+      onTouchEnd: (e: React.TouchEvent) => {
+        if (consumedTouch.current && e.cancelable) e.preventDefault();
+        consumedTouch.current = false;
       },
       onContextMenu: (e: React.MouseEvent) => {
         // Long press on mobile browsers triggers the native context menu
