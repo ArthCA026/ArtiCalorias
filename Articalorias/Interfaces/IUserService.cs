@@ -13,4 +13,9 @@ public interface IUserService
 
     /// <summary>Permanently deletes the user account and all associated data.</summary>
     Task DeleteAccountAsync(long userId);
+
+    /// <summary>Everything the account holds, as one JSON-serializable object
+    /// (Ley 8968 access right). Credential fields are excluded by construction.
+    /// Null when the user does not exist.</summary>
+    Task<object?> ExportAsync(long userId);
 }

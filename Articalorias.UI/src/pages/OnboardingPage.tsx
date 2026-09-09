@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Button, IconButton } from '@/components/ui/Button';
 import { DecimalField, Field } from '@/components/ui/Field';
@@ -35,6 +35,8 @@ import { macroService } from '@/services/macroService';
 import { parseDate } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 import { cn } from '@/utils/cn';
+import { PolicySheet } from '@/components/legal/PolicySheet';
+import type { PolicyDocKey } from '@/legal/documents';
 import type { MacroKey } from '@/types';
 
 /**
@@ -79,6 +81,7 @@ export default function OnboardingPage() {
   const [proteinId, setProteinId] = useState<ProteinPresetId | 'none'>('everyday');
   const [trackedMacros, setTrackedMacros] = useState<Set<MacroKey>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [policyDoc, setPolicyDoc] = useState<PolicyDocKey | null>(null);
 
   /**
    * Switching units CONVERTS what was already typed instead of relabeling it:
@@ -293,6 +296,28 @@ export default function OnboardingPage() {
                 {t('onboarding.body_sub', 'This sizes your daily calorie budget. You can change everything later.')}
               </p>
             </div>
+            {/* Just-in-time disclosure right before the first health data is
+                typed (Ley 8968): reminds what the sign-up consent covers.
+                The link opens a sheet over the wizard, never navigating away. */}
+            <div className="flex items-start gap-2.5 rounded-card bg-inset px-4 py-3">
+              <Icon name="shield" size={16} className="text-ink-3 mt-0.5 shrink-0" />
+              <p className="text-[12px] text-ink-3 leading-snug">
+                <Trans
+                  i18nKey="legal.onboarding_disclosure"
+                  defaults="These are health details, used only to compute your budgets, under the consent you gave at sign-up. Details in the <privacyLink>Privacy Notice</privacyLink>."
+                  components={{
+                    privacyLink: (
+                      <button
+                        type="button"
+                        className="font-semibold text-primary-soft-ink underline underline-offset-2"
+                        onClick={() => setPolicyDoc('privacy')}
+                      />
+                    ),
+                  }}
+                />
+              </p>
+            </div>
+            <PolicySheet doc={policyDoc} onClose={() => setPolicyDoc(null)} />
             <Card className="space-y-3.5">
               <SegmentedControl<'metric' | 'imperial'>
                 aria-label={t('profile.units', 'Units')}

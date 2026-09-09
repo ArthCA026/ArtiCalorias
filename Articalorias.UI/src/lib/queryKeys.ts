@@ -13,6 +13,7 @@ export const queryKeys = {
   streak: () => ['streak'] as const,
   macroPreferences: () => ['macro-preferences'] as const,
   measurements: () => ['measurements'] as const,
+  consent: () => ['consent'] as const,
 };
 
 /**

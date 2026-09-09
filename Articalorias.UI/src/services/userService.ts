@@ -16,4 +16,9 @@ export const userService = {
   deleteAccount(): Promise<void> {
     return api.delete('/user/account');
   },
+
+  /** Art. 7 access right: everything the account holds, as one JSON object. */
+  exportData() {
+    return api.get<unknown>('/user/export');
+  },
 };

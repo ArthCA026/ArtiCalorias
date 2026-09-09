@@ -77,17 +77,18 @@ public class FoodParsingService : IFoodParsingService
         }
         catch (System.ClientModel.ClientResultException ex) when (ex.Status == 429)
         {
-            _logger.LogError(ex, "OpenAI API quota exceeded for input: {Input}", freeText);
+            _logger.LogError(ex, "OpenAI API quota exceeded for food parse (input length {Length})", freeText.Length);
             throw new InvalidOperationException("AI food parsing is temporarily unavailable (API quota exceeded).");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "OpenAI API call failed for input: {Input}", freeText);
+            _logger.LogError(ex, "OpenAI API call failed for food parse (input length {Length})", freeText.Length);
             throw new InvalidOperationException("Failed to parse food description. Try again or enter manually.");
         }
 
-        var content = completion.Content[0].Text;
-        _logger.LogInformation("OpenAI response: {Response}", content);
+        var content = completion.Content[0].Text ?? string.Empty;
+        // Meal text is health data (Ley 8968): log outcome and size, never content.
+        _logger.LogInformation("OpenAI food parse succeeded (response length {Length})", content.Length);
 
         // 3. Deserialize
         var items = DeserializeResponse(content);
@@ -396,8 +397,8 @@ public class FoodParsingService : IFoodParsingService
             throw new InvalidOperationException("Failed to analyze the image. Try again or enter food manually.");
         }
 
-        var content = completion.Content[0].Text;
-        _logger.LogInformation("OpenAI Vision response: {Response}", content);
+        var content = completion.Content[0].Text ?? string.Empty;
+        _logger.LogInformation("OpenAI Vision parse succeeded (response length {Length})", content.Length);
 
         var items = DeserializeResponse(content);
         var validated = Validate(items, options ?? FoodParsingOptions.None);

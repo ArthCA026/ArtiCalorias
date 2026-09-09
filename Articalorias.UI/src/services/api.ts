@@ -51,6 +51,17 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config as typeof error.config & { _retry?: boolean };
 
+    // The consent middleware blocks writes for users without a current
+    // health-data consent; send them to the consent gate to fix it.
+    if (
+      error.response?.status === 403 &&
+      error.response.data?.ErrorCode === 'CONSENT_REQUIRED' &&
+      !window.location.pathname.startsWith('/consent')
+    ) {
+      window.location.assign('/consent');
+      return Promise.reject(error);
+    }
+
     if (error.response?.status !== 401 || originalRequest._retry) {
       return Promise.reject(error);
     }

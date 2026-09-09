@@ -23,4 +23,6 @@ public static class ErrorCodes
     public const string InvalidInput = "INVALID_INPUT";
     public const string ActivityDurationExceeded = "ACTIVITY_DURATION_EXCEEDED";
     public const string FastingDayHasFood = "FASTING_DAY_HAS_FOOD";
+    public const string ConsentRequired = "CONSENT_REQUIRED";
+    public const string ConsentVersionStale = "CONSENT_VERSION_STALE";
 }

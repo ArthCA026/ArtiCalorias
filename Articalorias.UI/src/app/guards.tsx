@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
 import { profileService } from '@/services/profileService';
+import { consentService } from '@/services/consentService';
 import { queryKeys } from '@/lib/queryKeys';
 import { isNotFound } from '@/utils/apiError';
 import { Spinner } from '@/components/ui/Button';
@@ -57,6 +58,36 @@ export function RequireOnboarded() {
   const profile = profileQuery.data;
   if (!profile || !profile.isOnboardingCompleted) {
     return <Navigate to="/onboarding" replace state={{ from: location.pathname }} />;
+  }
+  return <Outlet />;
+}
+
+/**
+ * Requires a signed-in user with all consents granted at the current policy
+ * versions (Ley 8968). Existing accounts and users caught by a policy version
+ * bump are funneled to /consent before anything else, onboarding included.
+ * The backend middleware independently blocks writes, so a network error here
+ * fails open for UX without weakening enforcement.
+ */
+export function RequireConsented() {
+  const { isAuthenticated } = useAuth();
+  const location = useLocation();
+
+  const consentQuery = useQuery({
+    queryKey: queryKeys.consent(),
+    queryFn: () => consentService.getState().then((r) => r.data),
+    staleTime: 10 * 60 * 1000,
+    enabled: isAuthenticated,
+  });
+
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (consentQuery.isLoading) return <GuardSplash />;
+  if (consentQuery.isError) {
+    // Network trouble: let the app render; pages show their own error states.
+    return <Outlet />;
+  }
+  if ((consentQuery.data?.requiresConsent.length ?? 0) > 0) {
+    return <Navigate to="/consent" replace state={{ from: location.pathname }} />;
   }
   return <Outlet />;
 }

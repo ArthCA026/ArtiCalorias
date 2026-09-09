@@ -23,6 +23,7 @@ public class AppDbContext : DbContext
     public DbSet<UserStreak> UserStreaks => Set<UserStreak>();
     public DbSet<UserMacroPreference> UserMacroPreferences => Set<UserMacroPreference>();
     public DbSet<BodyMeasurement> BodyMeasurements => Set<BodyMeasurement>();
+    public DbSet<UserConsent> UserConsents => Set<UserConsent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

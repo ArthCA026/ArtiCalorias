@@ -66,12 +66,13 @@ public class ActivityParsingService : IActivityParsingService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "OpenAI API call failed for activity input: {Input}", freeText);
+            _logger.LogError(ex, "OpenAI API call failed for activity parse (input length {Length})", freeText.Length);
             throw new InvalidOperationException("Failed to parse activity description. Try again or enter manually.");
         }
 
-        var content = completion.Content[0].Text;
-        _logger.LogInformation("OpenAI activity parse response: {Response}", content);
+        var content = completion.Content[0].Text ?? string.Empty;
+        // Activity text is health data (Ley 8968): log outcome and size, never content.
+        _logger.LogInformation("OpenAI activity parse succeeded (response length {Length})", content.Length);
 
         var items = DeserializeActivityResponse(content);
         return ValidateActivities(items);
@@ -111,12 +112,12 @@ public class ActivityParsingService : IActivityParsingService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "OpenAI API call failed for MET estimate: {Activity}", activityName);
+            _logger.LogError(ex, "OpenAI API call failed for MET estimate (name length {Length})", activityName.Length);
             throw new InvalidOperationException("Failed to estimate MET value. Try again or enter manually.");
         }
 
-        var content = completion.Content[0].Text;
-        _logger.LogInformation("OpenAI MET estimate response: {Response}", content);
+        var content = completion.Content[0].Text ?? string.Empty;
+        _logger.LogInformation("OpenAI MET estimate succeeded (response length {Length})", content.Length);
 
         return DeserializeMetResponse(content, activityName);
     }

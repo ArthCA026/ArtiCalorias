@@ -1,32 +1,43 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Field, PasswordField } from '@/components/ui/Field';
 import { Button } from '@/components/ui/Button';
 import { InlineError } from '@/components/ui/States';
+import { ConsentCheckboxes, type ConsentValues } from '@/components/legal/ConsentCheckboxes';
 import { useAuth } from '@/hooks/useAuth';
+import { useLanguage } from '@/hooks/useLanguage';
 import { authService } from '@/services/authService';
+import { queryKeys } from '@/lib/queryKeys';
+import { POLICY_VERSIONS, CONSENT_TYPES } from '@/legal/policyVersions';
 import { extractApiError } from '@/utils/apiError';
 import { validateEmail } from '@/utils/emailValidation';
 import { validatePassword, validateConfirmPassword } from '@/utils/passwordValidation';
+import type { ConsentState } from '@/types';
 
 interface FieldErrors {
   username?: string;
   email?: string;
   password?: string;
   confirm?: string;
+  terms?: string;
+  health?: string;
 }
 
 export default function RegisterPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { login } = useAuth();
+  const { language } = useLanguage();
 
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [consents, setConsents] = useState<ConsentValues>({ termsAccepted: false, healthAccepted: false });
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [apiError, setApiError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -58,6 +69,12 @@ export default function RegisterPage() {
         ? t('auth.validation.confirm_mismatch', "Passwords don't match.")
         : t('auth.validation.confirm_required', 'Please re-enter your password.');
     }
+    if (!consents.termsAccepted) {
+      errors.terms = t('legal.error_terms_required', 'Please accept the terms and the privacy notice to continue.');
+    }
+    if (!consents.healthAccepted) {
+      errors.health = t('legal.error_health_required', 'The app cannot work without your consent to process health data.');
+    }
     return errors;
   };
 
@@ -65,15 +82,38 @@ export default function RegisterPage() {
     e.preventDefault();
     const errors = validate();
     setFieldErrors(errors);
-    if (errors.username || errors.email || errors.password || errors.confirm) return;
+    if (Object.values(errors).some(Boolean)) return;
 
     setApiError(null);
     setPending(true);
     try {
       const data = await authService
-        .register({ username: username.trim(), email: email.trim(), password })
+        .register({
+          username: username.trim(),
+          email: email.trim(),
+          password,
+          acceptedTermsVersion: POLICY_VERSIONS.terms,
+          acceptedPrivacyVersion: POLICY_VERSIONS.privacy,
+          acceptedHealthDataVersion: POLICY_VERSIONS.health_data,
+          consentLocale: language,
+        })
         .then((r) => r.data);
       login(data);
+      // The register endpoint already recorded all three grants; seed the
+      // cache so the consent gate does not flash a splash on the way in.
+      const now = new Date().toISOString();
+      const seeded: ConsentState = {
+        consents: CONSENT_TYPES.map((type) => ({
+          consentType: type,
+          status: 'granted',
+          policyVersion: POLICY_VERSIONS[type],
+          recordedAtUtc: now,
+          isCurrent: true,
+        })),
+        requiresConsent: [],
+        history: [],
+      };
+      queryClient.setQueryData(queryKeys.consent(), seeded);
       navigate('/onboarding', { replace: true });
     } catch (err) {
       setApiError(
@@ -152,6 +192,16 @@ export default function RegisterPage() {
               clearError('confirm');
             }}
             error={fieldErrors.confirm}
+          />
+          <ConsentCheckboxes
+            values={consents}
+            onChange={(next) => {
+              setConsents(next);
+              setFieldErrors((prev) => ({ ...prev, terms: undefined, health: undefined }));
+              setApiError(null);
+            }}
+            termsError={fieldErrors.terms}
+            healthError={fieldErrors.health}
           />
           <div className="pt-1">
             {apiError && <InlineError message={apiError} className="mb-3" />}

@@ -61,6 +61,17 @@ public class UserController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Ley 8968 access right: every piece of data the account holds,
+    /// as one JSON document. Credentials are never included.</summary>
+    [HttpGet("export")]
+    public async Task<IActionResult> ExportData()
+    {
+        var userId = GetUserId();
+        var export = await _userService.ExportAsync(userId);
+        if (export is null) return NotFound();
+        return Ok(export);
+    }
+
     private long GetUserId()
     {
         var claim = User.FindFirst(ClaimTypes.NameIdentifier)

@@ -19,6 +19,10 @@ import {
   RemindersSheet,
   SleepNeatSheet,
 } from '@/components/profile/ProfileSheets';
+import { ConsentStatusSheet, WithdrawConsentSheet } from '@/components/profile/LegalSheets';
+import { Spinner } from '@/components/ui/Button';
+import { consentService } from '@/services/consentService';
+import { POLICY_VERSIONS } from '@/legal/policyVersions';
 import { useMacroPreferences } from '@/hooks/useMacroPreferences';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme, type Theme } from '@/hooks/useTheme';
@@ -43,7 +47,7 @@ import { useBodyStaleDays, BODY_VERY_STALE_DAYS } from '@/hooks/useBodyStaleDays
 import { FEATURES } from '@/config/features';
 import type { UserProfileRequest } from '@/types';
 
-type OpenSheet = 'body' | 'protein' | 'mode' | 'reminders' | 'sleep-neat' | null;
+type OpenSheet = 'body' | 'protein' | 'mode' | 'reminders' | 'sleep-neat' | 'consent-status' | 'withdraw-consent' | null;
 type ConfirmKind = 'streak-reset' | 'clear-history' | 'delete-account' | 'bmr-review' | null;
 
 export default function ProfilePage() {
@@ -121,6 +125,55 @@ export default function ProfilePage() {
       logout();
     },
     onError: (err) => toast('error', extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
+  });
+
+  const revokeHealthConsent = () =>
+    consentService.record({
+      consents: [{ consentType: 'health_data', policyVersion: POLICY_VERSIONS.health_data, action: 'revoked' }],
+      locale: language,
+      source: 'profile',
+    });
+
+  // Ley 8968 revocation, withdraw-only path: the revocation row is appended,
+  // then the session ends. Next sign-in lands on the consent gate.
+  const withdrawOnly = useMutation({
+    mutationFn: () => revokeHealthConsent(),
+    onSuccess: () => {
+      queryClient.clear();
+      logout();
+    },
+    onError: (err) => toast('error', extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
+  });
+
+  // Withdraw-and-delete: revocation is recorded first so the audit trail
+  // shows the withdrawal even though the account (and the trail) is erased
+  // right after. Order matters for the brief window between the two calls.
+  const withdrawAndDelete = useMutation({
+    mutationFn: async () => {
+      await revokeHealthConsent();
+      await userService.deleteAccount();
+    },
+    onSuccess: () => {
+      queryClient.clear();
+      logout();
+    },
+    onError: (err) => toast('error', extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
+  });
+
+  const exportData = useMutation({
+    mutationFn: () => userService.exportData().then((r) => r.data),
+    onSuccess: (data) => {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `articalorias-data-${toDateString()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('success', t('legal.export_done', 'Your data file is downloading'));
+    },
+    onError: (err) =>
+      toast('error', extractApiError(err, t('legal.export_error', 'Could not prepare your data. Check your connection and try again.'))),
   });
 
   const goalLabel = (() => {
@@ -419,6 +472,43 @@ export default function ProfilePage() {
             </Card>
           </section>
 
+          {/* Legal (Ley 8968: policies, consent state, data export) */}
+          <section>
+            <h2 className="text-[13px] font-bold text-ink-2 uppercase tracking-wide mb-2 px-1">
+              {t('legal.section', 'Legal')}
+            </h2>
+            <Card padded={false} className="overflow-hidden divide-y divide-hairline/50">
+              <ListRow
+                icon="shield"
+                title={t('legal.row_privacy', 'Privacy notice')}
+                chevron
+                onClick={() => navigate('/legal/privacy')}
+              />
+              <ListRow
+                icon="fileText"
+                title={t('legal.row_terms', 'Terms of use')}
+                chevron
+                onClick={() => navigate('/legal/terms')}
+              />
+              <ListRow
+                icon="shieldCheck"
+                title={t('legal.row_consent', 'Consent and your data')}
+                subtitle={t('legal.row_consent_hint', 'See or withdraw what you have agreed to')}
+                chevron
+                onClick={() => setSheet('consent-status')}
+              />
+              <ListRow
+                icon="download"
+                title={t('legal.row_export', 'Download my data')}
+                subtitle={t('legal.row_export_hint', 'Everything in your account, as one file')}
+                right={exportData.isPending ? <Spinner size={18} /> : undefined}
+                onClick={() => {
+                  if (!exportData.isPending) exportData.mutate();
+                }}
+              />
+            </Card>
+          </section>
+
           {/* Account */}
           <section>
             <h2 className="text-[13px] font-bold text-ink-2 uppercase tracking-wide mb-2 px-1">
@@ -484,6 +574,19 @@ export default function ProfilePage() {
             }}
           />
           <RemindersSheet open={sheet === 'reminders'} onClose={() => setSheet(null)} />
+          <ConsentStatusSheet
+            open={sheet === 'consent-status'}
+            onClose={() => setSheet(null)}
+            onWithdraw={() => setSheet('withdraw-consent')}
+          />
+          <WithdrawConsentSheet
+            open={sheet === 'withdraw-consent'}
+            onClose={() => setSheet(null)}
+            withdrawing={withdrawOnly.isPending}
+            deleting={withdrawAndDelete.isPending}
+            onWithdrawOnly={() => withdrawOnly.mutate()}
+            onWithdrawAndDelete={() => withdrawAndDelete.mutate()}
+          />
 
           <ConfirmSheet
             open={confirm === 'bmr-review'}

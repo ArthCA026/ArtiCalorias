@@ -36,6 +36,8 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken ct = default)
     {
+        ValidateRegistrationConsents(request);
+
         if (await _db.Users.AnyAsync(u => u.Username == request.Username, ct))
             throw new InvalidOperationException("Username already exists.");
 
@@ -54,9 +56,50 @@ public class AuthService : IAuthService
         };
 
         _db.Users.Add(user);
+
+        // Consent evidence shares the SaveChanges with the account row: no
+        // account can exist without it, and no orphan rows if creation fails.
+        var locale = ConsentLocales.Normalize(request.ConsentLocale);
+        foreach (var (type, version) in PolicyVersions.Current)
+        {
+            _db.UserConsents.Add(new UserConsent
+            {
+                User = user,
+                ConsentType = type,
+                PolicyVersion = version,
+                Action = ConsentActions.Granted,
+                Locale = locale,
+                Source = ConsentSources.Register
+            });
+        }
+
         await _db.SaveChangesAsync(ct);
 
         return await GenerateAuthResponseAsync(user, ct);
+    }
+
+    /// <summary>
+    /// Registration requires all three consents (Ley 8968: terms, privacy
+    /// notice, and the separate express health-data consent) at the current
+    /// document versions. Client-side checkboxes are UX; this is the rule.
+    /// </summary>
+    private static void ValidateRegistrationConsents(RegisterRequest request)
+    {
+        if (string.IsNullOrEmpty(request.AcceptedTermsVersion) ||
+            string.IsNullOrEmpty(request.AcceptedPrivacyVersion) ||
+            string.IsNullOrEmpty(request.AcceptedHealthDataVersion))
+        {
+            throw new ApiException(ErrorCodes.ConsentRequired,
+                "Creating an account requires accepting the terms, the privacy notice, and health data processing.");
+        }
+
+        if (request.AcceptedTermsVersion != PolicyVersions.Terms ||
+            request.AcceptedPrivacyVersion != PolicyVersions.Privacy ||
+            request.AcceptedHealthDataVersion != PolicyVersions.HealthData)
+        {
+            throw new ApiException(ErrorCodes.ConsentVersionStale,
+                "The accepted document versions are out of date. Please reload the app and review the current versions.");
+        }
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken ct = default)

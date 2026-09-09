@@ -33,6 +33,9 @@ public static class ServiceCollectionExtensions
         // Auth
         services.AddScoped<IAuthService, AuthService>();
 
+        // Informed consent audit log + gate state (Ley 8968)
+        services.AddScoped<IConsentService, ConsentService>();
+
         // Core data services
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IUserProfileService, UserProfileService>();
@@ -89,9 +92,16 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddCorsPolicy(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddCorsPolicy(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+
+        // Fail closed: a health-data API must never fall back to any-origin in
+        // production because a config value went missing. Development keeps the
+        // open fallback for local tooling.
+        if (allowedOrigins.Length == 0 && !environment.IsDevelopment())
+            throw new InvalidOperationException(
+                "Cors:AllowedOrigins must be configured outside Development. Refusing to start with an open CORS policy.");
 
         services.AddCors(options =>
         {

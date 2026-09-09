@@ -99,4 +99,88 @@ public class UserService : IUserService
 
         await tx.CommitAsync();
     }
+
+    public async Task<object?> ExportAsync(long userId)
+    {
+        // Credentials are excluded by projection, never by post-filtering.
+        var account = await _db.Users.AsNoTracking()
+            .Where(u => u.UserId == userId)
+            .Select(u => new { u.UserId, u.Username, u.Email, u.IsActive, u.CreatedAtUtc, u.LastActiveAtUtc })
+            .FirstOrDefaultAsync();
+
+        if (account is null)
+            return null;
+
+        // Flat AsNoTracking queries on purpose: no Includes means no nav
+        // fixup, so the entity graphs stay acyclic and serialize cleanly.
+        var profile = await _db.UserProfiles.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.UserId == userId);
+
+        var dailyLogs = await _db.DailyLogs.AsNoTracking()
+            .Where(d => d.UserId == userId).OrderBy(d => d.LogDate).ToListAsync();
+
+        var foodEntries = await _db.FoodEntries.AsNoTracking()
+            .Where(f => f.DailyLog.UserId == userId).ToListAsync();
+
+        var activityEntries = await _db.ActivityEntries.AsNoTracking()
+            .Where(a => a.DailyLog.UserId == userId).ToListAsync();
+
+        var bodyMeasurements = await _db.BodyMeasurements.AsNoTracking()
+            .Where(m => m.UserId == userId).OrderBy(m => m.MeasuredOn).ToListAsync();
+
+        var monthlySummaries = await _db.MonthlySummaries.AsNoTracking()
+            .Where(m => m.UserId == userId).ToListAsync();
+
+        var foodTemplates = await _db.FoodTemplates.AsNoTracking()
+            .Where(f => f.UserId == userId).ToListAsync();
+
+        var activityTemplates = await _db.ActivityTemplates.AsNoTracking()
+            .Where(a => a.UserId == userId).ToListAsync();
+
+        var favoriteRoutines = await _db.FavoriteRoutines.AsNoTracking()
+            .Where(r => r.UserId == userId).ToListAsync();
+
+        var routineIds = favoriteRoutines.Select(r => r.FavoriteRoutineId).ToList();
+        var favoriteRoutineItems = await _db.FavoriteRoutineItems.AsNoTracking()
+            .Where(i => routineIds.Contains(i.FavoriteRoutineId)).ToListAsync();
+
+        var macroPreferences = await _db.UserMacroPreferences.AsNoTracking()
+            .Where(m => m.UserId == userId).ToListAsync();
+
+        var streak = await _db.UserStreaks.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.UserId == userId);
+
+        var notificationSchedules = await _db.NotificationSchedules.AsNoTracking()
+            .Where(n => n.UserId == userId).ToListAsync();
+
+        var pushSubscriptions = await _db.PushSubscriptions.AsNoTracking()
+            .Where(p => p.UserId == userId).ToListAsync();
+
+        var consents = await _db.UserConsents.AsNoTracking()
+            .Where(c => c.UserId == userId)
+            .OrderBy(c => c.CreatedAtUtc)
+            .Select(c => new { c.ConsentType, c.PolicyVersion, c.Action, c.Locale, c.Source, c.CreatedAtUtc })
+            .ToListAsync();
+
+        return new
+        {
+            ExportedAtUtc = DateTime.UtcNow,
+            Account = account,
+            Profile = profile,
+            DailyLogs = dailyLogs,
+            FoodEntries = foodEntries,
+            ActivityEntries = activityEntries,
+            BodyMeasurements = bodyMeasurements,
+            MonthlySummaries = monthlySummaries,
+            FoodTemplates = foodTemplates,
+            ActivityTemplates = activityTemplates,
+            FavoriteRoutines = favoriteRoutines,
+            FavoriteRoutineItems = favoriteRoutineItems,
+            MacroPreferences = macroPreferences,
+            Streak = streak,
+            NotificationSchedules = notificationSchedules,
+            PushSubscriptions = pushSubscriptions,
+            Consents = consents
+        };
+    }
 }
