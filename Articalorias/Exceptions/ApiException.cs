@@ -25,4 +25,5 @@ public static class ErrorCodes
     public const string FastingDayHasFood = "FASTING_DAY_HAS_FOOD";
     public const string ConsentRequired = "CONSENT_REQUIRED";
     public const string ConsentVersionStale = "CONSENT_VERSION_STALE";
+    public const string AiRateLimited = "AI_RATE_LIMITED";
 }

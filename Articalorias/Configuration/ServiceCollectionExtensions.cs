@@ -26,6 +26,17 @@ public static class ServiceCollectionExtensions
         // OpenAI configuration
         services.Configure<OpenAiSettings>(configuration.GetSection(OpenAiSettings.SectionName));
 
+        // Per-user quotas on the AI endpoints (every parse is a paid call)
+        services.Configure<AiRateLimitSettings>(configuration.GetSection(AiRateLimitSettings.SectionName));
+
+        // Single funnel for OpenAI calls: model routing, reasoning/output caps,
+        // token-usage logging. Singleton — ChatClients are thread-safe.
+        services.AddSingleton<IOpenAiChatExecutor, OpenAiChatExecutor>();
+
+        // Shared AI response cache (memory + database) — identical parse
+        // inputs stop paying for repeat OpenAI calls.
+        services.AddScoped<IAiResponseCacheService, AiResponseCacheService>();
+
         // SMTP / Email
         services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
         services.AddScoped<IEmailService, EmailService>();
@@ -61,6 +72,9 @@ public static class ServiceCollectionExtensions
 
         // OpenAI activity parsing
         services.AddScoped<IActivityParsingService, ActivityParsingService>();
+
+        // One-call food+activity parsing for the type-agnostic favorites parse
+        services.AddScoped<ICombinedParsingService, CombinedParsingService>();
 
         // Food templates (favorites)
         services.AddScoped<IFoodTemplateService, FoodTemplateService>();

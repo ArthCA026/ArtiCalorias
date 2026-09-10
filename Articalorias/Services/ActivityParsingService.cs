@@ -3,6 +3,7 @@ using Articalorias.Configuration;
 using Articalorias.DTOs.ActivityParsing;
 using Articalorias.Exceptions;
 using Articalorias.Interfaces;
+using Articalorias.Services.Parsing;
 using Microsoft.Extensions.Options;
 using OpenAI.Chat;
 
@@ -16,7 +17,15 @@ namespace Articalorias.Services;
 /// </summary>
 public class ActivityParsingService : IActivityParsingService
 {
-    private readonly ChatClient _chatClient;
+    /// <summary>Bump when a prompt or wire schema changes (invalidates cache).</summary>
+    private const string PromptVersion = "v2";
+
+    private const string ParseCacheType = "activity";
+    private const string MetCacheType = "met";
+
+    private readonly IOpenAiChatExecutor _executor;
+    private readonly IAiResponseCacheService _cache;
+    private readonly OpenAiSettings _settings;
     private readonly ILogger<ActivityParsingService> _logger;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -24,16 +33,16 @@ public class ActivityParsingService : IActivityParsingService
         PropertyNameCaseInsensitive = true
     };
 
-    public ActivityParsingService(IOptions<OpenAiSettings> settings, ILogger<ActivityParsingService> logger)
+    public ActivityParsingService(
+        IOpenAiChatExecutor executor,
+        IAiResponseCacheService cache,
+        IOptions<OpenAiSettings> settings,
+        ILogger<ActivityParsingService> logger)
     {
+        _executor = executor;
+        _cache = cache;
+        _settings = settings.Value;
         _logger = logger;
-        var config = settings.Value;
-
-        if (string.IsNullOrWhiteSpace(config.ApiKey))
-            throw new InvalidOperationException(
-                "OpenAI API key is not configured. Set OpenAI:ApiKey in appsettings.json.");
-
-        _chatClient = new ChatClient(config.Model, config.ApiKey);
     }
 
     public async Task<IReadOnlyList<ParsedActivityItem>> ParseFreeTextAsync(string freeText)
@@ -48,21 +57,35 @@ public class ActivityParsingService : IActivityParsingService
             throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
         }
 
+        var cacheKey = AiCacheKey.Compute(
+            ParseCacheType,
+            PromptVersion,
+            _settings.ResolveModel(_settings.ActivityModel),
+            AiCacheKey.NormalizeText(freeText));
+
+        var cachedContent = await _cache.GetAsync(ParseCacheType, cacheKey);
+        if (cachedContent is not null)
+        {
+            var cachedItems = TryProcessResponse(cachedContent);
+            if (cachedItems is { Count: > 0 })
+            {
+                // Activity text is health data (Ley 8968): log outcome only, never content.
+                _logger.LogInformation("Activity parse served from cache");
+                return cachedItems;
+            }
+        }
+
         var messages = new List<ChatMessage>
         {
             new SystemChatMessage(ActivityParseSystemPrompt),
             new UserChatMessage(freeText)
         };
 
-        var options = new ChatCompletionOptions
-        {
-            ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
-        };
-
-        ChatCompletion completion;
+        string content;
         try
         {
-            completion = await _chatClient.CompleteChatAsync(messages, options);
+            content = await _executor.ExecuteAsync(
+                "activity-parse", _settings.ActivityModel, messages, ParsingSchemas.ActivityFormat());
         }
         catch (Exception ex)
         {
@@ -70,12 +93,14 @@ public class ActivityParsingService : IActivityParsingService
             throw new InvalidOperationException("Failed to parse activity description. Try again or enter manually.");
         }
 
-        var content = completion.Content[0].Text ?? string.Empty;
-        // Activity text is health data (Ley 8968): log outcome and size, never content.
         _logger.LogInformation("OpenAI activity parse succeeded (response length {Length})", content.Length);
 
-        var items = DeserializeActivityResponse(content);
-        return ValidateActivities(items);
+        var items = ProcessResponse(content);
+
+        await _cache.SetAsync(ParseCacheType, cacheKey, content,
+            TimeSpan.FromDays(_settings.ParseCacheTtlDays));
+
+        return items;
     }
 
     public async Task<EstimateMetResponse> EstimateMetAsync(string activityName, decimal? durationMinutes)
@@ -90,25 +115,52 @@ public class ActivityParsingService : IActivityParsingService
             throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
         }
 
-        var userMessage = durationMinutes.HasValue
-            ? $"{activityName} ({durationMinutes.Value} minutes)"
-            : activityName;
+        // The prompt itself demands a deterministic value per activity name and
+        // tells the model to ignore duration — so duration takes no part in the
+        // estimate, common activities resolve from the in-code Compendium seed,
+        // and every model answer is cached forever. Marginal cost trends to zero.
+        var normalizedName = AiCacheKey.NormalizeText(activityName);
+
+        if (MetSeed.TryGetValue(normalizedName, out var seed))
+        {
+            return new EstimateMetResponse
+            {
+                ActivityName = activityName,
+                MetValue = seed.Met,
+                Explanation = seed.Spanish
+                    ? "Valor MET de referencia del Compendio de Actividades Físicas."
+                    : "Reference MET value from the Compendium of Physical Activities."
+            };
+        }
+
+        var cacheKey = AiCacheKey.Compute(
+            MetCacheType,
+            PromptVersion,
+            _settings.ResolveModel(_settings.MetModel),
+            normalizedName);
+
+        var cachedContent = await _cache.GetAsync(MetCacheType, cacheKey);
+        if (cachedContent is not null)
+        {
+            var cachedResponse = TryProcessMetResponse(cachedContent, activityName);
+            if (cachedResponse is not null)
+            {
+                _logger.LogInformation("MET estimate served from cache");
+                return cachedResponse;
+            }
+        }
 
         var messages = new List<ChatMessage>
         {
             new SystemChatMessage(MetEstimateSystemPrompt),
-            new UserChatMessage(userMessage)
+            new UserChatMessage(activityName)
         };
 
-        var options = new ChatCompletionOptions
-        {
-            ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
-        };
-
-        ChatCompletion completion;
+        string content;
         try
         {
-            completion = await _chatClient.CompleteChatAsync(messages, options);
+            content = await _executor.ExecuteAsync(
+                "met-estimate", _settings.MetModel, messages, ParsingSchemas.MetFormat());
         }
         catch (Exception ex)
         {
@@ -116,158 +168,178 @@ public class ActivityParsingService : IActivityParsingService
             throw new InvalidOperationException("Failed to estimate MET value. Try again or enter manually.");
         }
 
-        var content = completion.Content[0].Text ?? string.Empty;
         _logger.LogInformation("OpenAI MET estimate succeeded (response length {Length})", content.Length);
 
-        return DeserializeMetResponse(content, activityName);
+        var response = ProcessMetResponse(content, activityName);
+
+        // MET values never go stale — cache forever.
+        await _cache.SetAsync(MetCacheType, cacheKey, content, ttl: null);
+
+        return response;
     }
+
+    // ─────────────────────────────────────────────────────
+    //  Static MET seed — top activities never touch OpenAI
+    // ─────────────────────────────────────────────────────
+
+    // Values follow the Compendium of Physical Activities at moderate
+    // intensity, consistent with the anchors in the prompts below.
+    private static readonly Dictionary<string, (decimal Met, bool Spanish)> MetSeed = new()
+    {
+        // English
+        ["walking"] = (3.5m, false),
+        ["walk"] = (3.5m, false),
+        ["running"] = (8.3m, false),
+        ["run"] = (8.3m, false),
+        ["jogging"] = (7.0m, false),
+        ["cycling"] = (6.8m, false),
+        ["biking"] = (6.8m, false),
+        ["swimming"] = (5.8m, false),
+        ["weight training"] = (5.0m, false),
+        ["weightlifting"] = (5.0m, false),
+        ["lifting"] = (5.0m, false),
+        ["gym"] = (5.0m, false),
+        ["workout"] = (5.0m, false),
+        ["exercise"] = (5.0m, false),
+        ["yoga"] = (2.5m, false),
+        ["hiit"] = (10.0m, false),
+        ["stretching"] = (2.3m, false),
+        ["dancing"] = (5.5m, false),
+        ["basketball"] = (6.5m, false),
+        ["soccer"] = (7.0m, false),
+        ["football"] = (7.0m, false),
+        ["tennis"] = (7.3m, false),
+        ["hiking"] = (6.0m, false),
+        ["pilates"] = (3.0m, false),
+        ["crossfit"] = (10.0m, false),
+        ["elliptical"] = (5.0m, false),
+        ["rowing"] = (7.0m, false),
+        ["spinning"] = (8.5m, false),
+        ["boxing"] = (7.8m, false),
+        ["climbing"] = (8.0m, false),
+        ["zumba"] = (6.5m, false),
+        // Spanish
+        ["caminar"] = (3.5m, true),
+        ["caminata"] = (3.5m, true),
+        ["correr"] = (8.3m, true),
+        ["trotar"] = (7.0m, true),
+        ["ciclismo"] = (6.8m, true),
+        ["bicicleta"] = (6.8m, true),
+        ["natación"] = (5.8m, true),
+        ["natacion"] = (5.8m, true),
+        ["nadar"] = (5.8m, true),
+        ["pesas"] = (5.0m, true),
+        ["gimnasio"] = (5.0m, true),
+        ["ejercicio"] = (5.0m, true),
+        ["estiramiento"] = (2.3m, true),
+        ["baile"] = (5.5m, true),
+        ["bailar"] = (5.5m, true),
+        ["baloncesto"] = (6.5m, true),
+        ["básquetbol"] = (6.5m, true),
+        ["basquetbol"] = (6.5m, true),
+        ["fútbol"] = (7.0m, true),
+        ["futbol"] = (7.0m, true),
+        ["tenis"] = (7.3m, true),
+        ["senderismo"] = (6.0m, true),
+        ["escalada"] = (8.0m, true),
+        ["remo"] = (7.0m, true),
+        ["boxeo"] = (7.8m, true),
+    };
 
     // ─────────────────────────────────────────────────────
     //  Prompts
     // ─────────────────────────────────────────────────────
 
+    // Output-format policing lives in the strict JSON schema; these prompts
+    // carry only the tuned extraction semantics.
     private const string ActivityParseSystemPrompt = """
-        You are a fitness and exercise assistant. The user will describe activities they performed in free text, in Spanish or English. Parse each distinct activity into structured data.
+        You are a fitness and exercise assistant. The user describes activities they performed in free text, in Spanish or English. Parse each distinct activity into a separate item (activities may be joined by "and", "y", commas, or similar separators).
 
-        Return JSON only.
-        Return a JSON object with a single key "items" containing an array.
-
-        Each item must have exactly these fields:
-        - activityName (string): activity name in the same language as the user's input; preserve natural casing (e.g. "CrossFit", "Pilates"); do not translate; empty string "" when the user did not name the activity
-        - durationMinutes (number or null): duration in minutes
-        - metValue (number or null): estimated MET value for the activity
-        - caloriesKcal (number or null): calories burned, ONLY if the user explicitly stated them (e.g. "200 kcal", "burned 350 calories", "quemé 200 kcal")
+        FIELDS
+        - n: activity name in the same language as the user's input; preserve natural casing ("CrossFit", "Pilates"); do not translate; empty string "" when the user did not name the activity.
+        - min: duration in minutes (convert other units to minutes).
+        - met: estimated MET value, rounded to 1 decimal place.
+        - kcal: calories burned, ONLY if the user explicitly stated them ("200 kcal", "burned 350 calories", "queme 200 kcal").
 
         The user may report calories from a smart watch. Extraction rules for that case — follow them exactly:
-        - caloriesKcal is filled ONLY with a number the user said. NEVER estimate or calculate calories yourself.
+        - kcal is filled ONLY with a number the user said. NEVER estimate or calculate calories yourself.
         - When the user states calories, NEVER calculate the missing duration or MET from them. Leave what the user did not say as null. The backend does that math.
-        - "200kcal of running" → activityName "running" (keep user language), metValue estimated from the activity name, durationMinutes null, caloriesKcal 200.
-        - "200kcal in 20min" → activityName "", durationMinutes 20, metValue null, caloriesKcal 200.
-        - "200kcal of running in 20min" → activityName "running", durationMinutes 20, metValue null (the backend derives the real MET from calories and duration), caloriesKcal 200.
-        - "200kcal" alone → activityName "", durationMinutes null, metValue null, caloriesKcal 200.
+        - "200kcal of running" -> n "running" (keep user language), met estimated from the activity name, min null, kcal 200.
+        - "200kcal in 20min" -> n "", min 20, met null, kcal 200.
+        - "200kcal of running in 20min" -> n "running", min 20, met null (the backend derives the real MET from calories and duration), kcal 200.
+        - "200kcal" alone -> n "", min null, met null, kcal 200.
 
-        When the user does NOT state calories (the normal case), caloriesKcal is null and the old behavior applies:
-        - metValue: estimate a reasonable MET value based on the Compendium of Physical Activities.
-        - durationMinutes: if the user stated it, use their value; otherwise estimate a typical duration for that activity (e.g., aerobics class → 45, yoga → 60, running → 30, weight training → 45, stretching → 15).
+        When the user does NOT state calories (the normal case), kcal is null and:
+        - met: estimate a reasonable MET value based on the Compendium of Physical Activities; if the activity is too vague, use the most reasonable common estimate for that label.
+        - min: if the user stated it, use their value; otherwise estimate a typical duration (aerobics class 45, yoga 60, running 30, weight training 45, stretching 15).
 
-        General rules:
-        - Parse each distinct activity as a separate item.
-        - Keep activityName in the same language as the user's input; preserve natural casing; do not translate.
-        - If the user mentions multiple activities joined by "and", "y", commas, or similar separators, return one item per activity.
-        - Round metValue to 1 decimal place.
-        - Convert durations to minutes.
-        - Support inputs in English or Spanish.
-        - Never return negative values.
-        - If the activity is too vague to assign a confident MET value, use the most reasonable common estimate for that activity label.
-        - Output valid JSON only, with no markdown or extra text.
+        Reference MET examples: walking moderate 3.5, running 8 km/h 8.3, cycling moderate 6.8, swimming moderate 5.8, weight training 5.0, yoga 2.5, HIIT 10.0, stretching 2.3.
+        Never return negative values.
 
-        Reference MET examples:
-        - Walking (moderate): 3.5
-        - Running (8 km/h): 8.3
-        - Cycling (moderate): 6.8
-        - Swimming (moderate): 5.8
-        - Weight training: 5.0
-        - Yoga: 2.5
-        - HIIT: 10.0
-        - Stretching: 2.3
-
-        Example input: "30 min corriendo y 15 min de estiramiento"
-        Example output:
-        {
-          "items": [
-            {
-              "activityName": "Correr",
-              "durationMinutes": 30,
-              "metValue": 8.3,
-              "caloriesKcal": null
-            },
-            {
-              "activityName": "Estiramiento",
-              "durationMinutes": 15,
-              "metValue": 2.3,
-              "caloriesKcal": null
-            }
-          ]
-        }
-
-        Example input: "corrí y quemé 320 kcal según mi reloj"
-        Example output:
-        {
-          "items": [
-            {
-              "activityName": "Correr",
-              "durationMinutes": null,
-              "metValue": 8.3,
-              "caloriesKcal": 320
-            }
-          ]
-        }
+        Example: "30 min corriendo y 15 min de estiramiento" -> items: [{ n "Correr", min 30, met 8.3, kcal null }, { n "Estiramiento", min 15, met 2.3, kcal null }].
+        Example: "corri y queme 320 kcal segun mi reloj" -> items: [{ n "Correr", min null, met 8.3, kcal 320 }].
         """;
 
     private const string MetEstimateSystemPrompt = """
-            You are a fitness expert. The user will provide the name of a physical activity in English or Spanish. 
-            Estimate the MET (Metabolic Equivalent of Task) value for that activity using the Compendium of Physical Activities as reference.
+            You are a fitness expert. The user provides the name of a physical activity in English or Spanish. Estimate its MET (Metabolic Equivalent of Task) value using the Compendium of Physical Activities as reference.
 
-            Return JSON only.
+            - met: the estimated MET value, rounded to 1 decimal place. Use the most common/moderate intensity if intensity is not specified. Ignore duration, calories, or distance unless they clearly imply intensity. If the activity is vague ("workout", "exercise"), choose a reasonable general estimate (~5.0). Always return a deterministic value for the same input.
+            - why: a single short, specific sentence explaining the choice.
 
-            Return a JSON object with exactly these fields:
-            - metValue (number): the estimated MET value, rounded to 1 decimal place
-            - explanation (string): a single concise sentence explaining the choice
-
-            Reference MET values (use these as anchors):
-            - Sitting quietly: 1.0
-            - Walking (slow, 3 km/h): 2.0
-            - Walking (moderate, 5 km/h): 3.5
-            - Cycling (moderate): 6.8
-            - Running (8 km/h): 8.3
-            - Running (10 km/h): 10.0
-            - Swimming (moderate): 5.8
-            - Weight training (moderate): 5.0
-            - Yoga: 2.5
-            - HIIT: 10.0
-            - Stretching: 2.3
-            - Dancing: 5.5
-            - Basketball: 6.5
-            - Soccer: 7.0
-
-            Rules:
-            - Use the most common/moderate intensity if intensity is not specified.
-            - Ignore duration, calories, or distance unless they clearly imply intensity.
-            - If the activity is vague (e.g., "workout", "exercise"), choose a reasonable general estimate (~5.0 MET).
-            - Always return a deterministic value for the same input.
-            - Round metValue to 1 decimal place.
-            - Keep the explanation short, specific, and limited to one sentence.
-            - Output valid JSON only, with no extra text.
+            Reference anchors: sitting quietly 1.0, walking slow 2.0, walking moderate 3.5, cycling moderate 6.8, running 8 km/h 8.3, running 10 km/h 10.0, swimming moderate 5.8, weight training 5.0, yoga 2.5, HIIT 10.0, stretching 2.3, dancing 5.5, basketball 6.5, soccer 7.0.
             """;
 
     // ─────────────────────────────────────────────────────
-    //  Deserialization
+    //  Response processing
     // ─────────────────────────────────────────────────────
 
-    private static List<ParsedActivityItem> DeserializeActivityResponse(string json)
+    private static IReadOnlyList<ParsedActivityItem> ProcessResponse(string json)
     {
+        List<ParsedActivityItem> items;
         try
         {
-            var wrapper = JsonSerializer.Deserialize<ActivityResponseWrapper>(json, JsonOptions);
-            return wrapper?.Items ?? [];
+            var wrapper = JsonSerializer.Deserialize<WireActivityResponse>(json, JsonOptions);
+            items = (wrapper?.Items ?? []).Select(i => i.ToParsedActivityItem()).ToList();
         }
         catch (JsonException)
         {
             throw new InvalidOperationException(
                 "OpenAI returned an invalid response format. Try again or enter manually.");
         }
+
+        if (items.Count == 0)
+            throw new InvalidOperationException("OpenAI returned no activity items. Try a more descriptive input.");
+
+        var sanitized = ActivityItemSanitizer.Sanitize(items);
+
+        if (sanitized.Count == 0)
+            throw new InvalidOperationException("All parsed items were invalid. Try again or enter manually.");
+
+        return sanitized;
     }
 
-    private static EstimateMetResponse DeserializeMetResponse(string json, string activityName)
+    private static IReadOnlyList<ParsedActivityItem>? TryProcessResponse(string json)
     {
         try
         {
-            var result = JsonSerializer.Deserialize<MetResponseWrapper>(json, JsonOptions);
+            return ProcessResponse(json);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static EstimateMetResponse ProcessMetResponse(string json, string activityName)
+    {
+        try
+        {
+            var result = JsonSerializer.Deserialize<WireMetResponse>(json, JsonOptions);
             return new EstimateMetResponse
             {
                 ActivityName = activityName,
-                MetValue = Math.Clamp(result?.MetValue ?? 3.5m, 0.5m, 50m),
-                Explanation = result?.Explanation
+                MetValue = Math.Clamp(result?.Met ?? 3.5m, 0.5m, 50m),
+                Explanation = result?.Why
             };
         }
         catch (JsonException)
@@ -277,55 +349,15 @@ public class ActivityParsingService : IActivityParsingService
         }
     }
 
-    // ─────────────────────────────────────────────────────
-    //  Validation
-    // ─────────────────────────────────────────────────────
-
-    private static IReadOnlyList<ParsedActivityItem> ValidateActivities(List<ParsedActivityItem> items)
+    private static EstimateMetResponse? TryProcessMetResponse(string json, string activityName)
     {
-        if (items.Count == 0)
-            throw new InvalidOperationException("OpenAI returned no activity items. Try a more descriptive input.");
-
-        var validated = new List<ParsedActivityItem>();
-
-        foreach (var item in items)
+        try
         {
-            // A nameless item is only acceptable on the smart-watch path, where the
-            // stated calories make it computable (the backend names it "Exercise").
-            if (string.IsNullOrWhiteSpace(item.ActivityName) && item.CaloriesKcal is not > 0m)
-                continue;
-
-            // Clamp values
-            if (item.DurationMinutes.HasValue)
-                item.DurationMinutes = Math.Clamp(item.DurationMinutes.Value, 0, 1440);
-
-            if (item.MetValue.HasValue)
-                item.MetValue = Math.Clamp(item.MetValue.Value, 0.5m, 50m);
-
-            if (item.CaloriesKcal.HasValue)
-                item.CaloriesKcal = Math.Clamp(item.CaloriesKcal.Value, 0m, 10000m);
-
-            validated.Add(item);
+            return ProcessMetResponse(json, activityName);
         }
-
-        if (validated.Count == 0)
-            throw new InvalidOperationException("All parsed items were invalid. Try again or enter manually.");
-
-        return validated;
-    }
-
-    // ─────────────────────────────────────────────────────
-    //  Internal DTOs for deserialization
-    // ─────────────────────────────────────────────────────
-
-    private sealed class ActivityResponseWrapper
-    {
-        public List<ParsedActivityItem> Items { get; set; } = [];
-    }
-
-    private sealed class MetResponseWrapper
-    {
-        public decimal MetValue { get; set; }
-        public string? Explanation { get; set; }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 }

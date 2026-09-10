@@ -3,6 +3,7 @@ using Articalorias.DTOs.ActivityParsing;
 using Articalorias.DTOs.Favorites;
 using Articalorias.DTOs.FoodParsing;
 using Articalorias.DTOs.FoodTemplates;
+using Articalorias.Filters;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
 using Articalorias.Services;
@@ -20,6 +21,7 @@ public class FavoritesController : ControllerBase
     private readonly IFavoriteRoutineService _routineService;
     private readonly IActivityParsingService _activityParsing;
     private readonly IFoodParsingService _foodParsing;
+    private readonly ICombinedParsingService _combinedParsing;
     private readonly IDailyLogService _dailyLogService;
     private readonly IUserProfileService _userProfileService;
     private readonly ILogger<FavoritesController> _logger;
@@ -29,6 +31,7 @@ public class FavoritesController : ControllerBase
         IFavoriteRoutineService routineService,
         IActivityParsingService activityParsing,
         IFoodParsingService foodParsing,
+        ICombinedParsingService combinedParsing,
         IDailyLogService dailyLogService,
         IUserProfileService userProfileService,
         ILogger<FavoritesController> logger)
@@ -37,6 +40,7 @@ public class FavoritesController : ControllerBase
         _routineService = routineService;
         _activityParsing = activityParsing;
         _foodParsing = foodParsing;
+        _combinedParsing = combinedParsing;
         _dailyLogService = dailyLogService;
         _userProfileService = userProfileService;
         _logger = logger;
@@ -131,6 +135,7 @@ public class FavoritesController : ControllerBase
     // ── AI Parse (tab-scoped, mirrors DailyLog pattern) ──
 
     [HttpPost("parse-activity")]
+    [AiRateLimit]
     public async Task<IActionResult> ParseActivity([FromBody] ParseFavoriteRequest request, CancellationToken ct)
     {
         if (PromptInjectionScanner.ContainsInjection(request.Text))
@@ -156,6 +161,7 @@ public class FavoritesController : ControllerBase
     }
 
     [HttpPost("parse-food")]
+    [AiRateLimit]
     public async Task<IActionResult> ParseFood([FromBody] ParseFavoriteRequest request, CancellationToken ct)
     {
         if (PromptInjectionScanner.ContainsInjection(request.Text))
@@ -186,6 +192,7 @@ public class FavoritesController : ControllerBase
     // ── Unified AI Parse (kept for backwards compat) ──
 
     [HttpPost("parse")]
+    [AiRateLimit]
     public async Task<IActionResult> ParseFavorites([FromBody] ParseFavoriteRequest request, CancellationToken ct)
     {
         if (PromptInjectionScanner.ContainsInjection(request.Text))
@@ -195,21 +202,27 @@ public class FavoritesController : ControllerBase
             return BadRequest(new { message = "Invalid input." });
         }
 
-        var parseActivities = request.Type is null or "activity";
-        var parseFoods      = request.Type is null or "food";
+        IReadOnlyList<ParsedActivityItem> activities;
+        IReadOnlyList<ParsedFoodItem> foods;
 
-        var activityTask = parseActivities
-            ? _activityParsing.ParseFreeTextAsync(request.Text)
-            : Task.FromResult<IReadOnlyList<ParsedActivityItem>>([]);
-
-        var foodTask = parseFoods
-            ? _foodParsing.ParseFreeTextAsync(request.Text)
-            : Task.FromResult<IReadOnlyList<ParsedFoodItem>>([]);
-
-        await Task.WhenAll(activityTask, foodTask);
-
-        var activities = await activityTask;
-        var foods = await foodTask;
+        if (request.Type is null)
+        {
+            // Type-agnostic: ONE combined OpenAI call instead of two parallel
+            // ones — half the cost, and a pure-activity text no longer makes
+            // the food parser fail the whole request.
+            var combined = await _combinedParsing.ParseAsync(request.Text);
+            activities = combined.Activities;
+            foods = combined.Foods;
+        }
+        else
+        {
+            activities = request.Type == "activity"
+                ? await _activityParsing.ParseFreeTextAsync(request.Text)
+                : [];
+            foods = request.Type == "food"
+                ? await _foodParsing.ParseFreeTextAsync(request.Text)
+                : [];
+        }
 
         // Validate all returned fields before returning
         var items = new List<ParsedFavoriteItem>();

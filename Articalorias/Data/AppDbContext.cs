@@ -24,6 +24,7 @@ public class AppDbContext : DbContext
     public DbSet<UserMacroPreference> UserMacroPreferences => Set<UserMacroPreference>();
     public DbSet<BodyMeasurement> BodyMeasurements => Set<BodyMeasurement>();
     public DbSet<UserConsent> UserConsents => Set<UserConsent>();
+    public DbSet<AiResponseCacheEntry> AiResponseCache => Set<AiResponseCacheEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

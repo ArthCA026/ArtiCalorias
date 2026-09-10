@@ -1,9 +1,9 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Articalorias.Configuration;
 using Articalorias.DTOs.FoodParsing;
 using Articalorias.Exceptions;
 using Articalorias.Interfaces;
+using Articalorias.Services.Parsing;
 using Microsoft.Extensions.Options;
 using OpenAI.Chat;
 
@@ -17,7 +17,17 @@ namespace Articalorias.Services;
 /// </summary>
 public class FoodParsingService : IFoodParsingService
 {
-    private readonly ChatClient _chatClient;
+    /// <summary>
+    /// Part of every cache key: bump whenever the prompt or wire schema
+    /// changes so stale answers from the old contract can never be served.
+    /// </summary>
+    private const string PromptVersion = "v2";
+
+    private const string CacheType = "food";
+
+    private readonly IOpenAiChatExecutor _executor;
+    private readonly IAiResponseCacheService _cache;
+    private readonly OpenAiSettings _settings;
     private readonly ILogger<FoodParsingService> _logger;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -25,16 +35,16 @@ public class FoodParsingService : IFoodParsingService
         PropertyNameCaseInsensitive = true
     };
 
-    public FoodParsingService(IOptions<OpenAiSettings> settings, ILogger<FoodParsingService> logger)
+    public FoodParsingService(
+        IOpenAiChatExecutor executor,
+        IAiResponseCacheService cache,
+        IOptions<OpenAiSettings> settings,
+        ILogger<FoodParsingService> logger)
     {
+        _executor = executor;
+        _cache = cache;
+        _settings = settings.Value;
         _logger = logger;
-        var config = settings.Value;
-
-        if (string.IsNullOrWhiteSpace(config.ApiKey))
-            throw new InvalidOperationException(
-                "OpenAI API key is not configured. Set OpenAI:ApiKey in appsettings.json.");
-
-        _chatClient = new ChatClient(config.Model, config.ApiKey);
     }
 
     public async Task<IReadOnlyList<ParsedFoodItem>> ParseFreeTextAsync(string freeText, string? country = null, FoodParsingOptions? options = null)
@@ -55,25 +65,45 @@ public class FoodParsingService : IFoodParsingService
             throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
         }
 
-        var systemPrompt = BuildSystemPrompt(country, options ?? FoodParsingOptions.None);
+        var opts = options ?? FoodParsingOptions.None;
 
-        // 1. Build the prompt
+        // Identical inputs are extremely common in a calorie tracker ("2 huevos",
+        // "cafe con leche") — an exact-match cache turns them into free replays.
+        // The key covers everything that shapes the answer.
+        var cacheKey = AiCacheKey.Compute(
+            CacheType,
+            PromptVersion,
+            _settings.ResolveModel(_settings.FoodModel),
+            country,
+            opts.IncludeSugar ? "s1" : "s0",
+            opts.IncludeWater ? "w1" : "w0",
+            AiCacheKey.NormalizeText(freeText));
+
+        var cachedContent = await _cache.GetAsync(CacheType, cacheKey);
+        if (cachedContent is not null)
+        {
+            var cachedItems = TryProcessResponse(cachedContent, opts);
+            if (cachedItems is { Count: > 0 })
+            {
+                // Meal text is health data (Ley 8968): log outcome only, never content.
+                _logger.LogInformation("Food parse served from cache");
+                return cachedItems;
+            }
+            // Corrupt or contract-stale entry — fall through to a fresh call.
+        }
+
+        var systemPrompt = BuildSystemPrompt(country, opts);
         var messages = new List<ChatMessage>
         {
             new SystemChatMessage(systemPrompt),
             new UserChatMessage(freeText)
         };
 
-        var chatOptions = new ChatCompletionOptions
-        {
-            ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
-        };
-
-        // 2. Call OpenAI
-        ChatCompletion completion;
+        string content;
         try
         {
-            completion = await _chatClient.CompleteChatAsync(messages, chatOptions);
+            content = await _executor.ExecuteAsync(
+                "food-parse", _settings.FoodModel, messages, ParsingSchemas.FoodFormat(opts));
         }
         catch (System.ClientModel.ClientResultException ex) when (ex.Status == 429)
         {
@@ -86,49 +116,46 @@ public class FoodParsingService : IFoodParsingService
             throw new InvalidOperationException("Failed to parse food description. Try again or enter manually.");
         }
 
-        var content = completion.Content[0].Text ?? string.Empty;
-        // Meal text is health data (Ley 8968): log outcome and size, never content.
         _logger.LogInformation("OpenAI food parse succeeded (response length {Length})", content.Length);
 
-        // 3. Deserialize
-        var items = DeserializeResponse(content);
+        var items = ProcessResponse(content, opts);
 
-        // 3. Validate — bad AI output never reaches the frontend
-        var validated = Validate(items, options ?? FoodParsingOptions.None);
+        // Only proven-good responses are worth replaying for the next user.
+        await _cache.SetAsync(CacheType, cacheKey, content,
+            TimeSpan.FromDays(_settings.ParseCacheTtlDays));
 
-        // 4. Scale per-unit nutrition by quantity, then normalize portion descriptions
-        return NormalizePortions(Scale(validated));
+        return items;
     }
+
+    // ─────────────────────────────────────────────────────
+    //  Prompt — defines the contract between us and OpenAI
+    // ─────────────────────────────────────────────────────
 
     /// <summary>
     /// Assembles the system prompt for the caller's tracked macros. The base
     /// prompt is untouched when no optional macro is tracked, so default users
-    /// keep the exact extraction contract that has been tuned so far.
+    /// keep a stable extraction contract (and a stable cache-key prefix).
     /// </summary>
     private static string BuildSystemPrompt(string? country, FoodParsingOptions options)
     {
         var prompt = DeveloperPrompt;
 
-        var extraFields = new List<string>();
         var extraRules = new List<string>();
 
         if (options.IncludeSugar)
         {
-            extraFields.Add("- sugarGrams (number) — total sugars for ONE unit only (naturally occurring plus added), never multiplied by quantity. Sugars are a subset of carbsGrams and must never exceed them.");
-            extraRules.Add("- Sugar: estimate total sugars per unit (e.g. a can of cola ~35 g, a plain egg 0 g). sugarGrams <= carbsGrams always.");
+            extraRules.Add("- sug: total sugar grams for ONE unit (naturally occurring plus added), never multiplied by q. Sugars are a subset of c and must never exceed it (a can of cola ~35, a plain egg 0).");
         }
 
         if (options.IncludeWater)
         {
-            extraFields.Add("- waterMl (number) — milliliters of drinkable fluid ONE unit contributes. Count water and other beverages (coffee, tea, milk, soda) at their full volume. Solid foods are 0 even if moist. Never multiplied by quantity.");
-            extraRules.Add("- Water: only drinks contribute waterMl (a 330 ml soda -> 330, a glass of water -> 250 unless specified, solid food -> 0).");
+            extraRules.Add("- h2o: milliliters of drinkable fluid ONE unit contributes, never multiplied by q. Water and other beverages count at full volume (a 330 ml soda -> 330, a glass of water -> 250 unless specified); solid food is 0 even if moist.");
         }
 
-        if (extraFields.Count > 0)
+        if (extraRules.Count > 0)
         {
             prompt += "\n\nADDITIONAL TRACKED FIELDS (the user tracks these; include them on EVERY item)\n"
-                   + string.Join("\n", extraFields)
-                   + "\n" + string.Join("\n", extraRules);
+                   + string.Join("\n", extraRules);
         }
 
         if (!string.IsNullOrWhiteSpace(country))
@@ -139,186 +166,77 @@ public class FoodParsingService : IFoodParsingService
         return prompt;
     }
 
-    // ─────────────────────────────────────────────────────
-    //  Prompt — defines the contract between us and OpenAI
-    // ─────────────────────────────────────────────────────
-
+    // Output-format policing lives in the strict JSON schema now; this prompt
+    // only carries the extraction semantics that were tuned on real inputs.
     private const string DeveloperPrompt = """
-            You are a food-intake extraction engine.
-
-            The user may describe foods or drinks in Spanish or English. Extract edible or drinkable items and convert them into structured nutrition estimates.
-
-            Your goal is to produce realistic, consistent, and conservative nutritional approximations based on common foods, brands, and preparation methods.
-
-            OUTPUT RULES
-            - Return a JSON object with a single key: "items".
-            - "items" must be an array.
-            - If no valid food or drink is found, return: { "items": [] }.
-            - Do not include any text outside the JSON object.
+            You are a food-intake extraction engine. The user describes foods or drinks in Spanish or English; extract every edible or drinkable item into the schema. Produce realistic, consistent, conservative nutrition estimates based on common foods, brands, and preparation methods. If nothing edible or drinkable is described, return an empty items array.
 
             EXTRACTION RULES
             - Split distinct foods into separate items.
-            - Aggregate repeated identical items into one entry (e.g., "3 coffees" → one item with quantity 3).
-            - If foods differ meaningfully (e.g., chicken taco vs beef taco), keep them separate.
-            - Preserve important modifiers that affect nutrition:
-              (e.g., con leche, con azúcar, frito, integral, descremado, light, con alcohol).
-            - If a dish clearly contains multiple core components and splitting improves accuracy, you may separate them:
-              Example: "arroz con pollo" → arroz + pollo (optional, only if useful).
-            - Otherwise, keep it as a single item.
-            - Do not invent side dishes, toppings, or ingredients not implied by the text.
-            - However, you may infer minimal standard preparation when strongly implied:
-              Example: fried foods include oil.
+            - Aggregate repeated identical items into one entry ("3 coffees" -> one item with q 3).
+            - If foods differ meaningfully (chicken taco vs beef taco), keep them separate.
+            - Preserve modifiers that affect nutrition (con leche, con azucar, frito, integral, descremado, light, con alcohol).
+            - If a dish clearly contains multiple core components and splitting improves accuracy, you may separate them ("arroz con pollo" -> arroz + pollo). Otherwise keep one item.
+            - Do not invent side dishes, toppings, or ingredients not implied by the text; you may infer minimal standard preparation when strongly implied (fried foods include oil).
 
             PORTION RULES
-            - If quantity is specified, use it.
-            - If not, assume quantity = 1.
-            - If portion is unclear, estimate a typical serving.
-            - Use normalized units such as:
-              g, ml, unidad, porcion, taza, pieza, cucharada, cucharadita, vaso, lata, botella, rebanada.
+            - q: the quantity the user stated, else 1. Integer or decimal.
+            - u: describe ONE unit without a leading count ("huevo entero", "rebanada de pan"); if portion is unclear, use a typical serving. Use normalized units such as: g, ml, unidad, porcion, taza, pieza, cucharada, cucharadita, vaso, lata, botella, rebanada.
 
             NUTRITION RULES
-            Priority order:
-            1. User-provided calories/macros
-            2. Known product, brand, or restaurant equivalent
-            3. Generic food database estimates
-
-            CRITICAL: All nutritional values (caloriesKcal, proteinGrams, fatGrams, carbsGrams, alcoholGrams)
-            must represent EXACTLY 1 unit of the food — never the total for the whole quantity.
-            The caller will multiply by quantity. If you multiply, the result will be wrong.
-            Examples:
-              "5 huevos"   -> caloriesKcal = 70   (1 egg),   NOT 350
-              "2 Big Macs" -> caloriesKcal = 550  (1 Big Mac), NOT 1100
-              "3 manzanas" -> caloriesKcal = 95   (1 apple),  NOT 285
-
-            - Use realistic, conservative estimates.
-            - Never return negative values.
-            - Round calories and macro values to 1 decimal place.
-            - quantity may be integer or decimal.
-
-            - Ensure internal consistency using Atwater factors:
-              protein = 4 kcal/g
-              carbs = 4 kcal/g
-              fat = 9 kcal/g
-              alcohol = 7 kcal/g
-
-            - Avoid fake precision:
-              If uncertainty is high, use reasonable rounded estimates.
-
-            SPECIAL CASES
-            - If the item is a supplement, medicine, or non-caloric product:
-              return zero or negligible calories and macros.
-
-            - Alcohol:
-              - For non-alcoholic items → alcoholGrams = 0
-              - For alcoholic drinks → estimate alcoholGrams using typical serving and ABV unless specified
-              - Alcohol calories must be included in caloriesKcal
+            - Priority order: 1. user-provided calories/macros, 2. known product, brand, or restaurant equivalent, 3. generic food database estimates.
+            - CRITICAL: kcal, p, f, c and alc are each for EXACTLY ONE unit of the food — never the total for the whole quantity. The caller multiplies by q; if you multiply, the result will be wrong.
+              "5 huevos" -> kcal 70 (1 egg), NOT 350. "2 Big Macs" -> kcal 550 (1 Big Mac), NOT 1100.
+            - Keep values internally consistent using Atwater factors: protein 4 kcal/g, carbs 4 kcal/g, fat 9 kcal/g, alcohol 7 kcal/g.
+            - Round to 1 decimal place; never negative; if uncertainty is high, use reasonable rounded estimates instead of fake precision.
+            - Supplements, medicine, and non-caloric products -> zero or negligible calories and macros.
+            - Alcohol: alc is 0 for non-alcoholic items; for alcoholic drinks estimate alc from typical serving and ABV unless specified, and include alcohol calories in kcal.
 
             LANGUAGE RULES
-            - Preserve foodName and portionDescription in the same language as the user input when possible. Preserve natural casing (e.g. "Coca-Cola", "Big Mac"); do not translate.
-
-            OUTPUT SCHEMA (STRICT)
-            Each item must contain exactly these fields:
-
-            - foodName (string)
-            - portionDescription (string) — describe ONE unit WITHOUT a leading number prefix (e.g. "huevo entero", "rebanada de pan"). Only include a leading number if the portion inherently implies a specific count greater than 1 (e.g. "3 galletas").
-            - quantity (number) — how many units the user specified
-            - caloriesKcal (number) — for ONE unit only, never multiplied by quantity
-            - proteinGrams (number) — for ONE unit only, never multiplied by quantity
-            - fatGrams (number) — for ONE unit only, never multiplied by quantity
-            - carbsGrams (number) — for ONE unit only, never multiplied by quantity
-            - alcoholGrams (number) — for ONE unit only, never multiplied by quantity
-
-            - Do not include additional fields.
-            - Do not omit any fields.
+            - n and u stay in the same language as the user input, with natural casing preserved ("Coca-Cola", "Big Mac"); do not translate.
             """;
 
     // ─────────────────────────────────────────────────────
-    //  Deserialization
+    //  Response processing — wire JSON to validated items
     // ─────────────────────────────────────────────────────
 
-    private static List<ParsedFoodItem> DeserializeResponse(string json)
+    /// <summary>Full pipeline with user-facing errors on bad output.</summary>
+    private static IReadOnlyList<ParsedFoodItem> ProcessResponse(string json, FoodParsingOptions options)
     {
+        List<ParsedFoodItem> items;
         try
         {
-            var wrapper = JsonSerializer.Deserialize<OpenAiResponseWrapper>(json, JsonOptions);
-            return wrapper?.Items ?? [];
+            var wrapper = JsonSerializer.Deserialize<WireFoodResponse>(json, JsonOptions);
+            items = (wrapper?.Items ?? []).Select(i => i.ToParsedFoodItem()).ToList();
         }
         catch (JsonException)
         {
             throw new InvalidOperationException(
                 "OpenAI returned an invalid response format. Try again or enter manually.");
         }
-    }
 
-    // ─────────────────────────────────────────────────────
-    //  Validation — reject bad AI output before it reaches the frontend
-    // ─────────────────────────────────────────────────────
-
-    private static IReadOnlyList<ParsedFoodItem> Validate(List<ParsedFoodItem> items, FoodParsingOptions options)
-    {
         if (items.Count == 0)
             throw new InvalidOperationException("OpenAI returned no food items. Try a more descriptive input.");
 
-        var validated = new List<ParsedFoodItem>();
+        var sanitized = FoodItemSanitizer.Sanitize(items, options);
 
-        foreach (var item in items)
-        {
-            if (string.IsNullOrWhiteSpace(item.FoodName))
-                continue;
-
-            // Clamp negatives to zero
-            item.CaloriesKcal = Math.Max(0, item.CaloriesKcal);
-            item.ProteinGrams = Math.Max(0, item.ProteinGrams);
-            item.FatGrams = Math.Max(0, item.FatGrams);
-            item.CarbsGrams = Math.Max(0, item.CarbsGrams);
-            item.AlcoholGrams = Math.Max(0, item.AlcoholGrams);
-
-            // Optional fields: only kept when they were requested (an untracked
-            // macro must stay NULL in the database — NULL is what lets old days
-            // say "not tracked then"), clamped into physical plausibility.
-            item.SugarGrams = options.IncludeSugar
-                ? Math.Min(Math.Max(0, item.SugarGrams ?? 0), item.CarbsGrams)
-                : null;
-            item.WaterMl = options.IncludeWater
-                ? Math.Clamp(item.WaterMl ?? 0, 0, 5000)
-                : null;
-
-            // Reject absurd single-item values
-            if (item.CaloriesKcal > 10000)
-                item.CaloriesKcal = 0;
-
-            validated.Add(item);
-        }
-
-        if (validated.Count == 0)
+        if (sanitized.Count == 0)
             throw new InvalidOperationException("All parsed items were invalid. Try again or enter manually.");
 
-        return validated;
+        return sanitized;
     }
 
-    // ─────────────────────────────────────────────────────
-    //  Scale — multiply per-unit nutrition values by quantity
-    // ─────────────────────────────────────────────────────
-
-    private static IReadOnlyList<ParsedFoodItem> Scale(IReadOnlyList<ParsedFoodItem> items)
+    /// <summary>Cache-replay pipeline: never throws, a bad entry is just a miss.</summary>
+    private static IReadOnlyList<ParsedFoodItem>? TryProcessResponse(string json, FoodParsingOptions options)
     {
-        foreach (var item in items)
+        try
         {
-            var qty = item.Quantity ?? 1m;
-            if (qty <= 0) qty = 1m;
-
-            item.CaloriesKcal = Math.Round(item.CaloriesKcal * qty, 1);
-            item.ProteinGrams = Math.Round(item.ProteinGrams * qty, 1);
-            item.FatGrams     = Math.Round(item.FatGrams     * qty, 1);
-            item.CarbsGrams   = Math.Round(item.CarbsGrams   * qty, 1);
-            item.AlcoholGrams = Math.Round(item.AlcoholGrams * qty, 1);
-            if (item.SugarGrams.HasValue)
-                item.SugarGrams = Math.Round(item.SugarGrams.Value * qty, 1);
-            if (item.WaterMl.HasValue)
-                item.WaterMl = Math.Round(item.WaterMl.Value * qty, 1);
+            return ProcessResponse(json, options);
         }
-
-        return items;
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     // ─────────────────────────────────────────────────────
@@ -348,7 +266,8 @@ public class FoodParsingService : IFoodParsingService
             throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
         }
 
-        var systemPrompt = BuildSystemPrompt(country, options ?? FoodParsingOptions.None);
+        var opts = options ?? FoodParsingOptions.None;
+        var systemPrompt = BuildSystemPrompt(country, opts);
 
         // Decode base64 → BinaryData for the OpenAI SDK
         byte[] imageBytes;
@@ -361,9 +280,12 @@ public class FoodParsingService : IFoodParsingService
             throw new InvalidOperationException("Image data is not valid base64.");
         }
 
+        // Image tokens scale with detail level; "low" is far cheaper but may
+        // miss small items — controlled via OpenAI:VisionDetail after testing.
         var imagePart = ChatMessageContentPart.CreateImagePart(
             BinaryData.FromBytes(imageBytes),
-            mimeType);
+            mimeType,
+            ResolveVisionDetail());
 
         var textContent = string.IsNullOrWhiteSpace(freeText)
             ? "What food or drink items are in this image? Extract all visible food and provide nutritional estimates."
@@ -377,19 +299,18 @@ public class FoodParsingService : IFoodParsingService
             new UserChatMessage(imagePart, textPart),
         };
 
-        var chatOptions = new ChatCompletionOptions
-        {
-            ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
-        };
-
         _logger.LogInformation(
             "Sending image to OpenAI Vision: mimeType={MimeType}, bytes={Bytes}, hasText={HasText}",
             mimeType, imageBytes.Length, !string.IsNullOrWhiteSpace(freeText));
 
-        ChatCompletion completion;
+        string content;
         try
         {
-            completion = await _chatClient.CompleteChatAsync(messages, chatOptions);
+            content = await _executor.ExecuteAsync(
+                "food-parse-image",
+                _settings.VisionModel ?? _settings.FoodModel,
+                messages,
+                ParsingSchemas.FoodFormat(opts));
         }
         catch (Exception ex)
         {
@@ -397,36 +318,17 @@ public class FoodParsingService : IFoodParsingService
             throw new InvalidOperationException("Failed to analyze the image. Try again or enter food manually.");
         }
 
-        var content = completion.Content[0].Text ?? string.Empty;
         _logger.LogInformation("OpenAI Vision parse succeeded (response length {Length})", content.Length);
 
-        var items = DeserializeResponse(content);
-        var validated = Validate(items, options ?? FoodParsingOptions.None);
-        return NormalizePortions(Scale(validated));
+        // No cache on the image path: photos are effectively never identical.
+        return ProcessResponse(content, opts);
     }
 
-    // ─────────────────────────────────────────────────────
-    //  Portion description normalization
-    // ─────────────────────────────────────────────────────
-
-    private static readonly Regex LeadingOnePattern = new(@"^1\s+", RegexOptions.Compiled);
-
-    private static IReadOnlyList<ParsedFoodItem> NormalizePortions(IReadOnlyList<ParsedFoodItem> items)
-    {
-        foreach (var item in items)
-            item.PortionDescription = NormalizePortionDescription(item.PortionDescription);
-        return items;
-    }
-
-    private static string? NormalizePortionDescription(string? s)
-        => string.IsNullOrWhiteSpace(s) ? s : LeadingOnePattern.Replace(s, string.Empty);
-
-    // ─────────────────────────────────────────────────────
-    //  Internal DTO for deserializing the { "items": [...] } wrapper
-    // ─────────────────────────────────────────────────────
-
-    private sealed class OpenAiResponseWrapper
-    {
-        public List<ParsedFoodItem> Items { get; set; } = [];
-    }
+    private ChatImageDetailLevel ResolveVisionDetail()
+        => _settings.VisionDetail.Trim().ToLowerInvariant() switch
+        {
+            "low" => ChatImageDetailLevel.Low,
+            "high" => ChatImageDetailLevel.High,
+            _ => ChatImageDetailLevel.Auto
+        };
 }

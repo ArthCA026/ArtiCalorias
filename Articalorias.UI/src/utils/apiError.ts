@@ -42,6 +42,19 @@ export function isNotFound(err: unknown): boolean {
 }
 
 /**
+ * Returns true when the backend rejected the request because the user hit the
+ * per-user AI parsing quota. Matched on the machine-readable code, not on the
+ * bare 429, because other endpoints (barcode lookup) use 429 for cooldowns.
+ */
+export function isAiRateLimited(err: unknown): boolean {
+  return (
+    err instanceof AxiosError &&
+    err.response?.status === 429 &&
+    extractApiErrorCode(err) === "AI_RATE_LIMITED"
+  );
+}
+
+/**
  * Extracts the machine-readable ErrorCode from an API error response.
  * Returns undefined when no code is present (legacy endpoints, network errors, etc.).
  */

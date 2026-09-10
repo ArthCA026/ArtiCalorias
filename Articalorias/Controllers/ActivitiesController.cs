@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Articalorias.DTOs.Activities;
 using Articalorias.DTOs.ActivityParsing;
+using Articalorias.Filters;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -152,6 +153,7 @@ public class ActivitiesController : ControllerBase
     // ── AI activity parsing (proposes structured data, does NOT save) ──
 
     [HttpPost("parse-activity")]
+    [AiRateLimit]
     public async Task<IActionResult> ParseActivity([FromBody] ParseActivityRequest request)
     {
         var parsed = await _activityParsing.ParseFreeTextAsync(request.FreeText);
@@ -161,6 +163,7 @@ public class ActivitiesController : ControllerBase
     // ── AI MET estimation ──
 
     [HttpPost("estimate-met")]
+    [AiRateLimit]
     public async Task<IActionResult> EstimateMet([FromBody] EstimateMetRequest request)
     {
         var result = await _activityParsing.EstimateMetAsync(request.ActivityName, request.DurationMinutes);

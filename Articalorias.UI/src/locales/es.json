@@ -19,7 +19,8 @@
     "min_suffix": "min",
     "calorie_mode_aria": "Vista de calorías: {{mode}}. Toca para cambiar.",
     "calorie_mode_changed": "Vista de calorías actualizada",
-    "hour_suffix": "h"
+    "hour_suffix": "h",
+    "ai_rate_limited": "Muchos análisis con IA en poco tiempo. Espera un momento e inténtalo de nuevo, o ingrésalo manualmente."
   },
   "macros": {
     "prot": "Prot",

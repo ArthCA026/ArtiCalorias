@@ -11,7 +11,7 @@ import { InlineError } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
 import { foodTemplateService } from '@/services/foodTemplateService';
 import { queryKeys } from '@/lib/queryKeys';
-import { extractApiError } from '@/utils/apiError';
+import { extractApiError, isAiRateLimited } from '@/utils/apiError';
 import type { FoodTemplateResponse } from '@/types';
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -79,6 +79,10 @@ export function MealTemplateSheet({ template, onClose, onDelete }: MealTemplateS
     onError: (err) => {
       if (err instanceof AxiosError && err.response?.status === 422) {
         setAiError(aiNothing);
+      } else if (isAiRateLimited(err)) {
+        setAiError(
+          t('common.ai_rate_limited', "That's a lot of AI logging in a short time. Give it a minute and try again, or enter it manually."),
+        );
       } else {
         setAiError(
           extractApiError(err, t('templates.save_error', 'Could not save. Check your connection and try again.')),

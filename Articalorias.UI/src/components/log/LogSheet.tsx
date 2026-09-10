@@ -10,7 +10,7 @@ import { InlineError } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
 import { dailyLogService } from '@/services/dailyLogService';
 import { invalidateDayData } from '@/lib/queryKeys';
-import { extractApiError } from '@/utils/apiError';
+import { extractApiError, isAiRateLimited } from '@/utils/apiError';
 import { compressImage } from '@/utils/compressImage';
 import type {
   CreateActivityEntryRequest,
@@ -146,12 +146,14 @@ export function LogSheet({ open, initialTab, targetDate, onClose }: LogSheetProp
     onSuccess: ({ date, count }) => onLogged(date, count),
     onError: (err) =>
       setError(
-        extractApiError(
-          err,
-          tab === 'meal'
-            ? t('log.parse_error', 'Could not understand that. Try describing the food differently, or enter it manually.')
-            : t('log.parse_error_activity', 'Could not understand that. Try something like "30 min running", or enter it manually.'),
-        ),
+        isAiRateLimited(err)
+          ? t('common.ai_rate_limited', "That's a lot of AI logging in a short time. Give it a minute and try again, or enter it manually.")
+          : extractApiError(
+              err,
+              tab === 'meal'
+                ? t('log.parse_error', 'Could not understand that. Try describing the food differently, or enter it manually.')
+                : t('log.parse_error_activity', 'Could not understand that. Try something like "30 min running", or enter it manually.'),
+            ),
       ),
   });
 
@@ -174,7 +176,11 @@ export function LogSheet({ open, initialTab, targetDate, onClose }: LogSheetProp
     },
     // The staged photo stays on error, so retrying or adding context is one tap.
     onError: (err) =>
-      setError(extractApiError(err, t('log.image_error', 'Could not read that photo. Try a clearer shot, or add a line of context below and press Add again.'))),
+      setError(
+        isAiRateLimited(err)
+          ? t('common.ai_rate_limited', "That's a lot of AI logging in a short time. Give it a minute and try again, or enter it manually.")
+          : extractApiError(err, t('log.image_error', 'Could not read that photo. Try a clearer shot, or add a line of context below and press Add again.')),
+      ),
   });
 
   const addFromBarcode = useMutation({

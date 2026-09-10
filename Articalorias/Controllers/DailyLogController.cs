@@ -4,6 +4,7 @@ using Articalorias.DTOs.ActivityParsing;
 using Articalorias.DTOs.DailyLogs;
 using Articalorias.DTOs.FoodEntries;
 using Articalorias.DTOs.FoodParsing;
+using Articalorias.Filters;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
 using Articalorias.Services;
@@ -159,6 +160,7 @@ public class DailyLogController : ControllerBase
     // ── AI food parsing (proposes entries, does NOT save) ──
 
     [HttpPost("{date}/parse-food")]
+    [AiRateLimit]
     public async Task<IActionResult> ParseFood(DateOnly date, [FromBody] ParseFoodRequest request)
     {
         var userId = GetUserId();
@@ -171,6 +173,7 @@ public class DailyLogController : ControllerBase
     // ── AI vision food parsing — accepts a photo (+ optional text context) ──
 
     [HttpPost("{date}/parse-food-image")]
+    [AiRateLimit]
     public async Task<IActionResult> ParseFoodImage(DateOnly date, [FromBody] ParseFoodWithImageRequest request)
     {
         var userId = GetUserId();
@@ -231,6 +234,7 @@ public class DailyLogController : ControllerBase
     // ── AI activity parsing (proposes entries, does NOT save) ──
 
     [HttpPost("{date}/parse-activity")]
+    [AiRateLimit]
     public async Task<IActionResult> ParseActivity(DateOnly date, [FromBody] ParseActivityRequest request)
     {
         var parsed = await _activityParsing.ParseFreeTextAsync(request.FreeText);

@@ -10,7 +10,7 @@ import { InlineError } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
 import { activityService } from '@/services/activityService';
 import { queryKeys } from '@/lib/queryKeys';
-import { extractApiError } from '@/utils/apiError';
+import { extractApiError, isAiRateLimited } from '@/utils/apiError';
 import type { ActivityTemplateResponse } from '@/types';
 
 const num = (raw: string): number => {
@@ -56,7 +56,9 @@ export function ActivityTemplateSheet({ template, onClose, onDelete }: ActivityT
     },
     onError: (err) =>
       setEstimateError(
-        extractApiError(err, t('templates.save_error', 'Could not save. Check your connection and try again.')),
+        isAiRateLimited(err)
+          ? t('common.ai_rate_limited', "That's a lot of AI logging in a short time. Give it a minute and try again, or enter it manually.")
+          : extractApiError(err, t('templates.save_error', 'Could not save. Check your connection and try again.')),
       ),
   });
 
