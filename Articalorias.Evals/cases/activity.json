@@ -1,0 +1,49 @@
+[
+  { "id": "es-30min-corriendo", "input": "30 min corriendo", "maxItems": 1,
+    "expect": [{ "nameContains": ["corr"], "durationMinutes": 30, "metMin": 7, "metMax": 10.5, "kcalNull": true }] },
+
+  { "id": "es-corri-5km-no-duration", "input": "corri 5 km", "maxItems": 1,
+    "expect": [{ "nameContains": ["corr"], "metMin": 7, "metMax": 10.5, "kcalNull": true }] },
+
+  { "id": "es-1-hora-pesas", "input": "1 hora de pesas", "maxItems": 1,
+    "expect": [{ "nameContains": ["pesa"], "durationMinutes": 60, "metMin": 3.5, "metMax": 6.5, "kcalNull": true }] },
+
+  { "id": "es-yoga-typical-duration", "input": "yoga", "maxItems": 1,
+    "expect": [{ "nameContains": ["yoga"], "metMin": 2, "metMax": 4, "kcalNull": true }] },
+
+  { "id": "en-run-and-stretch-two-items", "input": "30 min running and 15 min stretching", "minItems": 2, "maxItems": 2,
+    "expect": [
+      { "nameContains": ["run"], "durationMinutes": 30, "metMin": 7, "metMax": 10.5 },
+      { "nameContains": ["stretch"], "durationMinutes": 15, "metMin": 1.5, "metMax": 3.5 }
+    ] },
+
+  { "id": "es-smartwatch-kcal-only", "input": "queme 320 kcal segun mi reloj", "maxItems": 1,
+    "expect": [{ "nameEmpty": true, "kcal": 320, "metNull": true, "durationNull": true }] },
+
+  { "id": "en-smartwatch-kcal-of-activity", "input": "200kcal of running", "maxItems": 1,
+    "expect": [{ "nameContains": ["run"], "kcal": 200, "durationNull": true, "metMin": 6, "metMax": 11 }] },
+
+  { "id": "en-smartwatch-kcal-in-time", "input": "200 kcal in 20 min", "maxItems": 1,
+    "expect": [{ "nameEmpty": true, "durationMinutes": 20, "metNull": true, "kcal": 200 }] },
+
+  { "id": "es-smartwatch-full-combo", "input": "45 min de natacion y queme 400 kcal", "maxItems": 1,
+    "expect": [{ "nameContains": ["nata", "nada"], "durationMinutes": 45, "kcal": 400, "metNull": true }] },
+
+  { "id": "es-camine-40-min", "input": "camine 40 minutos", "maxItems": 1,
+    "expect": [{ "nameContains": ["camin"], "durationMinutes": 40, "metMin": 2.5, "metMax": 4.5, "kcalNull": true }] },
+
+  { "id": "en-hiit-20", "input": "HIIT 20 min", "maxItems": 1,
+    "expect": [{ "nameContains": ["hiit"], "durationMinutes": 20, "metMin": 8, "metMax": 12, "kcalNull": true }] },
+
+  { "id": "es-clase-spinning", "input": "clase de spinning", "maxItems": 1,
+    "expect": [{ "nameContains": ["spinning"], "metMin": 6.5, "metMax": 10, "kcalNull": true }] },
+
+  { "id": "es-futbol-90", "input": "jugue futbol 90 minutos", "maxItems": 1,
+    "expect": [{ "nameContains": ["futbol", "fútbol"], "durationMinutes": 90, "metMin": 6, "metMax": 9, "kcalNull": true }] },
+
+  { "id": "en-gym-session-45", "input": "gym session 45 minutes", "maxItems": 1,
+    "expect": [{ "durationMinutes": 45, "metMin": 3.5, "metMax": 7, "kcalNull": true, "nameContains": ["gym", "session", "workout"] }] },
+
+  { "id": "en-walked-dog-half-hour", "input": "walked the dog for half an hour", "maxItems": 1,
+    "expect": [{ "nameContains": ["walk"], "durationMinutes": 30, "metMin": 2.5, "metMax": 4.5, "kcalNull": true }] }
+]

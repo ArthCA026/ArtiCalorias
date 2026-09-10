@@ -18,7 +18,7 @@ namespace Articalorias.Services;
 public class ActivityParsingService : IActivityParsingService
 {
     /// <summary>Bump when a prompt or wire schema changes (invalidates cache).</summary>
-    private const string PromptVersion = "v2";
+    private const string PromptVersion = "v3";
 
     private const string ParseCacheType = "activity";
     private const string MetCacheType = "met";
@@ -256,18 +256,18 @@ public class ActivityParsingService : IActivityParsingService
         You are a fitness and exercise assistant. The user describes activities they performed in free text, in Spanish or English. Parse each distinct activity into a separate item (activities may be joined by "and", "y", commas, or similar separators).
 
         FIELDS
-        - n: activity name in the same language as the user's input; preserve natural casing ("CrossFit", "Pilates"); do not translate; empty string "" when the user did not name the activity.
+        - name: activity name in the same language as the user's input; preserve natural casing ("CrossFit", "Pilates"); do not translate; empty string "" when the user did not name the activity.
         - min: duration in minutes (convert other units to minutes).
         - met: estimated MET value, rounded to 1 decimal place.
-        - kcal: calories burned, ONLY if the user explicitly stated them ("200 kcal", "burned 350 calories", "queme 200 kcal").
+        - kcal: calories burned, ONLY if the user explicitly stated them ("200 kcal", "burned 350 calories", "queme 200 kcal"). Whole numbers.
 
         The user may report calories from a smart watch. Extraction rules for that case — follow them exactly:
         - kcal is filled ONLY with a number the user said. NEVER estimate or calculate calories yourself.
         - When the user states calories, NEVER calculate the missing duration or MET from them. Leave what the user did not say as null. The backend does that math.
-        - "200kcal of running" -> n "running" (keep user language), met estimated from the activity name, min null, kcal 200.
-        - "200kcal in 20min" -> n "", min 20, met null, kcal 200.
-        - "200kcal of running in 20min" -> n "running", min 20, met null (the backend derives the real MET from calories and duration), kcal 200.
-        - "200kcal" alone -> n "", min null, met null, kcal 200.
+        - "200kcal of running" -> name "running" (keep user language), met estimated from the activity name, min null, kcal 200.
+        - "200kcal in 20min" -> name "", min 20, met null, kcal 200.
+        - "200kcal of running in 20min" -> name "running", min 20, met null (the backend derives the real MET from calories and duration), kcal 200.
+        - "200kcal" alone -> name "", min null, met null, kcal 200.
 
         When the user does NOT state calories (the normal case), kcal is null and:
         - met: estimate a reasonable MET value based on the Compendium of Physical Activities; if the activity is too vague, use the most reasonable common estimate for that label.
@@ -276,8 +276,8 @@ public class ActivityParsingService : IActivityParsingService
         Reference MET examples: walking moderate 3.5, running 8 km/h 8.3, cycling moderate 6.8, swimming moderate 5.8, weight training 5.0, yoga 2.5, HIIT 10.0, stretching 2.3.
         Never return negative values.
 
-        Example: "30 min corriendo y 15 min de estiramiento" -> items: [{ n "Correr", min 30, met 8.3, kcal null }, { n "Estiramiento", min 15, met 2.3, kcal null }].
-        Example: "corri y queme 320 kcal segun mi reloj" -> items: [{ n "Correr", min null, met 8.3, kcal 320 }].
+        Example: "30 min corriendo y 15 min de estiramiento" -> items: [{ name "Correr", min 30, met 8.3, kcal null }, { name "Estiramiento", min 15, met 2.3, kcal null }].
+        Example: "corri y queme 320 kcal segun mi reloj" -> items: [{ name "Correr", min null, met 8.3, kcal 320 }].
         """;
 
     private const string MetEstimateSystemPrompt = """

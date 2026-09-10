@@ -1,0 +1,14 @@
+[
+  { "id": "seed-correr-exact", "input": "correr", "metMin": 8.3, "metMax": 8.3 },
+  { "id": "seed-yoga-exact", "input": "yoga", "metMin": 2.5, "metMax": 2.5 },
+  { "id": "es-escalada-en-roca", "input": "escalada en roca", "metMin": 6, "metMax": 11 },
+  { "id": "en-jump-rope", "input": "jump rope", "metMin": 9, "metMax": 13 },
+  { "id": "es-patinaje-hielo", "input": "patinaje en hielo", "metMin": 5, "metMax": 9 },
+  { "id": "en-kayaking", "input": "kayaking", "metMin": 3.5, "metMax": 7 },
+  { "id": "es-padel", "input": "padel", "metMin": 5.5, "metMax": 9 },
+  { "id": "es-surfear", "input": "surfear", "metMin": 2.5, "metMax": 6 },
+  { "id": "es-subir-escaleras", "input": "subir escaleras", "metMin": 4, "metMax": 9 },
+  { "id": "es-jardineria", "input": "jardineria", "metMin": 2.5, "metMax": 5 },
+  { "id": "es-ver-television-floor", "input": "ver television", "metMin": 0.9, "metMax": 1.5 },
+  { "id": "en-burpees", "input": "burpees", "metMin": 7, "metMax": 11 }
+]

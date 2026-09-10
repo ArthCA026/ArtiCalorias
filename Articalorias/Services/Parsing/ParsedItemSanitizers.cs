@@ -15,6 +15,14 @@ internal static partial class FoodItemSanitizer
     [GeneratedRegex(@"^1\s+")]
     private static partial Regex LeadingOnePattern();
 
+    // Bare measure-only portion descriptions. Combined with a large qty and a
+    // clearly non-per-gram kcal, they identify the gram-count failure mode.
+    private static readonly HashSet<string> BareMeasureUnits = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "g", "gr", "gramo", "gramos", "gram", "grams",
+        "ml", "mililitro", "mililitros", "milliliter", "milliliters", "cc"
+    };
+
     public static List<ParsedFoodItem> Sanitize(List<ParsedFoodItem> items, FoodParsingOptions options)
     {
         var sanitized = new List<ParsedFoodItem>();
@@ -45,6 +53,22 @@ internal static partial class FoodItemSanitizer
             if (item.CaloriesKcal > 10000)
                 item.CaloriesKcal = 0;
 
+            // Repair the gram-count failure mode: for "350g de carne" the
+            // model may answer qty 350, unit "g" with WHOLE-portion nutrition
+            // (875 kcal) — scaling would then multiply the portion by its own
+            // weight. Pure fat is only ~9 kcal/g, so kcal ≥ 20 on a bare g/ml
+            // portion cannot be per-gram: collapse it to one unit that carries
+            // the amount ("350 g"), which is also how the prompt now asks for
+            // weights. Runs on cache replays too, healing old bad entries.
+            if (item.Quantity is >= 20m
+                && item.CaloriesKcal >= 20
+                && item.PortionDescription is not null
+                && BareMeasureUnits.Contains(item.PortionDescription.Trim()))
+            {
+                item.PortionDescription = $"{item.Quantity.Value:0.#} {item.PortionDescription.Trim()}";
+                item.Quantity = 1;
+            }
+
             sanitized.Add(item);
         }
 
@@ -64,6 +88,20 @@ internal static partial class FoodItemSanitizer
                 item.SugarGrams = Math.Round(item.SugarGrams.Value * qty, 1);
             if (item.WaterMl.HasValue)
                 item.WaterMl = Math.Round(item.WaterMl.Value * qty, 1);
+
+            // Post-scale ceilings mirroring CreateFoodEntryRequest's ranges:
+            // whatever survives here must always be confirmable (the user can
+            // still review and edit an implausible value; a 400 on confirm is
+            // a dead end).
+            item.CaloriesKcal = Math.Min(item.CaloriesKcal, 50000m);
+            item.ProteinGrams = Math.Min(item.ProteinGrams, 10000m);
+            item.FatGrams     = Math.Min(item.FatGrams, 10000m);
+            item.CarbsGrams   = Math.Min(item.CarbsGrams, 10000m);
+            item.AlcoholGrams = Math.Min(item.AlcoholGrams, 10000m);
+            if (item.SugarGrams.HasValue)
+                item.SugarGrams = Math.Min(item.SugarGrams.Value, 10000m);
+            if (item.WaterMl.HasValue)
+                item.WaterMl = Math.Min(item.WaterMl.Value, 100000m);
 
             // "1 huevo entero" → "huevo entero": the quantity field already
             // carries the count, so a leading 1 in the portion text is noise.

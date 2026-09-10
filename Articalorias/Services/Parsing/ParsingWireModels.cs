@@ -3,9 +3,11 @@ using Articalorias.DTOs.FoodParsing;
 
 namespace Articalorias.Services.Parsing;
 
-// Wire-level DTOs matching the terse JSON the model returns. Output tokens are
-// the expensive ones (6x input price), so the wire schema uses one-letter and
-// abbreviated keys; these types translate back to the app's real DTOs.
+// Wire-level DTOs matching the JSON the model returns. Keys are short but
+// MEANINGFUL: measured with the o200k tokenizer, `"prot":` costs the same
+// 3 tokens as `"p":` (quotes+colon dominate), and real words give a small
+// model pretrained semantics to anchor on. These types translate back to the
+// app's real DTOs.
 
 internal sealed class WireFoodResponse
 {
@@ -14,19 +16,19 @@ internal sealed class WireFoodResponse
 
 internal sealed class WireFoodItem
 {
-    /// <summary>Food name.</summary>
-    public string? N { get; set; }
+    /// <summary>Food name ("name").</summary>
+    public string? Name { get; set; }
 
-    /// <summary>Portion description of ONE unit.</summary>
-    public string? U { get; set; }
+    /// <summary>Portion description of ONE unit ("unit").</summary>
+    public string? Unit { get; set; }
 
-    /// <summary>Quantity of units.</summary>
-    public decimal? Q { get; set; }
+    /// <summary>Quantity of units ("qty").</summary>
+    public decimal? Qty { get; set; }
 
     public decimal Kcal { get; set; }
-    public decimal P { get; set; }
-    public decimal F { get; set; }
-    public decimal C { get; set; }
+    public decimal Prot { get; set; }
+    public decimal Fat { get; set; }
+    public decimal Carb { get; set; }
     public decimal Alc { get; set; }
 
     /// <summary>Sugar grams; only present when the user tracks sugar.</summary>
@@ -37,13 +39,13 @@ internal sealed class WireFoodItem
 
     public ParsedFoodItem ToParsedFoodItem() => new()
     {
-        FoodName = N ?? string.Empty,
-        PortionDescription = U,
-        Quantity = Q,
+        FoodName = Name ?? string.Empty,
+        PortionDescription = Unit,
+        Quantity = Qty,
         CaloriesKcal = Kcal,
-        ProteinGrams = P,
-        FatGrams = F,
-        CarbsGrams = C,
+        ProteinGrams = Prot,
+        FatGrams = Fat,
+        CarbsGrams = Carb,
         AlcoholGrams = Alc,
         SugarGrams = Sug,
         WaterMl = H2o
@@ -58,9 +60,9 @@ internal sealed class WireActivityResponse
 internal sealed class WireActivityItem
 {
     /// <summary>Activity name; empty string when the user did not name one.</summary>
-    public string? N { get; set; }
+    public string? Name { get; set; }
 
-    /// <summary>Duration in minutes.</summary>
+    /// <summary>Duration in minutes ("min").</summary>
     public decimal? Min { get; set; }
 
     /// <summary>Estimated MET value.</summary>
@@ -71,7 +73,7 @@ internal sealed class WireActivityItem
 
     public ParsedActivityItem ToParsedActivityItem() => new()
     {
-        ActivityName = N ?? string.Empty,
+        ActivityName = Name ?? string.Empty,
         DurationMinutes = Min,
         MetValue = Met,
         CaloriesKcal = Kcal

@@ -6,26 +6,28 @@ namespace Articalorias.Services.Parsing;
 /// <summary>
 /// Strict Structured Output schemas for every parsing task. Strict mode makes
 /// malformed responses impossible (no retry burn) and lets the system prompts
-/// drop all output-format policing. Keys are terse on purpose: they are
-/// repeated per item in the response and output tokens cost 6x input tokens.
-/// Schemas must stay byte-identical between calls — OpenAI caches the compiled
-/// grammar and the prompt-cache prefix by exact content.
+/// drop all output-format policing. Keys are short-but-meaningful: measured
+/// with the o200k tokenizer, `"prot":` costs the same as `"p":`, so the keys
+/// keep real-word semantics at zero extra cost. Numeric fields ask for whole
+/// numbers (integers tokenize at 1 token vs 3 for decimals).
+/// Schemas must stay byte-identical between calls — OpenAI caches the
+/// compiled grammar and the prompt-cache prefix by exact content.
 /// </summary>
 internal static class ParsingSchemas
 {
     private const string FoodBaseProperties = """
-                "n": { "type": "string", "description": "Food name, same language as the user wrote" },
-                "u": { "type": "string", "description": "Portion description of ONE unit, no leading count" },
-                "q": { "type": "number", "description": "How many units the user had" },
-                "kcal": { "type": "number", "description": "Calories for ONE unit only, never multiplied by q" },
-                "p": { "type": "number", "description": "Protein grams for ONE unit" },
-                "f": { "type": "number", "description": "Fat grams for ONE unit" },
-                "c": { "type": "number", "description": "Carb grams for ONE unit" },
+                "name": { "type": "string", "description": "Food name, same language as the user wrote" },
+                "unit": { "type": "string", "description": "Portion description of ONE unit, no leading count" },
+                "qty": { "type": "number", "description": "How many units the user had" },
+                "kcal": { "type": "number", "description": "Calories for ONE unit only, never multiplied by qty" },
+                "prot": { "type": "number", "description": "Protein grams for ONE unit" },
+                "fat": { "type": "number", "description": "Fat grams for ONE unit" },
+                "carb": { "type": "number", "description": "Carb grams for ONE unit" },
                 "alc": { "type": "number", "description": "Alcohol grams for ONE unit" }
         """;
 
     private const string SugarProperty = """
-                "sug": { "type": "number", "description": "Total sugar grams for ONE unit, subset of c" }
+                "sug": { "type": "number", "description": "Total sugar grams for ONE unit, subset of carb" }
         """;
 
     private const string WaterProperty = """
@@ -36,12 +38,12 @@ internal static class ParsingSchemas
         {
           "type": "object",
           "properties": {
-            "n": { "type": "string", "description": "Activity name, same language as the user wrote; empty string if not named" },
+            "name": { "type": "string", "description": "Activity name, same language as the user wrote; empty string if not named" },
             "min": { "type": ["number", "null"], "description": "Duration in minutes" },
             "met": { "type": ["number", "null"], "description": "Estimated MET value" },
             "kcal": { "type": ["number", "null"], "description": "ONLY calories the user explicitly stated, never estimated" }
           },
-          "required": ["n", "min", "met", "kcal"],
+          "required": ["name", "min", "met", "kcal"],
           "additionalProperties": false
         }
         """;
@@ -113,7 +115,7 @@ internal static class ParsingSchemas
     {
         var properties = FoodBaseProperties;
         var required = """
-            "n", "u", "q", "kcal", "p", "f", "c", "alc"
+            "name", "unit", "qty", "kcal", "prot", "fat", "carb", "alc"
             """.Trim();
 
         if (options.IncludeSugar)

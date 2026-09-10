@@ -1,0 +1,133 @@
+[
+  { "id": "es-2-huevos", "input": "2 huevos", "maxItems": 1,
+    "expect": [{ "nameContains": ["huevo"], "kcal": 145, "kcalTolerancePct": 25, "prot": 12.5, "macroToleranceGrams": 4 }] },
+
+  { "id": "es-12-huevos-scaling", "input": "12 huevos", "maxItems": 1,
+    "expect": [{ "nameContains": ["huevo"], "kcal": 870, "kcalTolerancePct": 25 }] },
+
+  { "id": "es-un-huevo-word-qty", "input": "un huevo", "maxItems": 1,
+    "expect": [{ "nameContains": ["huevo"], "kcal": 72, "kcalTolerancePct": 35 }] },
+
+  { "id": "es-cafe-con-leche", "input": "cafe con leche", "maxItems": 2,
+    "expect": [{ "nameContains": ["cafe", "café"], "kcal": 50, "kcalTolerancePct": 90 }] },
+
+  { "id": "es-cafe-negro-nearzero", "input": "cafe negro", "maxItems": 1,
+    "expect": [{ "nameContains": ["cafe", "café"], "kcalMax": 15 }] },
+
+  { "id": "es-tres-cafes-word-scaling", "input": "tres cafes con leche", "maxItems": 2,
+    "totalKcal": 130, "totalKcalTolerancePct": 85,
+    "expect": [{ "nameContains": ["cafe", "café"] }] },
+
+  { "id": "es-3-tortillas", "input": "3 tortillas de maiz", "maxItems": 1,
+    "expect": [{ "nameContains": ["tortilla"], "kcal": 190, "kcalTolerancePct": 35 }] },
+
+  { "id": "es-arroz-con-pollo-composite", "input": "arroz con pollo", "maxItems": 2,
+    "totalKcal": 550, "totalKcalTolerancePct": 45, "expect": [] },
+
+  { "id": "es-copa-vino-alcohol", "input": "una copa de vino tinto", "maxItems": 1,
+    "expect": [{ "nameContains": ["vino"], "kcal": 125, "kcalTolerancePct": 45, "alcoholMin": 8 }] },
+
+  { "id": "es-2-cervezas-alcohol", "input": "2 cervezas", "maxItems": 1,
+    "expect": [{ "nameContains": ["cerveza"], "kcal": 300, "kcalTolerancePct": 40, "alcoholMin": 15 }] },
+
+  { "id": "es-1-manzana", "input": "1 manzana", "maxItems": 1,
+    "expect": [{ "nameContains": ["manzana"], "kcal": 95, "kcalTolerancePct": 35 }] },
+
+  { "id": "es-1-platano", "input": "1 platano", "maxItems": 1,
+    "expect": [{ "nameContains": ["platano", "plátano", "banano"], "kcal": 105, "kcalTolerancePct": 40 }] },
+
+  { "id": "es-gallo-pinto-cr", "input": "gallo pinto", "country": "Costa Rica", "maxItems": 3,
+    "totalKcal": 300, "totalKcalTolerancePct": 55, "expect": [] },
+
+  { "id": "es-casado-cr-composite", "input": "casado con pollo", "country": "Costa Rica", "maxItems": 6,
+    "totalKcal": 700, "totalKcalTolerancePct": 45, "expect": [] },
+
+  { "id": "es-leche-descremada-lowfat", "input": "un vaso de leche descremada", "maxItems": 1,
+    "expect": [{ "nameContains": ["leche"], "kcal": 85, "kcalTolerancePct": 45, "fat": 0.4, "macroToleranceGrams": 2 }] },
+
+  { "id": "es-pan-integral-mantequilla", "input": "2 rebanadas de pan integral con mantequilla", "maxItems": 3,
+    "totalKcal": 260, "totalKcalTolerancePct": 45, "expect": [{ "nameContains": ["pan"] }] },
+
+  { "id": "es-lata-coca-cola", "input": "1 lata de coca cola", "maxItems": 1,
+    "expect": [{ "nameContains": ["coca", "cola"], "kcal": 140, "kcalTolerancePct": 20 }] },
+
+  { "id": "es-coca-zero-nearzero", "input": "coca cola zero", "maxItems": 1,
+    "expect": [{ "nameContains": ["coca", "cola"], "kcalMax": 10 }] },
+
+  { "id": "es-scoop-proteina", "input": "un scoop de proteina en polvo", "maxItems": 1,
+    "expect": [{ "nameContains": ["prote"], "kcal": 120, "kcalTolerancePct": 45, "prot": 24, "macroToleranceGrams": 8 }] },
+
+  { "id": "es-100g-pechuga", "input": "100g de pechuga de pollo", "maxItems": 1,
+    "expect": [{ "nameContains": ["pechuga", "pollo"], "kcal": 165, "kcalTolerancePct": 30, "prot": 31, "macroToleranceGrams": 8 }] },
+
+  { "id": "es-arroz-cocido-gramos", "input": "50g de arroz blanco cocido", "maxItems": 1,
+    "expect": [{ "nameContains": ["arroz"], "kcal": 65, "kcalTolerancePct": 55 }] },
+
+  { "id": "es-tacos-y-cerveza-mixed", "input": "2 tacos de pollo y 1 cerveza", "minItems": 2, "maxItems": 3,
+    "expect": [
+      { "nameContains": ["taco"], "kcal": 400, "kcalTolerancePct": 50 },
+      { "nameContains": ["cerveza"], "alcoholMin": 8 }
+    ] },
+
+  { "id": "es-agua-zero", "input": "500 ml de agua", "maxItems": 1,
+    "expect": [{ "nameContains": ["agua"], "kcalMax": 5 }] },
+
+  { "id": "es-chicharrones-gramos", "input": "chicharrones 200g", "maxItems": 1,
+    "expect": [{ "nameContains": ["chicharr"], "kcal": 1050, "kcalTolerancePct": 50 }] },
+
+  { "id": "es-350g-carne-garbanzos-regression", "input": "350g de carne y garbanzos", "minItems": 2, "maxItems": 2,
+    "totalKcal": 1075, "totalKcalTolerancePct": 50,
+    "expect": [
+      { "nameContains": ["carne"], "kcal": 875, "kcalTolerancePct": 45 },
+      { "nameContains": ["garbanzo"] }
+    ] },
+
+  { "id": "es-350g-carne-weight-unit", "input": "350g de carne", "maxItems": 1,
+    "expect": [{ "nameContains": ["carne"], "kcal": 875, "kcalTolerancePct": 40 }] },
+
+  { "id": "es-ensalada-frutas", "input": "ensalada de frutas", "maxItems": 2,
+    "totalKcal": 120, "totalKcalTolerancePct": 70, "expect": [] },
+
+  { "id": "en-2-eggs-toast-butter", "input": "2 eggs and toast with butter", "minItems": 2, "maxItems": 3,
+    "totalKcal": 290, "totalKcalTolerancePct": 40,
+    "expect": [{ "nameContains": ["egg"] }, { "nameContains": ["toast", "bread"] }] },
+
+  { "id": "en-2-big-macs-brand", "input": "2 Big Macs", "maxItems": 1,
+    "expect": [{ "nameContains": ["big mac"], "kcal": 1100, "kcalTolerancePct": 20 }] },
+
+  { "id": "en-oatmeal-honey", "input": "a bowl of oatmeal with honey", "maxItems": 2,
+    "totalKcal": 250, "totalKcalTolerancePct": 50, "expect": [{ "nameContains": ["oat", "avena"] }] },
+
+  { "id": "en-grilled-chicken-salad", "input": "grilled chicken salad", "maxItems": 3,
+    "totalKcal": 350, "totalKcalTolerancePct": 55, "expect": [] },
+
+  { "id": "en-12-eggs-scaling", "input": "12 eggs", "maxItems": 1,
+    "expect": [{ "nameContains": ["egg"], "kcal": 870, "kcalTolerancePct": 25 }] },
+
+  { "id": "en-one-banana-word-qty", "input": "one banana", "maxItems": 1,
+    "expect": [{ "nameContains": ["banana"], "kcal": 105, "kcalTolerancePct": 40 }] },
+
+  { "id": "en-protein-shake-milk", "input": "protein shake with milk", "maxItems": 2,
+    "totalKcal": 250, "totalKcalTolerancePct": 55, "expect": [{ "nameContains": ["protein", "shake"] }] },
+
+  { "id": "en-2-slices-pizza", "input": "2 slices of pepperoni pizza", "maxItems": 1,
+    "expect": [{ "nameContains": ["pizza"], "kcal": 570, "kcalTolerancePct": 35 }] },
+
+  { "id": "en-orange-juice", "input": "a glass of orange juice", "maxItems": 1,
+    "expect": [{ "nameContains": ["orange", "juice", "naranja"], "kcal": 110, "kcalTolerancePct": 40 }] },
+
+  { "id": "en-greek-yogurt-berries", "input": "greek yogurt with berries", "maxItems": 2,
+    "totalKcal": 180, "totalKcalTolerancePct": 60, "expect": [{ "nameContains": ["yogurt", "yogur"] }] },
+
+  { "id": "en-half-cup-rice", "input": "half cup of white rice", "maxItems": 1,
+    "expect": [{ "nameContains": ["rice"], "kcal": 100, "kcalTolerancePct": 50 }] },
+
+  { "id": "en-tbsp-olive-oil", "input": "1 tbsp olive oil", "maxItems": 1,
+    "expect": [{ "nameContains": ["oil", "aceite"], "kcal": 119, "kcalTolerancePct": 30, "fat": 13.5, "macroToleranceGrams": 4 }] },
+
+  { "id": "en-diet-coke-nearzero", "input": "diet coke", "maxItems": 1,
+    "expect": [{ "nameContains": ["coke", "cola"], "kcalMax": 10 }] },
+
+  { "id": "en-avocado-toast", "input": "avocado toast", "maxItems": 2,
+    "totalKcal": 250, "totalKcalTolerancePct": 55, "expect": [{ "nameContains": ["avocado", "toast", "aguacate"] }] }
+]

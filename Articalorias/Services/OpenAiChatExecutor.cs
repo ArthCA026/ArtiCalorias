@@ -1,22 +1,39 @@
+using System.ClientModel;
+using System.ClientModel.Primitives;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text.Json.Nodes;
 using Articalorias.Configuration;
 using Articalorias.Interfaces;
 using Microsoft.Extensions.Options;
+using OpenAI;
 using OpenAI.Chat;
 
 namespace Articalorias.Services;
 
 /// <summary>
 /// Singleton wrapper around the OpenAI SDK. One <see cref="ChatClient"/> per
-/// model (clients are thread-safe), shared cost guards on every call, and
-/// structured token-usage logging — the raw numbers behind the OpenAI bill.
+/// (model, lane) — clients are thread-safe — with shared cost guards on every
+/// call and structured token-usage logging: the raw numbers behind the bill.
+///
+/// Flex lane: when configured, calls first go out with service_tier "flex"
+/// (Batch pricing, 50% off, synchronous). Flex may be slower or answer 429
+/// "no capacity right now" (not billed); either way the executor re-sends on
+/// the standard lane so callers never see a flex-specific failure.
 /// </summary>
 public class OpenAiChatExecutor : IOpenAiChatExecutor
 {
     private readonly OpenAiSettings _settings;
     private readonly ILogger<OpenAiChatExecutor> _logger;
-    private readonly ConcurrentDictionary<string, ChatClient> _clients = new();
+    private readonly ConcurrentDictionary<string, ChatClient> _standardClients = new();
+    private readonly ConcurrentDictionary<string, ChatClient> _flexClients = new();
+
+    /// <summary>
+    /// Circuit breaker: set when the API rejects service_tier outright (400),
+    /// e.g. a model without flex support. Prevents paying a doomed extra
+    /// round-trip on every call for the rest of the process lifetime.
+    /// </summary>
+    private volatile bool _flexUnsupported;
 
     public OpenAiChatExecutor(IOptions<OpenAiSettings> settings, ILogger<OpenAiChatExecutor> logger)
     {
@@ -35,8 +52,48 @@ public class OpenAiChatExecutor : IOpenAiChatExecutor
         ChatResponseFormat responseFormat)
     {
         var model = _settings.ResolveModel(modelOverride);
-        var client = _clients.GetOrAdd(model, m => new ChatClient(m, _settings.ApiKey));
+        var useFlex = !string.IsNullOrWhiteSpace(_settings.ServiceTier) && !_flexUnsupported;
 
+        if (useFlex)
+        {
+            try
+            {
+                // Bounded wait: flex is allowed to be slower, not to hang the
+                // user. Past the timeout the standard lane takes over.
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_settings.FlexTimeoutSeconds));
+                return await CallAsync(GetFlexClient(model), feature, model, _settings.ServiceTier, messages, responseFormat, cts.Token);
+            }
+            catch (ClientResultException ex) when (ex.Status == 400 && ex.Message.Contains("service_tier", StringComparison.OrdinalIgnoreCase))
+            {
+                _flexUnsupported = true;
+                _logger.LogWarning(ex, "OpenAI rejected service_tier '{Tier}'; disabling flex until restart", _settings.ServiceTier);
+            }
+            catch (ClientResultException ex) when (ex.Status == 429)
+            {
+                // Flex capacity 429s are expected and not billed.
+                _logger.LogInformation("Flex capacity unavailable for {Feature}; falling back to standard tier", feature);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("Flex call for {Feature} exceeded {Timeout}s; falling back to standard tier",
+                    feature, _settings.FlexTimeoutSeconds);
+            }
+        }
+
+        return await CallAsync(GetStandardClient(model), feature, model, "standard", messages, responseFormat, CancellationToken.None);
+    }
+
+    private async Task<string> CallAsync(
+        ChatClient client,
+        string feature,
+        string model,
+        string tier,
+        IList<ChatMessage> messages,
+        ChatResponseFormat responseFormat,
+        CancellationToken cancellationToken)
+    {
+        // Fresh options per attempt — never share mutable SDK state between
+        // the flex try and the standard fallback.
         var options = new ChatCompletionOptions
         {
             ResponseFormat = responseFormat,
@@ -54,14 +111,15 @@ public class OpenAiChatExecutor : IOpenAiChatExecutor
 #pragma warning restore OPENAI001
 
         var stopwatch = Stopwatch.StartNew();
-        ChatCompletion completion = await client.CompleteChatAsync(messages, options);
+        ChatCompletion completion = await client.CompleteChatAsync(messages, options, cancellationToken);
         stopwatch.Stop();
 
         var usage = completion.Usage;
         _logger.LogInformation(
-            "OpenAI usage feature={Feature} model={Model} inputTokens={InputTokens} cachedInputTokens={CachedInputTokens} outputTokens={OutputTokens} reasoningTokens={ReasoningTokens} durationMs={DurationMs}",
+            "OpenAI usage feature={Feature} model={Model} tier={Tier} inputTokens={InputTokens} cachedInputTokens={CachedInputTokens} outputTokens={OutputTokens} reasoningTokens={ReasoningTokens} durationMs={DurationMs}",
             feature,
             model,
+            tier,
             usage?.InputTokenCount ?? -1,
             usage?.InputTokenDetails?.CachedTokenCount ?? 0,
             usage?.OutputTokenCount ?? -1,
@@ -69,5 +127,69 @@ public class OpenAiChatExecutor : IOpenAiChatExecutor
             stopwatch.ElapsedMilliseconds);
 
         return completion.Content.Count > 0 ? completion.Content[0].Text ?? string.Empty : string.Empty;
+    }
+
+    private ChatClient GetStandardClient(string model)
+        => _standardClients.GetOrAdd(model, m => new ChatClient(m, _settings.ApiKey));
+
+    private ChatClient GetFlexClient(string model)
+        => _flexClients.GetOrAdd(model, m =>
+        {
+            // The installed SDK has no typed service_tier setting, so a
+            // pipeline policy injects it into the request JSON. Retries are
+            // disabled on this client: a flex 429 should fail fast into the
+            // standard-lane fallback, not burn seconds on doomed retries.
+            var clientOptions = new OpenAIClientOptions
+            {
+                RetryPolicy = new ClientRetryPolicy(maxRetries: 0)
+            };
+            clientOptions.AddPolicy(new ServiceTierPolicy(_settings.ServiceTier), PipelinePosition.PerCall);
+            return new ChatClient(m, new ApiKeyCredential(_settings.ApiKey), clientOptions);
+        });
+
+    /// <summary>Rewrites the outgoing request body to add "service_tier".</summary>
+    private sealed class ServiceTierPolicy : PipelinePolicy
+    {
+        private readonly string _tier;
+
+        public ServiceTierPolicy(string tier) => _tier = tier;
+
+        public override void Process(PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)
+        {
+            InjectTier(message);
+            ProcessNext(message, pipeline, currentIndex);
+        }
+
+        public override async ValueTask ProcessAsync(PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)
+        {
+            InjectTier(message);
+            await ProcessNextAsync(message, pipeline, currentIndex).ConfigureAwait(false);
+        }
+
+        private void InjectTier(PipelineMessage message)
+        {
+            if (message.Request?.Content is null)
+                return;
+
+            using var buffer = new MemoryStream();
+            message.Request.Content.WriteTo(buffer);
+            buffer.Position = 0;
+
+            JsonNode? body;
+            try
+            {
+                body = JsonNode.Parse(buffer);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return; // not a JSON body — leave untouched
+            }
+
+            if (body is not JsonObject json)
+                return;
+
+            json["service_tier"] = _tier;
+            message.Request.Content = BinaryContent.Create(BinaryData.FromString(json.ToJsonString()));
+        }
     }
 }

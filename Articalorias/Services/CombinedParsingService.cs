@@ -16,7 +16,7 @@ namespace Articalorias.Services;
 /// </summary>
 public class CombinedParsingService : ICombinedParsingService
 {
-    private const string PromptVersion = "v2";
+    private const string PromptVersion = "v4";
     private const string CacheType = "combined";
 
     private readonly IOpenAiChatExecutor _executor;
@@ -108,14 +108,14 @@ public class CombinedParsingService : ICombinedParsingService
         You are an extraction engine for a calorie tracker. The user text, in Spanish or English, may describe foods or drinks consumed, physical activities performed, or both. Put foods in "foods" and activities in "acts". Either array may be empty; never force an unclear phrase into either side.
 
         FOOD RULES
-        - Split distinct foods into separate items; aggregate repeated identical items ("3 coffees" -> one item, q 3); preserve modifiers that affect nutrition (con leche, frito, light).
+        - Split distinct foods into separate items; aggregate repeated identical items ("3 coffees" -> one item, qty 3); preserve modifiers that affect nutrition (con leche, frito, light).
         - Do not invent foods or ingredients not implied by the text; minimal standard preparation may be inferred (fried foods include oil).
-        - q: quantity stated, else 1. u: describe ONE unit without a leading count, typical serving when unclear (g, ml, unidad, porcion, taza, pieza, cucharada, vaso, lata, botella, rebanada).
-        - CRITICAL: kcal, p, f, c, alc are for EXACTLY ONE unit, never multiplied by q ("5 huevos" -> kcal 70, NOT 350). Use realistic conservative estimates consistent with Atwater factors (protein 4, carbs 4, fat 9, alcohol 7 kcal/g); round to 1 decimal; never negative.
+        - qty: quantity stated, else 1 — qty counts SERVINGS, never grams or milliliters. unit: describe ONE unit without a leading count, typical serving when unclear (unidad, porcion, taza, pieza, cucharada, vaso, lata, botella, rebanada). A stated weight or volume is ONE unit ("350g de carne" -> qty 1, unit "350 g", nutrition for the whole amount).
+        - CRITICAL: kcal, prot, fat, carb, alc are for EXACTLY ONE unit, never multiplied by qty ("5 huevos" -> kcal 70, NOT 350). Use realistic conservative estimates consistent with Atwater factors (protein 4, carbs 4, fat 9, alcohol 7 kcal/g); use whole numbers (one decimal only below 10); never negative.
         - Alcohol: alc 0 unless alcoholic; include alcohol calories in kcal.
 
         ACTIVITY RULES
-        - One item per distinct activity. n: activity name, "" when not named. min: duration in minutes. met: estimated MET from the Compendium of Physical Activities, 1 decimal.
+        - One item per distinct activity. name: activity name, "" when not named. min: duration in minutes. met: estimated MET from the Compendium of Physical Activities, 1 decimal.
         - kcal: ONLY a calorie number the user explicitly said; NEVER estimate it. When the user states calories, leave what they did not say as null (the backend does the math).
         - When calories are not stated: kcal null, estimate met, and use the stated duration or a typical one (yoga 60, running 30, weights 45).
         - Reference METs: walking 3.5, running 8.3, cycling 6.8, swimming 5.8, weights 5.0, yoga 2.5, HIIT 10.0, stretching 2.3.

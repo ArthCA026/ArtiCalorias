@@ -35,11 +35,27 @@ public class OpenAiSettings
     public int MaxOutputTokens { get; set; } = 800;
 
     /// <summary>
-    /// Vision input fidelity: "auto" | "low" | "high". "low" is dramatically
-    /// cheaper per image but may miss small items on a plate — flip it after
-    /// testing quality on real food photos.
+    /// Vision input fidelity: "auto" | "low" | "high". "low" caps the image at
+    /// 512x512 (~4x fewer image tokens than a 1024px auto image) and is enough
+    /// for plate-level food recognition; flip back to "auto" if real photos
+    /// show missed small items.
     /// </summary>
-    public string VisionDetail { get; set; } = "auto";
+    public string VisionDetail { get; set; } = "low";
+
+    /// <summary>
+    /// OpenAI processing lane. "flex" bills at Batch rates (50% off) on
+    /// synchronous calls in exchange for slower responses and occasional
+    /// capacity 429s — the executor falls back to the standard lane
+    /// automatically, so users only ever see the latency cost.
+    /// Empty string disables and always uses the standard lane.
+    /// </summary>
+    public string ServiceTier { get; set; } = "flex";
+
+    /// <summary>
+    /// How long a flex attempt may run before the executor gives up and
+    /// re-sends on the standard lane. Bounds worst-case user-facing latency.
+    /// </summary>
+    public int FlexTimeoutSeconds { get; set; } = 20;
 
     /// <summary>
     /// Days a cached text-parse response stays valid. MET estimates never expire

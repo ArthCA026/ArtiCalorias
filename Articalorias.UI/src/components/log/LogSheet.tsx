@@ -160,7 +160,10 @@ export function LogSheet({ open, initialTab, targetDate, onClose }: LogSheetProp
   const addFromImage = useMutation({
     mutationFn: async (file: File) => {
       const date = targetDate;
-      const { base64, mimeType } = await compressImage(file);
+      // 512px matches what the AI actually reads in low-detail mode (its
+      // vision input is capped at 512×512), so anything larger only slows
+      // the upload without improving recognition.
+      const { base64, mimeType } = await compressImage(file, 512);
       const items = await dailyLogService
         .parseFoodWithImage(date, {
           imageBase64: base64,

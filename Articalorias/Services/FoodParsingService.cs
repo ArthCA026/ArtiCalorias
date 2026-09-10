@@ -21,7 +21,7 @@ public class FoodParsingService : IFoodParsingService
     /// Part of every cache key: bump whenever the prompt or wire schema
     /// changes so stale answers from the old contract can never be served.
     /// </summary>
-    private const string PromptVersion = "v2";
+    private const string PromptVersion = "v4";
 
     private const string CacheType = "food";
 
@@ -66,26 +66,44 @@ public class FoodParsingService : IFoodParsingService
         }
 
         var opts = options ?? FoodParsingOptions.None;
+        var model = _settings.ResolveModel(_settings.FoodModel);
+        var normalizedText = AiCacheKey.NormalizeText(freeText);
+        var sugarFlag = opts.IncludeSugar ? "s1" : "s0";
+        var waterFlag = opts.IncludeWater ? "w1" : "w0";
 
-        // Identical inputs are extremely common in a calorie tracker ("2 huevos",
-        // "cafe con leche") — an exact-match cache turns them into free replays.
-        // The key covers everything that shapes the answer.
-        var cacheKey = AiCacheKey.Compute(
-            CacheType,
-            PromptVersion,
-            _settings.ResolveModel(_settings.FoodModel),
-            country,
-            opts.IncludeSugar ? "s1" : "s0",
-            opts.IncludeWater ? "w1" : "w0",
-            AiCacheKey.NormalizeText(freeText));
+        // Cache layer 1 — quantity-normalized, per-unit: "2 huevos", "12 eggs"
+        // and "dos huevos" all resolve through ONE stored entry whose per-unit
+        // values are multiplied by the requested quantity on replay.
+        var unitForm = QuantityNormalizer.TryNormalize(normalizedText);
+        string? unitCacheKey = null;
+        if (unitForm is { } uf)
+        {
+            unitCacheKey = AiCacheKey.Compute(
+                "food-unit", PromptVersion, model, country, sugarFlag, waterFlag, uf.Remainder);
 
-        var cachedContent = await _cache.GetAsync(CacheType, cacheKey);
+            var unitCached = await _cache.GetAsync(CacheType, unitCacheKey);
+            if (unitCached is not null)
+            {
+                var replayed = TryProcessUnitResponse(unitCached, uf.Qty, opts);
+                if (replayed is { Count: > 0 })
+                {
+                    // Meal text is health data (Ley 8968): log outcome only, never content.
+                    _logger.LogInformation("Food parse served from per-unit cache");
+                    return replayed;
+                }
+            }
+        }
+
+        // Cache layer 2 — exact match on the full normalized text.
+        var exactCacheKey = AiCacheKey.Compute(
+            CacheType, PromptVersion, model, country, sugarFlag, waterFlag, normalizedText);
+
+        var cachedContent = await _cache.GetAsync(CacheType, exactCacheKey);
         if (cachedContent is not null)
         {
             var cachedItems = TryProcessResponse(cachedContent, opts);
             if (cachedItems is { Count: > 0 })
             {
-                // Meal text is health data (Ley 8968): log outcome only, never content.
                 _logger.LogInformation("Food parse served from cache");
                 return cachedItems;
             }
@@ -121,8 +139,14 @@ public class FoodParsingService : IFoodParsingService
         var items = ProcessResponse(content, opts);
 
         // Only proven-good responses are worth replaying for the next user.
-        await _cache.SetAsync(CacheType, cacheKey, content,
-            TimeSpan.FromDays(_settings.ParseCacheTtlDays));
+        var ttl = TimeSpan.FromDays(_settings.ParseCacheTtlDays);
+        await _cache.SetAsync(CacheType, exactCacheKey, content, ttl);
+
+        // Seed the per-unit entry only when the model saw the input the same
+        // way the normalizer did: exactly one item, same quantity. Anything
+        // else risks replaying a misattributed quantity.
+        if (unitCacheKey is not null && unitForm is { } confirmed && IsUnitCacheable(content, confirmed.Qty))
+            await _cache.SetAsync(CacheType, unitCacheKey, content, ttl);
 
         return items;
     }
@@ -144,12 +168,12 @@ public class FoodParsingService : IFoodParsingService
 
         if (options.IncludeSugar)
         {
-            extraRules.Add("- sug: total sugar grams for ONE unit (naturally occurring plus added), never multiplied by q. Sugars are a subset of c and must never exceed it (a can of cola ~35, a plain egg 0).");
+            extraRules.Add("- sug: total sugar grams for ONE unit (naturally occurring plus added), never multiplied by qty. Sugars are a subset of carb and must never exceed it (a can of cola ~35, a plain egg 0).");
         }
 
         if (options.IncludeWater)
         {
-            extraRules.Add("- h2o: milliliters of drinkable fluid ONE unit contributes, never multiplied by q. Water and other beverages count at full volume (a 330 ml soda -> 330, a glass of water -> 250 unless specified); solid food is 0 even if moist.");
+            extraRules.Add("- h2o: milliliters of drinkable fluid ONE unit contributes, never multiplied by qty. Water and other beverages count at full volume (a 330 ml soda -> 330, a glass of water -> 250 unless specified); solid food is 0 even if moist.");
         }
 
         if (extraRules.Count > 0)
@@ -173,27 +197,29 @@ public class FoodParsingService : IFoodParsingService
 
             EXTRACTION RULES
             - Split distinct foods into separate items.
-            - Aggregate repeated identical items into one entry ("3 coffees" -> one item with q 3).
+            - Aggregate repeated identical items into one entry ("3 coffees" -> one item with qty 3).
             - If foods differ meaningfully (chicken taco vs beef taco), keep them separate.
             - Preserve modifiers that affect nutrition (con leche, con azucar, frito, integral, descremado, light, con alcohol).
             - If a dish clearly contains multiple core components and splitting improves accuracy, you may separate them ("arroz con pollo" -> arroz + pollo). Otherwise keep one item.
             - Do not invent side dishes, toppings, or ingredients not implied by the text; you may infer minimal standard preparation when strongly implied (fried foods include oil).
 
             PORTION RULES
-            - q: the quantity the user stated, else 1. Integer or decimal.
-            - u: describe ONE unit without a leading count ("huevo entero", "rebanada de pan"); if portion is unclear, use a typical serving. Use normalized units such as: g, ml, unidad, porcion, taza, pieza, cucharada, cucharadita, vaso, lata, botella, rebanada.
+            - qty: the quantity the user stated, else 1. Integer or decimal. qty counts SERVINGS, never grams or milliliters.
+            - unit: describe ONE unit without a leading count ("huevo entero", "rebanada de pan"); if portion is unclear, use a typical serving. Use normalized units such as: unidad, porcion, taza, pieza, cucharada, cucharadita, vaso, lata, botella, rebanada.
+            - When the user states a weight or volume ("350g de carne", "500 ml de leche"), the WHOLE stated amount is ONE unit: qty 1, unit "350 g", nutrition for the entire 350 g. NEVER qty 350 with unit "g".
 
             NUTRITION RULES
             - Priority order: 1. user-provided calories/macros, 2. known product, brand, or restaurant equivalent, 3. generic food database estimates.
-            - CRITICAL: kcal, p, f, c and alc are each for EXACTLY ONE unit of the food — never the total for the whole quantity. The caller multiplies by q; if you multiply, the result will be wrong.
+            - CRITICAL: kcal, prot, fat, carb and alc are each for EXACTLY ONE unit of the food — never the total for the whole quantity. The caller multiplies by qty; if you multiply, the result will be wrong.
               "5 huevos" -> kcal 70 (1 egg), NOT 350. "2 Big Macs" -> kcal 550 (1 Big Mac), NOT 1100.
+              "350g de carne" -> qty 1, unit "350 g", kcal 875 (the whole 350 g is the one unit).
             - Keep values internally consistent using Atwater factors: protein 4 kcal/g, carbs 4 kcal/g, fat 9 kcal/g, alcohol 7 kcal/g.
-            - Round to 1 decimal place; never negative; if uncertainty is high, use reasonable rounded estimates instead of fake precision.
+            - Use whole numbers; use one decimal only when a per-unit value is below 10 (e.g. prot 0.6 for one almond). Never negative. If uncertainty is high, use reasonable rounded estimates instead of fake precision.
             - Supplements, medicine, and non-caloric products -> zero or negligible calories and macros.
             - Alcohol: alc is 0 for non-alcoholic items; for alcoholic drinks estimate alc from typical serving and ABV unless specified, and include alcohol calories in kcal.
 
             LANGUAGE RULES
-            - n and u stay in the same language as the user input, with natural casing preserved ("Coca-Cola", "Big Mac"); do not translate.
+            - name and unit stay in the same language as the user input, with natural casing preserved ("Coca-Cola", "Big Mac"); do not translate.
             """;
 
     // ─────────────────────────────────────────────────────
@@ -239,6 +265,44 @@ public class FoodParsingService : IFoodParsingService
         }
     }
 
+    /// <summary>
+    /// Replays a per-unit cache entry at a different quantity: the stored
+    /// response holds per-unit values, so overriding qty before the shared
+    /// sanitize/scale pipeline yields the right totals.
+    /// </summary>
+    private static IReadOnlyList<ParsedFoodItem>? TryProcessUnitResponse(string json, int qty, FoodParsingOptions options)
+    {
+        try
+        {
+            var wrapper = JsonSerializer.Deserialize<WireFoodResponse>(json, JsonOptions);
+            if (wrapper?.Items is not { Count: 1 })
+                return null;
+
+            wrapper.Items[0].Qty = qty;
+            var items = wrapper.Items.Select(i => i.ToParsedFoodItem()).ToList();
+            var sanitized = FoodItemSanitizer.Sanitize(items, options);
+            return sanitized.Count > 0 ? sanitized : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The model must agree with the normalizer: one item, same qty.</summary>
+    private static bool IsUnitCacheable(string json, int qty)
+    {
+        try
+        {
+            var wrapper = JsonSerializer.Deserialize<WireFoodResponse>(json, JsonOptions);
+            return wrapper?.Items is { Count: 1 } && (wrapper.Items[0].Qty ?? 1m) == qty;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
     // ─────────────────────────────────────────────────────
     //  ParseImageAsync — vision-based food parsing
     // ─────────────────────────────────────────────────────
@@ -280,8 +344,8 @@ public class FoodParsingService : IFoodParsingService
             throw new InvalidOperationException("Image data is not valid base64.");
         }
 
-        // Image tokens scale with detail level; "low" is far cheaper but may
-        // miss small items — controlled via OpenAI:VisionDetail after testing.
+        // Image tokens scale with detail level; "low" caps at 512x512 (~4x
+        // cheaper than a 1024px auto image) — controlled via OpenAI:VisionDetail.
         var imagePart = ChatMessageContentPart.CreateImagePart(
             BinaryData.FromBytes(imageBytes),
             mimeType,
