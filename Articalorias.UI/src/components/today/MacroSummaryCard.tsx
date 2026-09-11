@@ -1,13 +1,14 @@
 import { useTranslation } from 'react-i18next';
 import { ProgressBar } from '@/components/ui/Progress';
-import { Icon, type IconName } from '@/components/ui/Icon';
-import { MACRO_META, PROTEIN_META, formatMacroAmount, macroLabel, macroTotalFor } from '@/utils/macros';
+import { Icon, iconOrFallback, type IconName } from '@/components/ui/Icon';
+import { useMacros } from '@/hooks/useMacros';
+import { formatMacroAmount, macroColor, macroTotalFor, sortKeysByCatalog } from '@/utils/macros';
 import { cn } from '@/utils/cn';
-import type { DailyLogResponse, MacroKey } from '@/types';
+import type { DailyLogResponse } from '@/types';
 
 interface MacroBarsProps {
   log: DailyLogResponse;
-  /** Water and alcohol are excluded here: each has its own quick-add card */
+  /** Own-card macros (water, alcohol, caffeine...) are excluded here: the quick-add card is their bar */
   className?: string;
 }
 
@@ -23,53 +24,39 @@ interface BarModel {
 }
 
 /**
- * Bars for the day's tracked NUTRIENT macros, protein included, rendered as
- * one block inside the calorie-ring card. The layout adapts to how many are
- * tracked so one lonely macro never floats in half a card:
- *   1 -> a single full-width bar (the classic protein look);
+ * Bars for the day's tracked nutrient macros, protein included, rendered as
+ * one block inside the calorie-ring card. Which bars exist comes from the
+ * DAY's frozen targets (a past day shows the macros it was lived under,
+ * never today's settings) and how each one looks comes from the catalog.
+ * The layout adapts to how many are tracked so one lonely macro never
+ * floats in half a card:
+ *   1 -> a single full-width bar;
  *   2 -> two full-width bars stacked;
  *   3 -> one full-width bar on top, two half-width below;
- *   4 -> the two-by-two grid.
- * Targets come frozen from the day itself: a past day shows the macros it
- * was lived under, never today's settings. Water and alcohol live in their
- * own quick-add cards. "limit" macros (sugar) flip to the warning color once
- * past the limit; an untargeted one shows the plain amount, judgement-free.
- * Renders nothing when the day tracked no nutrient macro at all.
+ *   4+ -> the two-column grid.
+ * "limit" macros flip to the warning color once past the limit; an
+ * untargeted one shows the plain amount, judgement-free.
  */
 export function MacroBars({ log, className }: MacroBarsProps) {
   const { t } = useTranslation();
+  const { get, label } = useMacros();
 
   const bars: BarModel[] = [];
+  const keys = sortKeysByCatalog(log.macroTargets.map((m) => m.macroKey), get);
 
-  if (log.snapshotProteinGoalGrams > 0) {
-    bars.push({
-      key: 'protein',
-      icon: PROTEIN_META.icon,
-      color: PROTEIN_META.color,
-      label: t('today.protein', 'Protein'),
-      valueText: `${Math.round(log.totalProteinGrams)}g`,
-      targetText: `${Math.round(log.snapshotProteinGoalGrams)}g`,
-      progress:
-        log.snapshotProteinGoalGrams > 0
-          ? log.totalProteinGrams / log.snapshotProteinGoalGrams
-          : 0,
-      warn: false,
-    });
-  }
-
-  for (const m of log.macroTargets) {
-    if (m.macroKey === 'water' || m.macroKey === 'alcohol') continue;
-    const key = m.macroKey as MacroKey;
-    const meta = MACRO_META[key];
+  for (const key of keys) {
+    const def = get(key);
+    if (def.hasOwnCard || !def.showInHeroBars) continue;
+    const m = log.macroTargets.find((x) => x.macroKey === key)!;
     const value = macroTotalFor(log, key) ?? 0;
     const over = m.target !== null && value > m.target;
     bars.push({
       key,
-      icon: meta.icon,
-      color: meta.color,
-      label: macroLabel(t, key),
-      valueText: formatMacroAmount(key, value),
-      targetText: m.target !== null ? formatMacroAmount(key, m.target) : null,
+      icon: iconOrFallback(def.icon),
+      color: macroColor(key),
+      label: label(def),
+      valueText: formatMacroAmount(def, value),
+      targetText: m.target !== null ? formatMacroAmount(def, m.target) : null,
       progress: m.target !== null ? (m.target > 0 ? value / m.target : 0) : null,
       warn: m.direction === 'limit' && over,
     });

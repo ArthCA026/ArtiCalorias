@@ -21,17 +21,24 @@ public class AuthService : IAuthService
     private readonly JwtSettings _jwt;
     private readonly IEmailService _emailService;
     private readonly IMemoryCache _cache;
+    private readonly ILogger<AuthService> _logger;
 
     private const int ResendCooldownSeconds = 60;
     private const int MaxVerificationAttempts = 5;
     private const int ResetTokenLifetimeMinutes = 15;
 
-    public AuthService(AppDbContext db, IOptions<JwtSettings> jwt, IEmailService emailService, IMemoryCache cache)
+    public AuthService(
+        AppDbContext db,
+        IOptions<JwtSettings> jwt,
+        IEmailService emailService,
+        IMemoryCache cache,
+        ILogger<AuthService> logger)
     {
         _db = db;
         _jwt = jwt.Value;
         _emailService = emailService;
         _cache = cache;
+        _logger = logger;
     }
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken ct = default)
@@ -142,7 +149,26 @@ public class AuthService : IAuthService
         // Clear any previous verification attempts for this email (fresh code = fresh attempts)
         _cache.Remove($"reset-attempts:{normalizedEmail}");
 
-        await _emailService.SendPasswordResetEmailAsync(user.Email, token);
+        try
+        {
+            await _emailService.SendPasswordResetEmailAsync(user.Email, token, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Password reset email could not be delivered for user {UserId}.", user.UserId);
+
+            // The code never reached the user: don't leave a live token behind and
+            // don't make them sit out the resend cooldown before they can retry.
+            user.PasswordResetToken = null;
+            user.PasswordResetTokenExpiresAtUtc = null;
+            await _db.SaveChangesAsync(CancellationToken.None);
+            _cache.Remove(cooldownKey);
+
+            throw new ApiException(
+                ErrorCodes.EmailDeliveryFailed,
+                "We couldn't send the reset email right now. Please try again in a few minutes.",
+                StatusCodes.Status503ServiceUnavailable);
+        }
     }
 
     public async Task ResetPasswordAsync(ResetPasswordRequest request, CancellationToken ct = default)

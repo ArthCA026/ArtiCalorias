@@ -1,3 +1,4 @@
+using Articalorias.Data.Conversions;
 using Articalorias.Models.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -16,12 +17,7 @@ public class FoodEntryConfiguration : IEntityTypeConfiguration<FoodEntry>
         builder.Property(f => f.Quantity).HasColumnType("decimal(10,3)");
 
         builder.Property(f => f.CaloriesKcal).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
-        builder.Property(f => f.ProteinGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
-        builder.Property(f => f.FatGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
-        builder.Property(f => f.CarbsGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
-        builder.Property(f => f.AlcoholGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
-        builder.Property(f => f.SugarGrams).HasColumnType("decimal(10,2)");
-        builder.Property(f => f.WaterMl).HasColumnType("decimal(10,2)");
+        builder.Property(f => f.Macros).IsMacroAmountsJson("MacrosJson");
 
         builder.Property(f => f.SortOrder).HasDefaultValue(0);
         builder.Property(f => f.Notes).HasMaxLength(500);

@@ -1,5 +1,8 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Articalorias.DTOs.ActivityParsing;
 using Articalorias.DTOs.FoodParsing;
+using Articalorias.Services.Macros;
 
 namespace Articalorias.Services.Parsing;
 
@@ -26,30 +29,39 @@ internal sealed class WireFoodItem
     public decimal? Qty { get; set; }
 
     public decimal Kcal { get; set; }
-    public decimal Prot { get; set; }
-    public decimal Fat { get; set; }
-    public decimal Carb { get; set; }
-    public decimal Alc { get; set; }
 
-    /// <summary>Sugar grams; only present when the user tracks sugar.</summary>
-    public decimal? Sug { get; set; }
+    /// <summary>
+    /// Every macro the model answered with, under its catalog wire key
+    /// ("prot", "sug", "caf"...). Captured generically so a new catalog macro
+    /// needs no wire-model change; the strict schema guarantees only known
+    /// keys ever arrive.
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Macros { get; set; }
 
-    /// <summary>Fluid milliliters; only present when the user tracks water.</summary>
-    public decimal? H2o { get; set; }
-
-    public ParsedFoodItem ToParsedFoodItem() => new()
+    public ParsedFoodItem ToParsedFoodItem()
     {
-        FoodName = Name ?? string.Empty,
-        PortionDescription = Unit,
-        Quantity = Qty,
-        CaloriesKcal = Kcal,
-        ProteinGrams = Prot,
-        FatGrams = Fat,
-        CarbsGrams = Carb,
-        AlcoholGrams = Alc,
-        SugarGrams = Sug,
-        WaterMl = H2o
-    };
+        var item = new ParsedFoodItem
+        {
+            FoodName = Name ?? string.Empty,
+            PortionDescription = Unit,
+            Quantity = Qty,
+            CaloriesKcal = Kcal,
+        };
+
+        if (Macros is not null)
+        {
+            foreach (var (wireKey, element) in Macros)
+            {
+                if (!MacroCatalog.ByWireKey.TryGetValue(wireKey, out var def))
+                    continue;
+                if (element.ValueKind == JsonValueKind.Number && element.TryGetDecimal(out var value))
+                    item.Macros[def.Key] = value;
+            }
+        }
+
+        return item;
+    }
 }
 
 internal sealed class WireActivityResponse

@@ -28,14 +28,7 @@ public class UserProfileRequest
     [Range(-5000, 10000)]
     public decimal? DailyBaseGoalKcal { get; set; }
 
-    [Range(0, 1000)]
-    public decimal? ProteinGoalGrams { get; set; }
-
-    public bool AutoCalculateProteinGoal { get; set; }
-
-    /// <summary>Preset g/kg multiplier behind an auto protein goal.</summary>
-    [Range(0.5, 4)]
-    public decimal? ProteinGoalGramsPerKg { get; set; }
+    // Protein targets moved to PUT /api/macropreferences (macroKey "protein").
 
     // Optional "reach X by DATE" goal metadata behind DailyBaseGoalKcal.
     // At most one of weight / body fat may be set, always alongside a date.

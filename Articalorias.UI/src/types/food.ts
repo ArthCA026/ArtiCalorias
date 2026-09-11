@@ -1,16 +1,16 @@
+import type { MacroAmounts } from './macros';
+
 export interface FoodEntryResponse {
   foodEntryId: number;
   foodName: string;
   portionDescription: string | null;
   quantity: number | null;
   caloriesKcal: number;
-  proteinGrams: number;
-  fatGrams: number;
-  carbsGrams: number;
-  alcoholGrams: number;
-  /** Null = not captured when this entry was logged (macro not tracked then). */
-  sugarGrams: number | null;
-  waterMl: number | null;
+  /**
+   * TOTAL amounts eaten keyed by macro key. Absent key = not captured when
+   * this entry was logged (macro not tracked then); core macros always present.
+   */
+  macros: MacroAmounts;
   sortOrder: number;
   notes: string | null;
 }
@@ -20,12 +20,8 @@ export interface CreateFoodEntryRequest {
   portionDescription?: string | null;
   quantity?: number | null;
   caloriesKcal: number;
-  proteinGrams: number;
-  fatGrams: number;
-  carbsGrams: number;
-  alcoholGrams: number;
-  sugarGrams?: number | null;
-  waterMl?: number | null;
+  /** TOTAL amounts keyed by macro key. Omit a key to record "not captured". */
+  macros: MacroAmounts;
   foodTemplateId?: number;
   notes?: string | null;
 }
@@ -35,14 +31,10 @@ export interface UpdateFoodEntryRequest {
   portionDescription?: string | null;
   quantity?: number | null;
   caloriesKcal: number;
-  proteinGrams: number;
-  fatGrams: number;
-  carbsGrams: number;
-  alcoholGrams: number;
-  sugarGrams?: number | null;
-  waterMl?: number | null;
+  /** TOTAL amounts keyed by macro key. Ignored when scaleByQuantity is true. */
+  macros: MacroAmounts;
   notes?: string | null;
-  /** When true the API scales existing macros by newQty/oldQty instead of using the submitted macro values. */
+  /** When true the API scales the stored calories and the whole macro map by newQty/oldQty. */
   scaleByQuantity?: boolean;
 }
 
@@ -55,13 +47,8 @@ export interface ParsedFoodItem {
   portionDescription: string | null;
   quantity: number | null;
   caloriesKcal: number;
-  proteinGrams: number;
-  fatGrams: number;
-  carbsGrams: number;
-  alcoholGrams: number;
-  /** Only present when the user tracks the macro. */
-  sugarGrams: number | null;
-  waterMl: number | null;
+  /** Already multiplied by quantity. Optional macros present only when tracked (AI) or on the label (barcode). */
+  macros: MacroAmounts;
 }
 
 export interface ConfirmParsedFoodsRequest {

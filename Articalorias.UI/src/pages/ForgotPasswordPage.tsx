@@ -34,8 +34,13 @@ export default function ForgotPasswordPage() {
       await authService.forgotPassword({ email: email.trim() });
       return true;
     } catch (err) {
-      if (extractApiErrorCode(err) === 'RESEND_COOLDOWN') {
+      const code = extractApiErrorCode(err);
+      if (code === 'RESEND_COOLDOWN') {
         setApiError(t('auth.forgot.error_cooldown', 'Please wait a minute before asking for another code.'));
+      } else if (code === 'EMAIL_DELIVERY_FAILED') {
+        setApiError(
+          t('auth.forgot.error_delivery', "We couldn't send the email right now. Please try again in a few minutes."),
+        );
       } else {
         setApiError(
           extractApiError(

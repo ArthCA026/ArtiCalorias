@@ -1,3 +1,5 @@
+using Articalorias.Services.Macros;
+
 namespace Articalorias.Models.Entities;
 
 public class FoodTemplate
@@ -8,12 +10,15 @@ public class FoodTemplate
     public string PortionDescription { get; set; } = string.Empty;
     public decimal DefaultQuantity { get; set; } = 1m;
     public decimal CaloriesKcal { get; set; }
-    public decimal ProteinGrams { get; set; }
-    public decimal FatGrams { get; set; }
-    public decimal CarbsGrams { get; set; }
-    public decimal AlcoholGrams { get; set; }
-    public decimal? SugarGrams { get; set; }
-    public decimal? WaterMl { get; set; }
+
+    /// <summary>
+    /// Amounts PER 1 PORTION keyed by catalog macro key (see
+    /// <see cref="Services.FoodTemplateMath"/> for the scaling rule when a
+    /// template becomes an entry). Absent key = not captured when the
+    /// template was saved.
+    /// </summary>
+    public MacroAmounts Macros { get; set; } = MacroAmounts.Empty;
+
     public bool AutoAddToNewDay { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAtUtc { get; set; }

@@ -193,8 +193,8 @@ export function CalorieHero({ dash, mode, isToday, onOpenDetails }: CalorieHeroP
       </button>
 
       {/* Protein and the other tracked nutrient macros share this card so the
-          meal list stays visible without scrolling. Water keeps its own card
-          (it carries the quick-add cups). */}
+          meal list stays visible without scrolling. Own-card macros (water,
+          alcohol...) live in the quick-add card, which carries their presets. */}
       <MacroBars log={dash} className="mt-4 w-full" />
     </Card>
   );

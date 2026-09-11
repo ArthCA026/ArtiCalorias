@@ -5,6 +5,7 @@ import { Icon } from '@/components/ui/Icon';
 import { CalorieModeTag } from '@/components/ui/CalorieModeTag';
 import { calorieModeShortLabel } from '@/components/ui/calorieModeLabels';
 import { useHaptics } from '@/hooks/useHaptics';
+import { useMacros } from '@/hooks/useMacros';
 import { addDays, parseDate, toDateString } from '@/utils/format';
 import { deltaFor, hasComparablePlan, isFavorableFor, isSurplusGoalDay } from '@/utils/calorieMath';
 import { cn } from '@/utils/cn';
@@ -68,6 +69,7 @@ interface Slot {
 export function WeekDeltaChart({ monday, days, mode }: WeekDeltaChartProps) {
   const { t, i18n } = useTranslation();
   const haptics = useHaptics();
+  const { label: macroName } = useMacros();
   const rootRef = useRef<HTMLDivElement>(null);
   // The selection is stamped with the week it belongs to, so paging away
   // drops it during render. A new week is a new chart and a stale index must
@@ -214,8 +216,8 @@ export function WeekDeltaChart({ monday, days, mode }: WeekDeltaChartProps) {
           value: energy(s.log.totalDailyExpenditureKcal),
         },
         {
-          label: t('progress.chart_col_protein', 'Protein'),
-          value: `${Math.round(s.log.totalProteinGrams)} g`,
+          label: macroName('protein'),
+          value: `${Math.round(s.log.macroTotals.protein ?? 0)} g`,
         },
       ],
       // Names both the color rule and the budget the value was measured
@@ -251,7 +253,7 @@ export function WeekDeltaChart({ monday, days, mode }: WeekDeltaChartProps) {
       {
         eaten: `${energy(s.log.totalFoodCaloriesKcal)} ${unit}`,
         burned: `${energy(s.log.totalDailyExpenditureKcal)} ${unit}`,
-        protein: Math.round(s.log.totalProteinGrams),
+        protein: Math.round(s.log.macroTotals.protein ?? 0),
       },
     );
     return `${day}: ${signed(s.value)} ${unit} ${caption(s.value)}. ${status}. ${stats}`;

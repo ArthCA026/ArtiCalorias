@@ -20,9 +20,6 @@ public class UserProfileConfiguration : IEntityTypeConfiguration<UserProfile>
         builder.Property(p => p.AutoCalculateBMR).HasDefaultValue(false);
         builder.Property(p => p.AutoCalculateBodyFat).HasDefaultValue(false);
         builder.Property(p => p.DailyBaseGoalKcal).HasColumnType("decimal(10,2)").HasDefaultValue(-500m);
-        builder.Property(p => p.ProteinGoalGrams).HasColumnType("decimal(10,2)");
-        builder.Property(p => p.AutoCalculateProteinGoal).HasDefaultValue(true);
-        builder.Property(p => p.ProteinGoalGramsPerKg).HasColumnType("decimal(4,2)");
         builder.Property(p => p.GoalTargetWeightKg).HasColumnType("decimal(8,2)");
         builder.Property(p => p.GoalTargetBodyFatPercent).HasColumnType("decimal(5,2)");
         builder.Property(p => p.Country).HasMaxLength(100);

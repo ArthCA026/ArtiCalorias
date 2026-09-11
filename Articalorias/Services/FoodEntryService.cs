@@ -107,26 +107,15 @@ public class FoodEntryService : IFoodEntryService
             && oldQuantity.HasValue
             && oldQuantity.Value != 0m)
         {
+            // Every stored macro scales with the quantity; absent keys stay absent.
             var ratio = entry.Quantity.Value / oldQuantity.Value;
             existing.CaloriesKcal = Math.Round(existing.CaloriesKcal * ratio, 2);
-            existing.ProteinGrams = Math.Round(existing.ProteinGrams * ratio, 2);
-            existing.FatGrams = Math.Round(existing.FatGrams * ratio, 2);
-            existing.CarbsGrams = Math.Round(existing.CarbsGrams * ratio, 2);
-            existing.AlcoholGrams = Math.Round(existing.AlcoholGrams * ratio, 2);
-            if (existing.SugarGrams.HasValue)
-                existing.SugarGrams = Math.Round(existing.SugarGrams.Value * ratio, 2);
-            if (existing.WaterMl.HasValue)
-                existing.WaterMl = Math.Round(existing.WaterMl.Value * ratio, 2);
+            existing.Macros = existing.Macros.Scale(ratio, 2);
         }
         else
         {
             existing.CaloriesKcal = entry.CaloriesKcal;
-            existing.ProteinGrams = entry.ProteinGrams;
-            existing.FatGrams = entry.FatGrams;
-            existing.CarbsGrams = entry.CarbsGrams;
-            existing.AlcoholGrams = entry.AlcoholGrams;
-            existing.SugarGrams = entry.SugarGrams;
-            existing.WaterMl = entry.WaterMl;
+            existing.Macros = entry.Macros;
         }
 
         existing.UpdatedAtUtc = DateTime.UtcNow;

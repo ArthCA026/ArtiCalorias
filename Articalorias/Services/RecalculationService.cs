@@ -2,6 +2,7 @@ using Articalorias.Configuration;
 using Articalorias.Data;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
+using Articalorias.Services.Macros;
 using Microsoft.EntityFrameworkCore;
 
 namespace Articalorias.Services;
@@ -86,21 +87,13 @@ public class RecalculationService : IRecalculationService
 
         // ── Step 2: Recompute food intake totals ──
         log.TotalFoodCaloriesKcal = log.FoodEntries.Sum(f => f.CaloriesKcal);
-        log.TotalProteinGrams = log.FoodEntries.Sum(f => f.ProteinGrams);
-        log.TotalFatGrams = log.FoodEntries.Sum(f => f.FatGrams);
-        log.TotalCarbsGrams = log.FoodEntries.Sum(f => f.CarbsGrams);
-        log.TotalAlcoholGrams = log.FoodEntries.Sum(f => f.AlcoholGrams);
 
-        // Optional macros keep the null/number distinction: a NULL total means
-        // no entry of the day carried the data (macro not tracked back then),
-        // while a number — even 0 on a day with entries that tracked it — is a
-        // real measurement. Partial days sum whatever entries do carry.
-        log.TotalSugarGrams = log.FoodEntries.Any(f => f.SugarGrams.HasValue)
-            ? log.FoodEntries.Sum(f => f.SugarGrams ?? 0m)
-            : null;
-        log.TotalWaterMl = log.FoodEntries.Any(f => f.WaterMl.HasValue)
-            ? log.FoodEntries.Sum(f => f.WaterMl ?? 0m)
-            : null;
+        // Macro totals keep the absent/number distinction per key: a key is
+        // missing when no entry of the day carried it (macro not tracked back
+        // then), while a number — even 0 on a day with entries that tracked
+        // it — is a real measurement. Partial days sum whatever entries do
+        // carry. Core macros are always present.
+        log.MacroTotals = MacroAmounts.Sum(log.FoodEntries.Select(f => f.Macros)).EnsureCore();
 
         // A fasting day with food on it is a contradiction: the user broke the
         // fast or mislabeled the day. Enforced here, at the single point every
@@ -142,12 +135,8 @@ public class RecalculationService : IRecalculationService
             ? (3.0m - 1m) * (log.SnapshotWeightKg ?? 0m) * neatH
             : 0m;
 
-        // ── Step 4: Recompute TEF (per-macro business logic) ──
-        log.TEFKcal = TefConstants.Calculate(
-            log.TotalProteinGrams,
-            log.TotalFatGrams,
-            log.TotalCarbsGrams,
-            log.TotalAlcoholGrams);
+        // ── Step 4: Recompute TEF (per-macro rates from the catalog) ──
+        log.TEFKcal = MacroTef.Calculate(log.MacroTotals);
 
         // ── Step 5: Recompute total daily expenditure ──
         // BMR minus the resting offset = resting energy of the non-activity hours only;
@@ -163,7 +152,7 @@ public class RecalculationService : IRecalculationService
         // ── Step 6: Recompute net balance ──
         log.NetBalanceKcal = log.TotalFoodCaloriesKcal - log.TotalDailyExpenditureKcal;
 
-        // ── Step 7: Recompute daily remaining (calories + protein) ──
+        // ── Step 7: Recompute daily remaining calories (macro remaining is derived by the UI from the day's frozen targets) ──
         log.DailyGoalDeltaKcal = log.NetBalanceKcal - log.SnapshotDailyBaseGoalKcal;
 
         // Apply the same physiological safeguard to the "Daily Goal" calorie mode.
@@ -176,8 +165,6 @@ public class RecalculationService : IRecalculationService
             rawGoalTarget,
             safeguardEnabled ? Math.Max(minIntakeForGoal, 1m) : 1m);
         log.CaloriesRemainingToDailyTargetKcal = effectiveGoalTarget - log.TotalFoodCaloriesKcal;
-
-        log.ProteinRemainingGrams = log.SnapshotProteinGoalGrams - log.TotalProteinGrams;
 
         // ── Availability guard — zero budget fields when body metrics are incomplete ──
         // Weight + height are both required for TDEE / BMR auto-calc.
@@ -257,26 +244,23 @@ public class RecalculationService : IRecalculationService
             return;
 
         // Mirror the snapshot logic used in DailyLogService.GetOrCreateAsync.
-        var proteinGoal = ProteinMath.GoalGrams(profile);
-
         log.SnapshotWeightKg          = profile.CurrentWeightKg;
         log.SnapshotHeightCm          = profile.HeightCm;
         log.SnapshotBMRKcal           = profile.BMRKcal;
         log.SnapshotBodyFatPercent    = profile.BodyFatPercent;
         log.SnapshotDailyBaseGoalKcal = profile.DailyBaseGoalKcal;
-        log.SnapshotProteinGoalGrams  = proteinGoal;
         log.SnapshotSleepHours        = profile.SleepHours;
         log.SnapshotNeatHours         = profile.NeatHours;
 
-        // Refreshing a snapshot re-freezes the macro targets too, so "apply
-        // from today" after changing tracked macros uses the same mechanism
-        // as sleep/NEAT changes. Past days are never refreshed by the UI, so
-        // their frozen targets stay historically true.
+        // Refreshing a snapshot re-freezes every macro target (protein
+        // included), so "apply from today" after changing tracked macros uses
+        // the same mechanism as sleep/NEAT changes. Past days are never
+        // refreshed by the UI, so their frozen targets stay historically true.
         var macroPrefs = await _db.UserMacroPreferences
             .AsNoTracking()
             .Where(m => m.UserId == userId)
             .ToListAsync();
-        log.MacroTargetsJson = MacroTargets.BuildJson(profile, macroPrefs);
+        log.MacroTargetsJson = MacroTargetEngine.BuildJson(profile, macroPrefs);
 
         await _db.SaveChangesAsync();
 

@@ -11,29 +11,12 @@ namespace Articalorias.Services.Parsing;
 /// keep real-word semantics at zero extra cost. Numeric fields ask for whole
 /// numbers (integers tokenize at 1 token vs 3 for decimals).
 /// Schemas must stay byte-identical between calls — OpenAI caches the
-/// compiled grammar and the prompt-cache prefix by exact content.
+/// compiled grammar and the prompt-cache prefix by exact content. The food
+/// item schema is generated from the macro catalog (see
+/// <see cref="FoodPromptFragments"/>) and cached per option set.
 /// </summary>
 internal static class ParsingSchemas
 {
-    private const string FoodBaseProperties = """
-                "name": { "type": "string", "description": "Food name, same language as the user wrote" },
-                "unit": { "type": "string", "description": "Portion description of ONE unit, no leading count" },
-                "qty": { "type": "number", "description": "How many units the user had" },
-                "kcal": { "type": "number", "description": "Calories for ONE unit only, never multiplied by qty" },
-                "prot": { "type": "number", "description": "Protein grams for ONE unit" },
-                "fat": { "type": "number", "description": "Fat grams for ONE unit" },
-                "carb": { "type": "number", "description": "Carb grams for ONE unit" },
-                "alc": { "type": "number", "description": "Alcohol grams for ONE unit" }
-        """;
-
-    private const string SugarProperty = """
-                "sug": { "type": "number", "description": "Total sugar grams for ONE unit, subset of carb" }
-        """;
-
-    private const string WaterProperty = """
-                "h2o": { "type": "number", "description": "Drinkable-fluid ml ONE unit contributes; 0 for solid food" }
-        """;
-
     private const string ActivityItemSchema = """
         {
           "type": "object",
@@ -55,7 +38,7 @@ internal static class ParsingSchemas
                 {
                   "type": "object",
                   "properties": {
-                    "items": { "type": "array", "items": {{FoodItemSchema(options)}} }
+                    "items": { "type": "array", "items": {{FoodPromptFragments.FoodItemSchema(options)}} }
                   },
                   "required": ["items"],
                   "additionalProperties": false
@@ -79,14 +62,14 @@ internal static class ParsingSchemas
             jsonSchemaIsStrict: true);
 
     /// <summary>Foods and activities in one response — one paid call, not two.</summary>
-    public static ChatResponseFormat CombinedFormat()
+    public static ChatResponseFormat CombinedFormat(FoodParsingOptions options)
         => ChatResponseFormat.CreateJsonSchemaFormat(
             "food_and_activity_items",
             BinaryData.FromString($$"""
                 {
                   "type": "object",
                   "properties": {
-                    "foods": { "type": "array", "items": {{FoodItemSchema(FoodParsingOptions.None)}} },
+                    "foods": { "type": "array", "items": {{FoodPromptFragments.FoodItemSchema(options)}} },
                     "acts": { "type": "array", "items": {{ActivityItemSchema}} }
                   },
                   "required": ["foods", "acts"],
@@ -110,35 +93,4 @@ internal static class ParsingSchemas
                 }
                 """),
             jsonSchemaIsStrict: true);
-
-    private static string FoodItemSchema(FoodParsingOptions options)
-    {
-        var properties = FoodBaseProperties;
-        var required = """
-            "name", "unit", "qty", "kcal", "prot", "fat", "carb", "alc"
-            """.Trim();
-
-        if (options.IncludeSugar)
-        {
-            properties += ",\n" + SugarProperty;
-            required += ", \"sug\"";
-        }
-
-        if (options.IncludeWater)
-        {
-            properties += ",\n" + WaterProperty;
-            required += ", \"h2o\"";
-        }
-
-        return $$"""
-            {
-              "type": "object",
-              "properties": {
-            {{properties}}
-              },
-              "required": [{{required}}],
-              "additionalProperties": false
-            }
-            """;
-    }
 }

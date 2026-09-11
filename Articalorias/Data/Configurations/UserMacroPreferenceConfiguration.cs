@@ -15,6 +15,7 @@ public class UserMacroPreferenceConfiguration : IEntityTypeConfiguration<UserMac
         builder.Property(m => m.IsTracked).HasDefaultValue(false);
         builder.Property(m => m.TargetMode).HasMaxLength(10).HasDefaultValue("auto").IsRequired();
         builder.Property(m => m.CustomTargetValue).HasColumnType("decimal(10,2)");
+        builder.Property(m => m.AutoParam).HasColumnType("decimal(10,3)");
         builder.Property(m => m.CreatedAtUtc).HasColumnType("datetime2(0)").HasDefaultValueSql("SYSUTCDATETIME()");
         builder.Property(m => m.UpdatedAtUtc).HasColumnType("datetime2(0)").HasDefaultValueSql("SYSUTCDATETIME()");
         builder.Property(m => m.RowVersion).IsRowVersion();

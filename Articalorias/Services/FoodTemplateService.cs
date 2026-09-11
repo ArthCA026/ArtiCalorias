@@ -52,12 +52,7 @@ public class FoodTemplateService : IFoodTemplateService
         existing.PortionDescription = template.PortionDescription;
         existing.DefaultQuantity = template.DefaultQuantity;
         existing.CaloriesKcal = template.CaloriesKcal;
-        existing.ProteinGrams = template.ProteinGrams;
-        existing.FatGrams = template.FatGrams;
-        existing.CarbsGrams = template.CarbsGrams;
-        existing.AlcoholGrams = template.AlcoholGrams;
-        existing.SugarGrams = template.SugarGrams;
-        existing.WaterMl = template.WaterMl;
+        existing.Macros = template.Macros;
         existing.AutoAddToNewDay = template.AutoAddToNewDay;
         existing.UpdatedAtUtc = DateTime.UtcNow;
 

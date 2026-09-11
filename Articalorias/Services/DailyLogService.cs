@@ -2,6 +2,7 @@ using Articalorias.Data;
 using Articalorias.Exceptions;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
+using Articalorias.Services.Macros;
 using Microsoft.EntityFrameworkCore;
 
 namespace Articalorias.Services;
@@ -60,8 +61,6 @@ public class DailyLogService : IDailyLogService
         var profile = await _db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId)
             ?? throw new InvalidOperationException("User profile not found. Complete onboarding first.");
 
-        var proteinGoal = ProteinMath.GoalGrams(profile);
-
         var (weekStart, weekEnd) = GetWeekRange(date);
 
         var macroPrefs = await _db.UserMacroPreferences
@@ -80,10 +79,11 @@ public class DailyLogService : IDailyLogService
             SnapshotBMRKcal = profile.BMRKcal,
             SnapshotBodyFatPercent = profile.BodyFatPercent,
             SnapshotDailyBaseGoalKcal = profile.DailyBaseGoalKcal,
-            SnapshotProteinGoalGrams = proteinGoal,
             SnapshotSleepHours = profile.SleepHours,
             SnapshotNeatHours = profile.NeatHours,
-            MacroTargetsJson = MacroTargets.BuildJson(profile, macroPrefs),
+            // Every macro target (protein included) freezes here; see MacroTargetEngine.
+            MacroTargetsJson = MacroTargetEngine.BuildJson(profile, macroPrefs),
+            MacroTotals = MacroAmounts.Empty.EnsureCore(),
 
             WeekStartDate = weekStart,
             WeekEndDate = weekEnd

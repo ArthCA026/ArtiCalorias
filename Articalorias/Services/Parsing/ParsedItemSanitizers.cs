@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Articalorias.DTOs.ActivityParsing;
 using Articalorias.DTOs.FoodParsing;
+using Articalorias.Services.Macros;
 
 namespace Articalorias.Services.Parsing;
 
@@ -9,9 +10,14 @@ namespace Articalorias.Services.Parsing;
 /// clamp bad AI output, scale per-unit nutrition by quantity, normalize
 /// portion descriptions. Returns a possibly-empty list — throwing on empty is
 /// the caller's decision (the combined parser legitimately gets empty sides).
+/// Every per-macro rule (ceilings, parent clamps, which keys survive) comes
+/// from the catalog, so a new macro needs no change here.
 /// </summary>
 internal static partial class FoodItemSanitizer
 {
+    private const decimal MaxKcalPerUnit = 10000m;
+    private const decimal MaxKcalPerEntry = 50000m;
+
     [GeneratedRegex(@"^1\s+")]
     private static partial Regex LeadingOnePattern();
 
@@ -25,6 +31,14 @@ internal static partial class FoodItemSanitizer
 
     public static List<ParsedFoodItem> Sanitize(List<ParsedFoodItem> items, FoodParsingOptions options)
     {
+        // Core macros always survive; optional ones only when they were
+        // requested (an untracked macro must stay ABSENT in the database —
+        // absence is what lets old days say "not tracked then"). Catalog
+        // order guarantees a parent is clamped before its children.
+        var keep = MacroCatalog.Core.Concat(options.OptionalDefinitions)
+            .OrderBy(d => d.SortOrder)
+            .ToList();
+
         var sanitized = new List<ParsedFoodItem>();
 
         foreach (var item in items)
@@ -32,25 +46,21 @@ internal static partial class FoodItemSanitizer
             if (string.IsNullOrWhiteSpace(item.FoodName))
                 continue;
 
-            // Clamp negatives to zero
             item.CaloriesKcal = Math.Max(0, item.CaloriesKcal);
-            item.ProteinGrams = Math.Max(0, item.ProteinGrams);
-            item.FatGrams = Math.Max(0, item.FatGrams);
-            item.CarbsGrams = Math.Max(0, item.CarbsGrams);
-            item.AlcoholGrams = Math.Max(0, item.AlcoholGrams);
 
-            // Optional fields: only kept when they were requested (an untracked
-            // macro must stay NULL in the database — NULL is what lets old days
-            // say "not tracked then"), clamped into physical plausibility.
-            item.SugarGrams = options.IncludeSugar
-                ? Math.Min(Math.Max(0, item.SugarGrams ?? 0), item.CarbsGrams)
-                : null;
-            item.WaterMl = options.IncludeWater
-                ? Math.Clamp(item.WaterMl ?? 0, 0, 5000)
-                : null;
+            var cleaned = new Dictionary<string, decimal>(StringComparer.Ordinal);
+            foreach (var def in keep)
+            {
+                var value = item.Macros.GetValueOrDefault(def.Key, 0m);
+                value = Math.Clamp(value, 0m, def.PreScaleMax);
+                if (def.ParentKey is not null && cleaned.TryGetValue(def.ParentKey, out var parent))
+                    value = Math.Min(value, parent);
+                cleaned[def.Key] = value;
+            }
+            item.Macros = cleaned;
 
             // Reject absurd single-item values
-            if (item.CaloriesKcal > 10000)
+            if (item.CaloriesKcal > MaxKcalPerUnit)
                 item.CaloriesKcal = 0;
 
             // Repair the gram-count failure mode: for "350g de carne" the
@@ -79,29 +89,21 @@ internal static partial class FoodItemSanitizer
             var qty = item.Quantity ?? 1m;
             if (qty <= 0) qty = 1m;
 
-            item.CaloriesKcal = Math.Round(item.CaloriesKcal * qty, 1);
-            item.ProteinGrams = Math.Round(item.ProteinGrams * qty, 1);
-            item.FatGrams     = Math.Round(item.FatGrams     * qty, 1);
-            item.CarbsGrams   = Math.Round(item.CarbsGrams   * qty, 1);
-            item.AlcoholGrams = Math.Round(item.AlcoholGrams * qty, 1);
-            if (item.SugarGrams.HasValue)
-                item.SugarGrams = Math.Round(item.SugarGrams.Value * qty, 1);
-            if (item.WaterMl.HasValue)
-                item.WaterMl = Math.Round(item.WaterMl.Value * qty, 1);
+            // Post-scale ceilings mirror the request DTOs' ranges: whatever
+            // survives here must always be confirmable (the user can still
+            // review and edit an implausible value; a 400 on confirm is a
+            // dead end).
+            item.CaloriesKcal = Math.Min(Math.Round(item.CaloriesKcal * qty, 1), MaxKcalPerEntry);
 
-            // Post-scale ceilings mirroring CreateFoodEntryRequest's ranges:
-            // whatever survives here must always be confirmable (the user can
-            // still review and edit an implausible value; a 400 on confirm is
-            // a dead end).
-            item.CaloriesKcal = Math.Min(item.CaloriesKcal, 50000m);
-            item.ProteinGrams = Math.Min(item.ProteinGrams, 10000m);
-            item.FatGrams     = Math.Min(item.FatGrams, 10000m);
-            item.CarbsGrams   = Math.Min(item.CarbsGrams, 10000m);
-            item.AlcoholGrams = Math.Min(item.AlcoholGrams, 10000m);
-            if (item.SugarGrams.HasValue)
-                item.SugarGrams = Math.Min(item.SugarGrams.Value, 10000m);
-            if (item.WaterMl.HasValue)
-                item.WaterMl = Math.Min(item.WaterMl.Value, 100000m);
+            foreach (var def in keep)
+            {
+                if (!item.Macros.TryGetValue(def.Key, out var value))
+                    continue;
+                value = Math.Min(Math.Round(value * qty, 1), def.MaxPerEntry);
+                if (def.ParentKey is not null && item.Macros.TryGetValue(def.ParentKey, out var parent))
+                    value = Math.Min(value, parent);
+                item.Macros[def.Key] = value;
+            }
 
             // "1 huevo entero" → "huevo entero": the quantity field already
             // carries the count, so a leading 1 in the portion text is noise.
@@ -110,6 +112,37 @@ internal static partial class FoodItemSanitizer
         }
 
         return sanitized;
+    }
+
+    /// <summary>
+    /// Label data (barcode lookups) is already a total for the stated portion:
+    /// no quantity scaling and no tracked-key gating (a label value costs
+    /// nothing, so whatever it provides is kept for the day the user starts
+    /// tracking it). Clamps into range, forces core zeros, honors parents.
+    /// </summary>
+    public static ParsedFoodItem SanitizeLabelData(ParsedFoodItem item)
+    {
+        item.CaloriesKcal = Math.Clamp(item.CaloriesKcal, 0m, MaxKcalPerEntry);
+
+        var cleaned = new Dictionary<string, decimal>(StringComparer.Ordinal);
+        foreach (var def in MacroCatalog.Active)
+        {
+            if (item.Macros.TryGetValue(def.Key, out var value))
+                cleaned[def.Key] = Math.Clamp(Math.Round(value, 2), 0m, def.MaxPerEntry);
+            else if (def.IsCore)
+                cleaned[def.Key] = 0m;
+        }
+
+        foreach (var def in MacroCatalog.Active)
+        {
+            if (def.ParentKey is null || !cleaned.TryGetValue(def.Key, out var child))
+                continue;
+            if (cleaned.TryGetValue(def.ParentKey, out var parent) && child > parent)
+                cleaned[def.Key] = parent;
+        }
+
+        item.Macros = cleaned;
+        return item;
     }
 }
 

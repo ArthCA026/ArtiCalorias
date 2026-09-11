@@ -7,12 +7,10 @@ public class FoodTemplateResponse
     public string PortionDescription { get; set; } = string.Empty;
     public decimal DefaultQuantity { get; set; }
     public decimal CaloriesKcal { get; set; }
-    public decimal ProteinGrams { get; set; }
-    public decimal FatGrams { get; set; }
-    public decimal CarbsGrams { get; set; }
-    public decimal AlcoholGrams { get; set; }
-    public decimal? SugarGrams { get; set; }
-    public decimal? WaterMl { get; set; }
+
+    /// <summary>Amounts PER 1 PORTION keyed by catalog macro key (absent = not captured).</summary>
+    public Dictionary<string, decimal> Macros { get; set; } = new();
+
     public bool AutoAddToNewDay { get; set; }
     public bool IsActive { get; set; }
 }

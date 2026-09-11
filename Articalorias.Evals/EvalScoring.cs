@@ -49,17 +49,33 @@ public static class EvalScoring
             if (expect.KcalMax.HasValue && item.CaloriesKcal > expect.KcalMax.Value)
                 failures.Add($"{item.FoodName}: kcal {item.CaloriesKcal} > max {expect.KcalMax}");
 
-            CheckMacro(failures, item.FoodName, "prot", item.ProteinGrams, expect.Prot, expect.MacroToleranceGrams);
-            CheckMacro(failures, item.FoodName, "fat", item.FatGrams, expect.Fat, expect.MacroToleranceGrams);
-            CheckMacro(failures, item.FoodName, "carb", item.CarbsGrams, expect.Carb, expect.MacroToleranceGrams);
+            CheckMacro(failures, item.FoodName, "prot", Amount(item, "protein"), expect.Prot, expect.MacroToleranceGrams);
+            CheckMacro(failures, item.FoodName, "fat", Amount(item, "fat"), expect.Fat, expect.MacroToleranceGrams);
+            CheckMacro(failures, item.FoodName, "carb", Amount(item, "carbs"), expect.Carb, expect.MacroToleranceGrams);
 
-            if (expect.AlcoholMin.HasValue && item.AlcoholGrams < expect.AlcoholMin.Value)
-                failures.Add($"{item.FoodName}: alcohol {item.AlcoholGrams}g < min {expect.AlcoholMin}g");
+            if (expect.AlcoholMin.HasValue && Amount(item, "alcohol") < expect.AlcoholMin.Value)
+                failures.Add($"{item.FoodName}: alcohol {Amount(item, "alcohol")}g < min {expect.AlcoholMin}g");
+
+            // Generic per-key expectations (optional macros such as sugar, water, caffeine).
+            foreach (var (key, expected) in expect.Macros)
+            {
+                if (!item.Macros.TryGetValue(key, out var actual))
+                {
+                    failures.Add($"{item.FoodName}: macro '{key}' missing from the response");
+                    continue;
+                }
+                CheckMacro(failures, item.FoodName, key, actual, expected, expect.MacroToleranceGrams);
+            }
         }
 
         return Result(c.Id, c.Input, failures,
-            string.Join("; ", items.Select(i => $"{i.FoodName} x{i.Quantity}: {i.CaloriesKcal}kcal P{i.ProteinGrams} F{i.FatGrams} C{i.CarbsGrams} A{i.AlcoholGrams}")));
+            string.Join("; ", items.Select(i =>
+                $"{i.FoodName} x{i.Quantity}: {i.CaloriesKcal}kcal " +
+                string.Join(" ", i.Macros.Select(kv => $"{kv.Key}={kv.Value}")))));
     }
+
+    private static decimal Amount(ParsedFoodItem item, string key)
+        => item.Macros.TryGetValue(key, out var v) ? v : 0m;
 
     public static CaseResult ScoreActivity(ActivityCase c, IReadOnlyList<ParsedActivityItem> items)
     {

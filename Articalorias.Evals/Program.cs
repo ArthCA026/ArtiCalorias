@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Articalorias.Configuration;
+using Articalorias.DTOs.FoodParsing;
 using Articalorias.Evals;
 using Articalorias.Interfaces;
 using Articalorias.Services;
@@ -69,7 +70,8 @@ Console.WriteLine(new string('─', 60));
 if (suite is "food" or "all")
     suites.Add(await RunSuite("food", Load<FoodCase>("food.json"), async c =>
     {
-        var items = await foodService.ParseFreeTextAsync(c.Input, c.Country);
+        var options = c.OptionalMacros.Count > 0 ? new FoodParsingOptions(c.OptionalMacros) : null;
+        var items = await foodService.ParseFreeTextAsync(c.Input, c.Country, options);
         return EvalScoring.ScoreFood(c, items);
     }));
 

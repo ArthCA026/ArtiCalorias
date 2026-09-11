@@ -1,3 +1,5 @@
+using Articalorias.Services.Macros;
+
 namespace Articalorias.Models.Entities;
 
 public class DailyLog
@@ -12,25 +14,24 @@ public class DailyLog
     public decimal SnapshotBMRKcal { get; set; }
     public decimal? SnapshotBodyFatPercent { get; set; }
     public decimal SnapshotDailyBaseGoalKcal { get; set; }
-    public decimal SnapshotProteinGoalGrams { get; set; }
 
     // Ingesta total del día
     public decimal TotalFoodCaloriesKcal { get; set; }
-    public decimal TotalProteinGrams { get; set; }
-    public decimal TotalFatGrams { get; set; }
-    public decimal TotalCarbsGrams { get; set; }
-    public decimal TotalAlcoholGrams { get; set; }
-    // Nullable: NULL = no entry of the day carried this data (macro was not
-    // tracked then), a number = the sum over the entries that did carry it.
-    public decimal? TotalSugarGrams { get; set; }
-    public decimal? TotalWaterMl { get; set; }
 
     /// <summary>
-    /// JSON snapshot of the extended macro targets active on this day
-    /// (serialized <see cref="Services.MacroTargets.DayMacroTarget"/> list).
-    /// NULL = the day predates macro tracking or nothing beyond protein was
-    /// tracked. Written on day creation and by refresh-snapshot; past days
-    /// keep the targets they were lived under.
+    /// Sum of the day's entries per macro key, stored as JSON. A key is absent
+    /// when no entry of the day carried it (the macro was not tracked then);
+    /// a number is the sum over the entries that did carry it. Core macros
+    /// are always present.
+    /// </summary>
+    public MacroAmounts MacroTotals { get; set; } = MacroAmounts.Empty;
+
+    /// <summary>
+    /// JSON snapshot of every macro target active on this day, protein
+    /// included (serialized <see cref="DayMacroTarget"/> list, catalog order).
+    /// NULL = nothing was tracked when the day was created. Written on day
+    /// creation and by refresh-snapshot; past days keep the targets they were
+    /// lived under.
     /// </summary>
     public string? MacroTargetsJson { get; set; }
 
@@ -50,7 +51,6 @@ public class DailyLog
     public decimal NetBalanceKcal { get; set; }
     public decimal DailyGoalDeltaKcal { get; set; }
     public decimal CaloriesRemainingToDailyTargetKcal { get; set; }
-    public decimal ProteinRemainingGrams { get; set; }
 
     // Contexto semanal
     public DateOnly WeekStartDate { get; set; }

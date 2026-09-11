@@ -1,4 +1,5 @@
 using Articalorias.DTOs.Favorites;
+using Articalorias.DTOs.FoodParsing;
 
 namespace Articalorias.Interfaces;
 
@@ -9,5 +10,6 @@ namespace Articalorias.Interfaces;
 /// </summary>
 public interface ICombinedParsingService
 {
-    Task<CombinedParseResult> ParseAsync(string freeText);
+    /// <param name="options">Optional macros to extract for the food side (the user's tracked macros).</param>
+    Task<CombinedParseResult> ParseAsync(string freeText, FoodParsingOptions? options = null);
 }

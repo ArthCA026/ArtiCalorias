@@ -9,6 +9,7 @@ import { EmptyState, ErrorState } from '@/components/ui/States';
 import { ConfirmSheet } from '@/components/ui/ActionSheet';
 import { MacroStrip } from '@/components/ui/MacroStrip';
 import { useMacroPreferences } from '@/hooks/useMacroPreferences';
+import { useMacros } from '@/hooks/useMacros';
 import { ItemRow, ItemMeta } from '@/components/ui/ItemRow';
 import { SelectionBar, type SelectionAction } from '@/components/ui/SelectionBar';
 import { Fab } from '@/components/ui/Fab';
@@ -19,6 +20,7 @@ import { foodService } from '@/services/foodService';
 import { dailyLogService } from '@/services/dailyLogService';
 import { queryKeys, invalidateDayData } from '@/lib/queryKeys';
 import { fmt, round1, qtyStr, toDateString } from '@/utils/format';
+import { rowStripItems, scaleMacros, trackedKeysFromPrefs } from '@/utils/macros';
 import { extractApiError } from '@/utils/apiError';
 import type { FoodTemplateResponse } from '@/types';
 import { MealTemplateSheet } from './MealTemplateSheet';
@@ -63,13 +65,8 @@ export function MealTemplates() {
   // Templates are not bound to a day, so their row strips follow the user's
   // CURRENT macro tracking (unlike day entries, which follow frozen targets).
   const { data: macroPrefs } = useMacroPreferences();
-  const extraMacros = useMemo(
-    () =>
-      (macroPrefs ?? [])
-        .filter((p) => p.isTracked && (p.macroKey === 'alcohol' || p.macroKey === 'sugar' || p.macroKey === 'water'))
-        .map((p) => p.macroKey),
-    [macroPrefs],
-  );
+  const { defs } = useMacros();
+  const trackedKeys = useMemo(() => trackedKeysFromPrefs(macroPrefs), [macroPrefs]);
   const toggleSelect = (id: number) =>
     setSelectIds((prev) => {
       const next = new Set(prev ?? []);
@@ -87,10 +84,9 @@ export function MealTemplates() {
           portionDescription: tpl.portionDescription,
           quantity: tpl.defaultQuantity,
           caloriesKcal: round1(tpl.caloriesKcal * tpl.defaultQuantity),
-          proteinGrams: round1(tpl.proteinGrams * tpl.defaultQuantity),
-          fatGrams: round1(tpl.fatGrams * tpl.defaultQuantity),
-          carbsGrams: round1(tpl.carbsGrams * tpl.defaultQuantity),
-          alcoholGrams: round1(tpl.alcoholGrams * tpl.defaultQuantity),
+          // The whole per-portion map scaled: sugar, water and any future
+          // macro the template stores travel along with the core four.
+          macros: scaleMacros(tpl.macros, tpl.defaultQuantity),
           foodTemplateId: tpl.foodTemplateId,
         })
         .then(() => ({ date, name: tpl.templateName }));
@@ -133,12 +129,7 @@ export function MealTemplates() {
           portionDescription: tpl.portionDescription,
           quantity: tpl.defaultQuantity,
           caloriesKcal: round1(tpl.caloriesKcal * tpl.defaultQuantity),
-          proteinGrams: round1(tpl.proteinGrams * tpl.defaultQuantity),
-          fatGrams: round1(tpl.fatGrams * tpl.defaultQuantity),
-          carbsGrams: round1(tpl.carbsGrams * tpl.defaultQuantity),
-          alcoholGrams: round1(tpl.alcoholGrams * tpl.defaultQuantity),
-          sugarGrams: tpl.sugarGrams !== null ? round1(tpl.sugarGrams * tpl.defaultQuantity) : null,
-          waterMl: tpl.waterMl !== null ? round1(tpl.waterMl * tpl.defaultQuantity) : null,
+          macros: scaleMacros(tpl.macros, tpl.defaultQuantity),
           foodTemplateId: tpl.foodTemplateId,
         })),
       }),
@@ -274,22 +265,7 @@ export function MealTemplates() {
                 }
                 footer={
                   <MacroStrip
-                    protein={tpl.proteinGrams * tpl.defaultQuantity}
-                    fat={tpl.fatGrams * tpl.defaultQuantity}
-                    carbs={tpl.carbsGrams * tpl.defaultQuantity}
-                    extras={extraMacros.map((key) => ({
-                      key,
-                      value:
-                        key === 'alcohol'
-                          ? round1(tpl.alcoholGrams * tpl.defaultQuantity)
-                          : key === 'sugar'
-                            ? tpl.sugarGrams !== null
-                              ? round1(tpl.sugarGrams * tpl.defaultQuantity)
-                              : null
-                            : tpl.waterMl !== null
-                              ? round1(tpl.waterMl * tpl.defaultQuantity)
-                              : null,
-                    }))}
+                    items={rowStripItems(scaleMacros(tpl.macros, tpl.defaultQuantity), trackedKeys, defs)}
                   />
                 }
               />

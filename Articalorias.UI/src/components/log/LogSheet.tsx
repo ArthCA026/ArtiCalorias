@@ -38,14 +38,9 @@ const toFoodRequest = (item: ParsedFoodItem): CreateFoodEntryRequest => ({
   portionDescription: item.portionDescription,
   quantity: item.quantity && item.quantity > 0 ? item.quantity : 1,
   caloriesKcal: item.caloriesKcal,
-  proteinGrams: item.proteinGrams,
-  fatGrams: item.fatGrams,
-  carbsGrams: item.carbsGrams,
-  alcoholGrams: item.alcoholGrams,
-  // Only present when the user tracks them; null keeps the honest
-  // "not captured" state in the database.
-  sugarGrams: item.sugarGrams,
-  waterMl: item.waterMl,
+  // Optional macros are only present when the user tracks them (or the
+  // label carries them); an absent key keeps the honest "not captured" state.
+  macros: item.macros,
 });
 
 const toActivityRequest = (item: ParsedActivityItem, genericName: string): CreateActivityEntryRequest => {

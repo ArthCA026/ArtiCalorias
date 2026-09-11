@@ -20,8 +20,9 @@ public class FoodParsingService : IFoodParsingService
     /// <summary>
     /// Part of every cache key: bump whenever the prompt or wire schema
     /// changes so stale answers from the old contract can never be served.
+    /// v5 = catalog-generated schema and prompt (macro keys are open-ended).
     /// </summary>
-    private const string PromptVersion = "v4";
+    private const string PromptVersion = "v5";
 
     private const string CacheType = "food";
 
@@ -68,18 +69,18 @@ public class FoodParsingService : IFoodParsingService
         var opts = options ?? FoodParsingOptions.None;
         var model = _settings.ResolveModel(_settings.FoodModel);
         var normalizedText = AiCacheKey.NormalizeText(freeText);
-        var sugarFlag = opts.IncludeSugar ? "s1" : "s0";
-        var waterFlag = opts.IncludeWater ? "w1" : "w0";
 
         // Cache layer 1 — quantity-normalized, per-unit: "2 huevos", "12 eggs"
         // and "dos huevos" all resolve through ONE stored entry whose per-unit
-        // values are multiplied by the requested quantity on replay.
+        // values are multiplied by the requested quantity on replay. The
+        // tracked-macro token is part of the key: a different option set is a
+        // different schema, so its answers must never be shared.
         var unitForm = QuantityNormalizer.TryNormalize(normalizedText);
         string? unitCacheKey = null;
         if (unitForm is { } uf)
         {
             unitCacheKey = AiCacheKey.Compute(
-                "food-unit", PromptVersion, model, country, sugarFlag, waterFlag, uf.Remainder);
+                "food-unit", PromptVersion, model, country, opts.CacheToken, uf.Remainder);
 
             var unitCached = await _cache.GetAsync(CacheType, unitCacheKey);
             if (unitCached is not null)
@@ -96,7 +97,7 @@ public class FoodParsingService : IFoodParsingService
 
         // Cache layer 2 — exact match on the full normalized text.
         var exactCacheKey = AiCacheKey.Compute(
-            CacheType, PromptVersion, model, country, sugarFlag, waterFlag, normalizedText);
+            CacheType, PromptVersion, model, country, opts.CacheToken, normalizedText);
 
         var cachedContent = await _cache.GetAsync(CacheType, exactCacheKey);
         if (cachedContent is not null)
@@ -158,29 +159,12 @@ public class FoodParsingService : IFoodParsingService
     /// <summary>
     /// Assembles the system prompt for the caller's tracked macros. The base
     /// prompt is untouched when no optional macro is tracked, so default users
-    /// keep a stable extraction contract (and a stable cache-key prefix).
+    /// keep a stable extraction contract (and a stable cache-key prefix). The
+    /// per-macro rules come from the catalog (see FoodPromptFragments).
     /// </summary>
     private static string BuildSystemPrompt(string? country, FoodParsingOptions options)
     {
-        var prompt = DeveloperPrompt;
-
-        var extraRules = new List<string>();
-
-        if (options.IncludeSugar)
-        {
-            extraRules.Add("- sug: total sugar grams for ONE unit (naturally occurring plus added), never multiplied by qty. Sugars are a subset of carb and must never exceed it (a can of cola ~35, a plain egg 0).");
-        }
-
-        if (options.IncludeWater)
-        {
-            extraRules.Add("- h2o: milliliters of drinkable fluid ONE unit contributes, never multiplied by qty. Water and other beverages count at full volume (a 330 ml soda -> 330, a glass of water -> 250 unless specified); solid food is 0 even if moist.");
-        }
-
-        if (extraRules.Count > 0)
-        {
-            prompt += "\n\nADDITIONAL TRACKED FIELDS (the user tracks these; include them on EVERY item)\n"
-                   + string.Join("\n", extraRules);
-        }
+        var prompt = DeveloperPrompt + FoodPromptFragments.AdditionalTrackedFieldsBlock(options);
 
         if (!string.IsNullOrWhiteSpace(country))
         {
@@ -192,7 +176,12 @@ public class FoodParsingService : IFoodParsingService
 
     // Output-format policing lives in the strict JSON schema now; this prompt
     // only carries the extraction semantics that were tuned on real inputs.
-    private const string DeveloperPrompt = """
+    // Built once: the core wire keys and Atwater factors come from the catalog.
+    private static readonly string DeveloperPrompt = DeveloperPromptTemplate
+        .Replace("{CORE_KEYS}", FoodPromptFragments.CoreWireKeys)
+        .Replace("{ATWATER}", FoodPromptFragments.AtwaterSentence);
+
+    private const string DeveloperPromptTemplate = """
             You are a food-intake extraction engine. The user describes foods or drinks in Spanish or English; extract every edible or drinkable item into the schema. Produce realistic, consistent, conservative nutrition estimates based on common foods, brands, and preparation methods. If nothing edible or drinkable is described, return an empty items array.
 
             EXTRACTION RULES
@@ -210,10 +199,10 @@ public class FoodParsingService : IFoodParsingService
 
             NUTRITION RULES
             - Priority order: 1. user-provided calories/macros, 2. known product, brand, or restaurant equivalent, 3. generic food database estimates.
-            - CRITICAL: kcal, prot, fat, carb and alc are each for EXACTLY ONE unit of the food — never the total for the whole quantity. The caller multiplies by qty; if you multiply, the result will be wrong.
+            - CRITICAL: {CORE_KEYS} are each for EXACTLY ONE unit of the food — never the total for the whole quantity. The caller multiplies by qty; if you multiply, the result will be wrong.
               "5 huevos" -> kcal 70 (1 egg), NOT 350. "2 Big Macs" -> kcal 550 (1 Big Mac), NOT 1100.
               "350g de carne" -> qty 1, unit "350 g", kcal 875 (the whole 350 g is the one unit).
-            - Keep values internally consistent using Atwater factors: protein 4 kcal/g, carbs 4 kcal/g, fat 9 kcal/g, alcohol 7 kcal/g.
+            - Keep values internally consistent using Atwater factors: {ATWATER}.
             - Use whole numbers; use one decimal only when a per-unit value is below 10 (e.g. prot 0.6 for one almond). Never negative. If uncertainty is high, use reasonable rounded estimates instead of fake precision.
             - Supplements, medicine, and non-caloric products -> zero or negligible calories and macros.
             - Alcohol: alc is 0 for non-alcoholic items; for alcoholic drinks estimate alc from typical serving and ABV unless specified, and include alcohol calories in kcal.

@@ -73,6 +73,13 @@
   --t-alcohol-soft: #efe3f9;
   --t-water: #0e87c9;
   --t-water-soft: #d9eef9;
+  --t-caffeine: #7c4a1e;
+  --t-caffeine-soft: #f1e3d6;
+  --t-sodium: #4f7f9a;
+  --t-sodium-soft: #dfeaf0;
+  /* Any macro the catalog adds before it gets its own token renders with these */
+  --t-macro-default: #6b7480;
+  --t-macro-default-soft: #e6e9ee;
 
   /* Progress ring gradient (goal gradient effect) */
   --t-ring-from: #38d08f;
@@ -140,6 +147,12 @@
   --t-alcohol-soft: #2c1e40;
   --t-water: #4db3ee;
   --t-water-soft: #10293a;
+  --t-caffeine: #c98a55;
+  --t-caffeine-soft: #33241a;
+  --t-sodium: #7fb3cc;
+  --t-sodium-soft: #17303b;
+  --t-macro-default: #98a2b3;
+  --t-macro-default-soft: #242a33;
 
   /* Progress ring gradient */
   --t-ring-from: #2fdb96;

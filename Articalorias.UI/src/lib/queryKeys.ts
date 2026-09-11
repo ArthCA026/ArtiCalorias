@@ -12,6 +12,7 @@ export const queryKeys = {
   notificationSchedules: () => ['notification-schedules'] as const,
   streak: () => ['streak'] as const,
   macroPreferences: () => ['macro-preferences'] as const,
+  macroCatalog: () => ['macro-catalog'] as const,
   measurements: () => ['measurements'] as const,
   consent: () => ['consent'] as const,
 };

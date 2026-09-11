@@ -9,10 +9,6 @@ export interface UserProfileResponse {
   autoCalculateBMR: boolean;
   autoCalculateBodyFat: boolean;
   dailyBaseGoalKcal: number;
-  proteinGoalGrams: number | null;
-  autoCalculateProteinGoal: boolean;
-  /** Preset g/kg multiplier behind an auto protein goal (null = legacy 2.0). */
-  proteinGoalGramsPerKg: number | null;
   /** Optional "reach X by DATE" goal behind dailyBaseGoalKcal. */
   goalTargetWeightKg: number | null;
   goalTargetBodyFatPercent: number | null;
@@ -43,10 +39,6 @@ export interface UserProfileRequest {
   autoCalculateBMR: boolean;
   autoCalculateBodyFat: boolean;
   dailyBaseGoalKcal?: number | null;
-  proteinGoalGrams?: number | null;
-  autoCalculateProteinGoal: boolean;
-  /** Preset g/kg multiplier behind an auto protein goal. */
-  proteinGoalGramsPerKg?: number | null;
   /** Optional "reach X by DATE" goal behind dailyBaseGoalKcal. */
   goalTargetWeightKg?: number | null;
   goalTargetBodyFatPercent?: number | null;

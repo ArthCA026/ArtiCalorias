@@ -1,8 +1,9 @@
 using System.ComponentModel.DataAnnotations;
+using Articalorias.Services.Macros;
 
 namespace Articalorias.DTOs.FoodTemplates;
 
-public class CreateFoodTemplateRequest
+public class CreateFoodTemplateRequest : IValidatableObject
 {
     [Required]
     [StringLength(150)]
@@ -18,23 +19,11 @@ public class CreateFoodTemplateRequest
     [Range(0, 9999.99)]
     public decimal CaloriesKcal { get; set; }
 
-    [Range(0, 9999.99)]
-    public decimal ProteinGrams { get; set; }
-
-    [Range(0, 9999.99)]
-    public decimal FatGrams { get; set; }
-
-    [Range(0, 9999.99)]
-    public decimal CarbsGrams { get; set; }
-
-    [Range(0, 9999.99)]
-    public decimal AlcoholGrams { get; set; }
-
-    [Range(0, 9999.99)]
-    public decimal? SugarGrams { get; set; }
-
-    [Range(0, 99999.99)]
-    public decimal? WaterMl { get; set; }
+    /// <summary>Amounts PER 1 PORTION keyed by catalog macro key (absent = not captured, core macros default to 0).</summary>
+    public Dictionary<string, decimal>? Macros { get; set; }
 
     public bool AutoAddToNewDay { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        => MacroInputValidator.Validate(Macros);
 }

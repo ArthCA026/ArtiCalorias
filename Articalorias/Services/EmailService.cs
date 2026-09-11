@@ -9,19 +9,26 @@ namespace Articalorias.Services;
 
 public class EmailService : IEmailService
 {
-    private readonly SmtpSettings _smtp;
+    // SmtpClient's default is 100 s; a stalled provider must not hold the
+    // request (and the user's spinner) for that long.
+    private const int SmtpTimeoutMilliseconds = 20_000;
 
-    public EmailService(IOptions<SmtpSettings> smtp)
+    private readonly SmtpSettings _smtp;
+    private readonly ILogger<EmailService> _logger;
+
+    public EmailService(IOptions<SmtpSettings> smtp, ILogger<EmailService> logger)
     {
         _smtp = smtp.Value;
+        _logger = logger;
     }
 
-    public async Task SendPasswordResetEmailAsync(string toEmail, string resetToken)
+    public async Task SendPasswordResetEmailAsync(string toEmail, string resetToken, CancellationToken ct = default)
     {
         using var client = new SmtpClient(_smtp.Host, _smtp.Port)
         {
             Credentials = new NetworkCredential(_smtp.Username, _smtp.Password),
-            EnableSsl = _smtp.EnableSsl
+            EnableSsl = _smtp.EnableSsl,
+            Timeout = SmtpTimeoutMilliseconds
         };
 
         var year = DateTime.UtcNow.Year;
@@ -140,6 +147,23 @@ public class EmailService : IEmailService
         var htmlView = AlternateView.CreateAlternateViewFromString(htmlBody, null, MediaTypeNames.Text.Html);
         message.AlternateViews.Add(htmlView);
 
-        await client.SendMailAsync(message);
+        try
+        {
+            await client.SendMailAsync(message, ct);
+        }
+        catch (SmtpException ex)
+        {
+            // System.Net.Mail swallows a non-2xx/3xx reply to AUTH (e.g. SendGrid's
+            // "451 Authentication failed: Maximum credits exceeded") and carries on
+            // unauthenticated, so the provider then drops the socket and all we get
+            // is "connection was closed". Spell out where to look so the next person
+            // reading this log doesn't have to rediscover that.
+            _logger.LogError(ex,
+                "SMTP send via {Host}:{Port} failed (status {StatusCode}, inner: {Inner}). " +
+                "A dropped connection right after AUTH usually means the provider account is " +
+                "rejecting us: check credentials, sending quota/credits, and sender verification.",
+                _smtp.Host, _smtp.Port, ex.StatusCode, ex.InnerException?.Message ?? "none");
+            throw;
+        }
     }
 }

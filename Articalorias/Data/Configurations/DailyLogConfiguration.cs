@@ -1,3 +1,4 @@
+using Articalorias.Data.Conversions;
 using Articalorias.Models.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -20,17 +21,11 @@ public class DailyLogConfiguration : IEntityTypeConfiguration<DailyLog>
         builder.Property(d => d.SnapshotBMRKcal).HasColumnType("decimal(10,2)");
         builder.Property(d => d.SnapshotBodyFatPercent).HasColumnType("decimal(5,2)");
         builder.Property(d => d.SnapshotDailyBaseGoalKcal).HasColumnType("decimal(10,2)");
-        builder.Property(d => d.SnapshotProteinGoalGrams).HasColumnType("decimal(10,2)");
 
         // Ingesta
         builder.Property(d => d.TotalFoodCaloriesKcal).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
-        builder.Property(d => d.TotalProteinGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
-        builder.Property(d => d.TotalFatGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
-        builder.Property(d => d.TotalCarbsGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
-        builder.Property(d => d.TotalAlcoholGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
-        builder.Property(d => d.TotalSugarGrams).HasColumnType("decimal(10,2)");
-        builder.Property(d => d.TotalWaterMl).HasColumnType("decimal(10,2)");
-        builder.Property(d => d.MacroTargetsJson).HasMaxLength(1000);
+        builder.Property(d => d.MacroTotals).IsMacroAmountsJson("MacroTotalsJson");
+        builder.Property(d => d.MacroTargetsJson).HasColumnType("nvarchar(max)");
 
         // Gasto
         builder.Property(d => d.TotalActivityCaloriesKcal).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
@@ -47,7 +42,6 @@ public class DailyLogConfiguration : IEntityTypeConfiguration<DailyLog>
         builder.Property(d => d.NetBalanceKcal).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
         builder.Property(d => d.DailyGoalDeltaKcal).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
         builder.Property(d => d.CaloriesRemainingToDailyTargetKcal).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
-        builder.Property(d => d.ProteinRemainingGrams).HasColumnType("decimal(10,2)").HasDefaultValue(0m);
 
         // Semanal
         builder.Property(d => d.WeeklyTargetKcal).HasColumnType("decimal(10,2)").HasDefaultValue(0m);

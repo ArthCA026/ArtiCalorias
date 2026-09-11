@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router';
 import { PublicOnly, RequireAuth, RequireConsented, RequireOnboarded } from './guards';
+import CatalogBoundary from './CatalogBoundary';
 import AuthLayout from '@/layouts/AuthLayout';
 import AppLayout from '@/layouts/AppLayout';
 import LoginPage from '@/pages/LoginPage';
@@ -49,30 +50,36 @@ const router = createBrowserRouter([
     // there, and Ley 8968 requires consent BEFORE collection.
     element: <RequireConsented />,
     children: [
-      { path: '/onboarding', element: <OnboardingPage /> },
       {
-        element: <RequireOnboarded />,
+        // The macro catalog is loaded once here for onboarding and the app.
+        element: <CatalogBoundary />,
         children: [
-          { path: '/premium', element: <PremiumPage /> },
+          { path: '/onboarding', element: <OnboardingPage /> },
           {
-            element: <AppLayout />,
+            element: <RequireOnboarded />,
             children: [
-              { path: '/today', element: <TodayPage /> },
-              { path: '/day/:date', element: <DayPage /> },
-              { path: '/templates', element: <TemplatesPage /> },
-              { path: '/progress', element: <ProgressPage /> },
-              { path: '/progress/body', element: <BodyPage /> },
-              { path: '/profile', element: <ProfilePage /> },
-              { path: '/profile/macros', element: <MacrosPage /> },
-              { path: '/profile/goal', element: <GoalPage /> },
+              { path: '/premium', element: <PremiumPage /> },
+              {
+                element: <AppLayout />,
+                children: [
+                  { path: '/today', element: <TodayPage /> },
+                  { path: '/day/:date', element: <DayPage /> },
+                  { path: '/templates', element: <TemplatesPage /> },
+                  { path: '/progress', element: <ProgressPage /> },
+                  { path: '/progress/body', element: <BodyPage /> },
+                  { path: '/profile', element: <ProfilePage /> },
+                  { path: '/profile/macros', element: <MacrosPage /> },
+                  { path: '/profile/goal', element: <GoalPage /> },
+                ],
+              },
+              // Legacy routes from the previous UI
+              { path: '/favorites', element: <Navigate to="/templates" replace /> },
+              { path: '/activities', element: <Navigate to="/templates" replace /> },
+              { path: '/history', element: <Navigate to="/progress" replace /> },
+              { path: '/history/:date', element: <Navigate to="/progress" replace /> },
+              { path: '/settings', element: <Navigate to="/profile" replace /> },
             ],
           },
-          // Legacy routes from the previous UI
-          { path: '/favorites', element: <Navigate to="/templates" replace /> },
-          { path: '/activities', element: <Navigate to="/templates" replace /> },
-          { path: '/history', element: <Navigate to="/progress" replace /> },
-          { path: '/history/:date', element: <Navigate to="/progress" replace /> },
-          { path: '/settings', element: <Navigate to="/profile" replace /> },
         ],
       },
     ],

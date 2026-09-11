@@ -44,6 +44,7 @@ export const termsEs: PolicyDocument = {
       paragraphs: [
         'ArtiCalorias ofrece estimaciones informativas basadas en fórmulas generales. No es un dispositivo médico y no sustituye el consejo de profesionales en medicina o nutrición.',
         'Consulta a un profesional antes de hacer cambios importantes en tu alimentación o ejercicio, en especial si tienes una condición de salud o un historial de trastornos de la conducta alimentaria. La aplicación aplica límites mínimos de seguridad en las metas de calorías, pero eso no convierte sus cálculos en recomendaciones médicas.',
+        'Las metas y límites de nutrientes que muestra la aplicación, por ejemplo de proteína, cafeína o sodio, son valores de referencia generales de salud pública, no recomendaciones personalizadas. El embarazo, la medicación y las condiciones médicas cambian lo que es adecuado para ti.',
       ],
     },
     {

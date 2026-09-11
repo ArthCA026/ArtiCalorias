@@ -29,12 +29,9 @@ public static class FoodTemplateMath
             PortionDescription = template.PortionDescription,
             Quantity = qty,
             CaloriesKcal = Math.Round(template.CaloriesKcal * qty, 2),
-            ProteinGrams = Math.Round(template.ProteinGrams * qty, 2),
-            FatGrams = Math.Round(template.FatGrams * qty, 2),
-            CarbsGrams = Math.Round(template.CarbsGrams * qty, 2),
-            AlcoholGrams = Math.Round(template.AlcoholGrams * qty, 2),
-            SugarGrams = template.SugarGrams.HasValue ? Math.Round(template.SugarGrams.Value * qty, 2) : null,
-            WaterMl = template.WaterMl.HasValue ? Math.Round(template.WaterMl.Value * qty, 2) : null,
+            // The whole map scales, whatever macros the template carries;
+            // absent keys stay absent (not captured then).
+            Macros = template.Macros.Scale(qty, 2).EnsureCore(),
             SortOrder = sortOrder,
             CreatedAtUtc = DateTime.UtcNow,
             UpdatedAtUtc = DateTime.UtcNow,

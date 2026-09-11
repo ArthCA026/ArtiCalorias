@@ -7,9 +7,11 @@ import { Button, IconButton } from '@/components/ui/Button';
 import { DecimalField, Field } from '@/components/ui/Field';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { ProgressBar } from '@/components/ui/Progress';
-import { Icon, type IconName } from '@/components/ui/Icon';
+import { Icon, iconOrFallback, type IconName } from '@/components/ui/Icon';
 import { InlineError } from '@/components/ui/States';
+import { SkeletonCard } from '@/components/ui/Skeleton';
 import { useAuth } from '@/hooks/useAuth';
+import { useMacros } from '@/hooks/useMacros';
 import { useUnits } from '@/hooks/useUnits';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useNotificationSettings } from '@/hooks/useNotificationSettings';
@@ -29,15 +31,15 @@ import {
 } from '@/utils/units';
 import { GOAL_PRESETS, matchPreset } from '@/utils/goalUtils';
 import { GoalPlanner, type GoalSelection } from '@/components/goal/GoalPlanner';
-import { PROTEIN_PRESETS, getAgeProteinMinimum, type ProteinPresetId } from '@/config/proteinPresets';
-import { MACRO_META, macroLabel } from '@/utils/macros';
+import { getAgeProteinMinimum } from '@/config/proteinPresets';
+import { macroColor, macroSoftColor, pickLabel, previewAutoTarget } from '@/utils/macros';
 import { macroService } from '@/services/macroService';
 import { parseDate } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 import { cn } from '@/utils/cn';
 import { PolicySheet } from '@/components/legal/PolicySheet';
 import type { PolicyDocKey } from '@/legal/documents';
-import type { MacroKey } from '@/types';
+import type { MacroDefinition, UpdateMacroPreferenceItem } from '@/types';
 
 /**
  * Onboarding wizard. Endowed progress: the bar starts at 25% because
@@ -47,7 +49,21 @@ import type { MacroKey } from '@/types';
  */
 
 const TOTAL_STEPS = 6; // account (done), body, goal, protein, macros, reminders
-const ONBOARDING_MACROS: MacroKey[] = ['carbs', 'fat', 'sugar', 'water', 'alcohol'];
+/** How many optional macros show before the "More options" fold. */
+const MACROS_ABOVE_FOLD = 5;
+
+/**
+ * The preset preselected on the protein step: the catalog default, else the
+ * second preset (the everyday middle ground), else no target at all.
+ */
+const defaultProteinParam = (def: MacroDefinition): number | 'none' => {
+  const presets = def.autoPresets;
+  return (
+    presets.find((p) => p.param === def.targetFormula.defaultParam)?.param ??
+    presets[1]?.param ??
+    'none'
+  );
+};
 
 const num = (raw: string): number | null => {
   if (raw.trim() === '') return null;
@@ -56,12 +72,16 @@ const num = (raw: string): number | null => {
 };
 
 export default function OnboardingPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { logout } = useAuth();
   const { system, setSystem, weightUnit } = useUnits();
   const imperial = system === 'imperial';
+  const { defs, get, label, isLoading: catalogLoading } = useMacros();
+  const proteinDef = get('protein');
+  // Every other active macro is an opt-in card on the macros step.
+  const optionalDefs = defs.filter((d) => d.key !== 'protein');
 
   const [step, setStep] = useState(0); // 0=body, 1=goal, 2=protein, 3=macros, 4=reminders, 5=summary
   const push = usePushNotifications();
@@ -77,9 +97,12 @@ export default function OnboardingPage() {
   const [manualBmr, setManualBmr] = useState('');
   const [manualBf, setManualBf] = useState('');
   const [goalSelection, setGoalSelection] = useState<GoalSelection | null>(null);
-  // 'none' = the user prefers not to track protein at all.
-  const [proteinId, setProteinId] = useState<ProteinPresetId | 'none'>('everyday');
-  const [trackedMacros, setTrackedMacros] = useState<Set<MacroKey>>(new Set());
+  // The chosen protein preset (its g/kg); 'none' = no protein target at all.
+  // Null = untouched, so the catalog default applies, which also covers the
+  // catalog arriving after this screen mounted.
+  const [proteinChoice, setProteinChoice] = useState<number | 'none' | null>(null);
+  const [trackedMacros, setTrackedMacros] = useState<Set<string>>(new Set());
+  const [showMoreMacros, setShowMoreMacros] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [policyDoc, setPolicyDoc] = useState<PolicyDocKey | null>(null);
 
@@ -127,11 +150,12 @@ export default function OnboardingPage() {
   const bmrOverride = num(manualBmr);
   const bfOverride = num(manualBf);
 
-  const proteinPreset = proteinId === 'none' ? null : PROTEIN_PRESETS.find((p) => p.id === proteinId)!;
-  const proteinGrams =
-    proteinPreset !== null && weightKg !== null
-      ? Math.round(weightKg * Math.max(proteinPreset.gramsPerKg, getAgeProteinMinimum(a ?? 30)))
-      : null;
+  const proteinParam: number | 'none' = proteinChoice ?? defaultProteinParam(proteinDef);
+  // Same formula the server applies (g/kg with the age floor), previewed from
+  // what was typed so far; null until there is a weight to multiply.
+  const proteinPreview = (param: number) =>
+    previewAutoTarget(proteinDef, param, { currentWeightKg: weightKg, age: a }, getAgeProteinMinimum);
+  const proteinGrams = proteinParam === 'none' ? null : proteinPreview(proteinParam);
 
   // Local preview with the same formulas the server uses (Mifflin-St Jeor).
   // A manual BMR takes over exactly like it does server-side.
@@ -202,13 +226,6 @@ export default function OnboardingPage() {
           goalTargetWeightKg: goalSelection?.goalTargetWeightKg ?? null,
           goalTargetBodyFatPercent: goalSelection?.goalTargetBodyFatPercent ?? null,
           goalTargetDate: goalSelection?.goalTargetDate ?? null,
-          // 'none' = protein off from day one. A preset stores its g/kg
-          // multiplier in AUTO mode, so the target derives from the weight
-          // now, activates by itself if the weight arrives later, and keeps
-          // following the body from then on.
-          proteinGoalGrams: null,
-          autoCalculateProteinGoal: proteinId !== 'none',
-          proteinGoalGramsPerKg: proteinPreset?.gramsPerKg ?? null,
           calorieDisplayMode: 'adjusted',
           minCaloriesSafeguardEnabled: true,
           sleepHours: 8,
@@ -217,22 +234,36 @@ export default function OnboardingPage() {
         .then((r) => r.data);
 
       // Macro choices go in BEFORE the first day is created (the Today
-      // dashboard freezes its targets at creation). A failure here is not
-      // fatal: tracking can always be turned on later in Profile.
-      if (trackedMacros.size > 0) {
-        try {
-          await macroService.updatePreferences({
-            items: ONBOARDING_MACROS.map((key) => ({
-              macroKey: key,
-              isTracked: trackedMacros.has(key),
-              targetMode: 'auto',
-              customTargetValue: null,
-            })),
-          });
-        } catch {
-          /* non-critical */
-        }
+      // dashboard freezes its targets at creation). Protein is one
+      // preference among the others: 'none' = off from day one, a preset
+      // stores its g/kg in AUTO mode so the target derives from the weight
+      // now, activates by itself if the weight arrives later, and keeps
+      // following the body from then on. A failure here is not fatal:
+      // tracking can always be turned on later in Profile.
+      const items: UpdateMacroPreferenceItem[] = [
+        {
+          macroKey: 'protein',
+          isTracked: proteinParam !== 'none',
+          targetMode: 'auto',
+          customTargetValue: null,
+          autoParam: proteinParam === 'none' ? null : proteinParam,
+        },
+        ...optionalDefs.map(
+          (d): UpdateMacroPreferenceItem => ({
+            macroKey: d.key,
+            isTracked: trackedMacros.has(d.key),
+            targetMode: 'auto',
+            customTargetValue: null,
+            autoParam: null,
+          }),
+        ),
+      ];
+      try {
+        await macroService.updatePreferences({ items });
+      } catch {
+        /* non-critical */
       }
+      void queryClient.invalidateQueries({ queryKey: queryKeys.macroPreferences() });
 
       return profile;
     },
@@ -257,6 +288,49 @@ export default function OnboardingPage() {
         : true;
 
   const progress = (step + 1) / (TOTAL_STEPS + 1);
+
+  // One opt-in card per catalog macro: icon, colour, name and whether it is
+  // a goal or a limit all come from the definition, so a macro added on the
+  // server shows up here with no UI change.
+  const macroCard = (def: MacroDefinition) => {
+    const active = trackedMacros.has(def.key);
+    return (
+      <button
+        key={def.key}
+        type="button"
+        role="checkbox"
+        aria-checked={active}
+        onClick={() =>
+          setTrackedMacros((prev) => {
+            const next = new Set(prev);
+            if (next.has(def.key)) next.delete(def.key);
+            else next.add(def.key);
+            return next;
+          })
+        }
+        className={cn(
+          'pressable w-full rounded-card px-4 py-3 text-left flex items-center gap-3',
+          active ? 'bg-primary-soft ring-2 ring-primary/60' : 'bg-card',
+        )}
+      >
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+          style={{ background: macroSoftColor(def.key), color: macroColor(def.key) }}
+        >
+          <Icon name={iconOrFallback(def.icon)} size={18} />
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="text-[15px] font-bold text-ink">{label(def)}</span>
+          <span className="block text-[12px] text-ink-2 mt-0.5">
+            {def.direction === 'limit'
+              ? t('macros.kind_limit', 'A limit: warns when you go over')
+              : t('macros.kind_hit', 'A goal: fill the bar to reach it')}
+          </span>
+        </span>
+        {active && <Icon name="checkCircle" size={20} className="text-primary shrink-0" />}
+      </button>
+    );
+  };
 
   return (
     <main className="mx-auto max-w-md min-h-dvh px-5 pt-6 pb-10 pt-safe flex flex-col">
@@ -471,32 +545,36 @@ export default function OnboardingPage() {
                 {t('onboarding.protein_sub', 'It keeps you full and protects muscle. Pick what fits your routine.')}
               </p>
             </div>
+            {catalogLoading && proteinDef.autoPresets.length === 0 && <SkeletonCard rows={3} />}
             <div className="space-y-2" role="radiogroup" aria-label={t('onboarding.protein_title', 'Protein matters too')}>
-              {PROTEIN_PRESETS.map((p) => {
-                const active = proteinId === p.id;
-                const grams =
-                  weightKg !== null
-                    ? Math.round(weightKg * Math.max(p.gramsPerKg, getAgeProteinMinimum(a ?? 30)))
-                    : null;
+              {proteinDef.autoPresets.map((p) => {
+                const active = proteinParam === p.param;
+                const grams = proteinPreview(p.param);
+                const description = pickLabel(p.labels.description, i18n.language);
                 return (
                   <button
                     key={p.id}
                     type="button"
                     role="radio"
                     aria-checked={active}
-                    onClick={() => setProteinId(p.id)}
+                    onClick={() => setProteinChoice(p.param)}
                     className={cn(
                       'pressable w-full rounded-card px-4 py-3 text-left flex items-center gap-3',
                       active ? 'bg-primary-soft ring-2 ring-primary/60' : 'bg-card',
                     )}
                   >
-                    <span className="flex-1">
-                      <span className="text-[15px] font-bold text-ink">{t(`protein.${p.id}`, p.label)}</span>
-                      <span className="block text-[12px] text-ink-2 mt-0.5">
-                        {p.gramsPerKg} g/kg{grams !== null ? ` = ${grams} g` : ''}
+                    <span className="flex-1 min-w-0">
+                      <span className="text-[15px] font-bold text-ink">
+                        {pickLabel(p.labels.name, i18n.language, p.id)}
                       </span>
+                      <span className="block text-[12px] text-ink-2 mt-0.5">
+                        {p.param} g/kg{grams !== null ? ` = ${grams} g` : ''}
+                      </span>
+                      {description !== '' && (
+                        <span className="block text-[12px] text-ink-3 mt-0.5 leading-snug">{description}</span>
+                      )}
                     </span>
-                    {active && <Icon name="checkCircle" size={20} className="text-primary" />}
+                    {active && <Icon name="checkCircle" size={20} className="text-primary shrink-0" />}
                   </button>
                 );
               })}
@@ -504,11 +582,11 @@ export default function OnboardingPage() {
               <button
                 type="button"
                 role="radio"
-                aria-checked={proteinId === 'none'}
-                onClick={() => setProteinId('none')}
+                aria-checked={proteinParam === 'none'}
+                onClick={() => setProteinChoice('none')}
                 className={cn(
                   'pressable w-full rounded-card px-4 py-3 text-left flex items-center gap-3',
-                  proteinId === 'none' ? 'bg-primary-soft ring-2 ring-primary/60' : 'bg-card',
+                  proteinParam === 'none' ? 'bg-primary-soft ring-2 ring-primary/60' : 'bg-card',
                 )}
               >
                 <span className="flex-1">
@@ -519,7 +597,7 @@ export default function OnboardingPage() {
                     {t('onboarding.protein_none_sub', 'Track calories only. You can turn it on any time in Profile.')}
                   </span>
                 </span>
-                {proteinId === 'none' && <Icon name="checkCircle" size={20} className="text-primary" />}
+                {proteinParam === 'none' && <Icon name="checkCircle" size={20} className="text-primary" />}
               </button>
             </div>
           </div>
@@ -535,48 +613,26 @@ export default function OnboardingPage() {
                 {t('onboarding.macros_sub', 'Each one gets its own bar on your day, with a target set for you. Most people start with none and add later.')}
               </p>
             </div>
+            {catalogLoading && optionalDefs.length === 0 && <SkeletonCard rows={3} />}
             <div className="space-y-2">
-              {ONBOARDING_MACROS.map((key) => {
-                const meta = MACRO_META[key];
-                const active = trackedMacros.has(key);
-                const isLimit = key === 'sugar' || key === 'alcohol';
-                return (
+              {optionalDefs.slice(0, MACROS_ABOVE_FOLD).map(macroCard)}
+              {optionalDefs.length > MACROS_ABOVE_FOLD && (
+                <>
+                  {/* Folded like the special details on the body step: the
+                      first handful covers most people, the rest is one tap
+                      away instead of a wall of cards. */}
                   <button
-                    key={key}
                     type="button"
-                    role="checkbox"
-                    aria-checked={active}
-                    onClick={() =>
-                      setTrackedMacros((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(key)) next.delete(key);
-                        else next.add(key);
-                        return next;
-                      })
-                    }
-                    className={cn(
-                      'pressable w-full rounded-card px-4 py-3 text-left flex items-center gap-3',
-                      active ? 'bg-primary-soft ring-2 ring-primary/60' : 'bg-card',
-                    )}
+                    aria-expanded={showMoreMacros}
+                    className="pressable flex items-center gap-1 text-sm font-semibold text-primary-soft-ink py-1"
+                    onClick={() => setShowMoreMacros((v) => !v)}
                   >
-                    <span
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-inset"
-                      style={{ color: meta.color }}
-                    >
-                      <Icon name={meta.icon} size={18} />
-                    </span>
-                    <span className="flex-1">
-                      <span className="text-[15px] font-bold text-ink">{macroLabel(t, key)}</span>
-                      <span className="block text-[12px] text-ink-2 mt-0.5">
-                        {isLimit
-                          ? t('macros.kind_limit', 'A limit: warns when you go over')
-                          : t('macros.kind_hit', 'A goal: fill the bar to reach it')}
-                      </span>
-                    </span>
-                    {active && <Icon name="checkCircle" size={20} className="text-primary shrink-0" />}
+                    <Icon name={showMoreMacros ? 'chevronUp' : 'chevronDown'} size={16} />
+                    {t('onboarding.macros_more', 'More options')}
                   </button>
-                );
-              })}
+                  {showMoreMacros && optionalDefs.slice(MACROS_ABOVE_FOLD).map(macroCard)}
+                </>
+              )}
             </div>
             <p className="text-[13px] text-ink-3 leading-relaxed">
               {t('onboarding.macros_hint', 'Nothing is mandatory. Every choice here can be changed in Profile, under Macro tracking.')}
@@ -614,7 +670,7 @@ export default function OnboardingPage() {
               )}
               {proteinGrams !== null && (
                 <SummaryRow
-                  icon="drumstick"
+                  icon={iconOrFallback(proteinDef.icon)}
                   label={t('onboarding.summary_protein', 'Protein target')}
                   value={`${proteinGrams} g`}
                 />

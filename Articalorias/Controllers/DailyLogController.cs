@@ -7,7 +7,7 @@ using Articalorias.DTOs.FoodParsing;
 using Articalorias.Filters;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
-using Articalorias.Services;
+using Articalorias.Services.Macros;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -192,13 +192,8 @@ public class DailyLogController : ControllerBase
     /// The prompt only asks for what the user actually tracks: extra fields
     /// make parsing slower, costlier and less accurate for everyone else.
     /// </summary>
-    private async Task<FoodParsingOptions> GetParsingOptionsAsync(long userId)
-    {
-        var prefs = await _macroPreferences.GetForUserAsync(userId);
-        return new FoodParsingOptions(
-            IncludeSugar: prefs.Any(p => p.MacroKey == MacroTargets.Sugar && p.IsTracked),
-            IncludeWater: prefs.Any(p => p.MacroKey == MacroTargets.Water && p.IsTracked));
-    }
+    private Task<FoodParsingOptions> GetParsingOptionsAsync(long userId)
+        => _macroPreferences.GetParsingOptionsAsync(userId);
 
     // ── Batch confirm (user reviewed AI proposals and hit confirm) ──
 
@@ -218,12 +213,7 @@ public class DailyLogController : ControllerBase
             PortionDescription = i.PortionDescription,
             Quantity = i.Quantity,
             CaloriesKcal = i.CaloriesKcal,
-            ProteinGrams = i.ProteinGrams,
-            FatGrams = i.FatGrams,
-            CarbsGrams = i.CarbsGrams,
-            AlcoholGrams = i.AlcoholGrams,
-            SugarGrams = i.SugarGrams,
-            WaterMl = i.WaterMl,
+            Macros = MacroAmounts.FromRequest(i.Macros),
             Notes = i.Notes
         }).ToList();
 
@@ -307,12 +297,7 @@ public class DailyLogController : ControllerBase
             PortionDescription = request.PortionDescription,
             Quantity = request.Quantity,
             CaloriesKcal = request.CaloriesKcal,
-            ProteinGrams = request.ProteinGrams,
-            FatGrams = request.FatGrams,
-            CarbsGrams = request.CarbsGrams,
-            AlcoholGrams = request.AlcoholGrams,
-            SugarGrams = request.SugarGrams,
-            WaterMl = request.WaterMl,
+            Macros = MacroAmounts.FromRequest(request.Macros),
             FoodTemplateId = request.FoodTemplateId,
             Notes = request.Notes
         };
@@ -331,12 +316,7 @@ public class DailyLogController : ControllerBase
             PortionDescription = request.PortionDescription,
             Quantity = request.Quantity,
             CaloriesKcal = request.CaloriesKcal,
-            ProteinGrams = request.ProteinGrams,
-            FatGrams = request.FatGrams,
-            CarbsGrams = request.CarbsGrams,
-            AlcoholGrams = request.AlcoholGrams,
-            SugarGrams = request.SugarGrams,
-            WaterMl = request.WaterMl,
+            Macros = MacroAmounts.FromRequest(request.Macros),
             Notes = request.Notes
         };
 
@@ -399,28 +379,22 @@ public class DailyLogController : ControllerBase
 
     /// <summary>Shared with HistoryController: keeps every daily payload identical.</summary>
     internal static List<DayMacroTargetResponse> MapMacroTargets(string? json) =>
-        MacroTargets.ParseJson(json)
+        MacroTargetEngine.ParseJson(json)
             .Select(t => new DayMacroTargetResponse { MacroKey = t.Key, Target = t.Target, Direction = t.Direction })
             .ToList();
 
-    private static DailyLogResponse MapToResponse(DailyLog d) => new()
+    /// <summary>Shared with HistoryController: keeps every daily payload identical.</summary>
+    internal static DailyLogResponse MapToResponse(DailyLog d) => new()
     {
         DailyLogId = d.DailyLogId,
         LogDate = d.LogDate,
         TotalFoodCaloriesKcal = d.TotalFoodCaloriesKcal,
-        TotalProteinGrams = d.TotalProteinGrams,
-        TotalFatGrams = d.TotalFatGrams,
-        TotalCarbsGrams = d.TotalCarbsGrams,
-        TotalAlcoholGrams = d.TotalAlcoholGrams,
-        TotalSugarGrams = d.TotalSugarGrams,
-        TotalWaterMl = d.TotalWaterMl,
+        MacroTotals = d.MacroTotals.EnsureCore().ToDictionary(),
         MacroTargets = MapMacroTargets(d.MacroTargetsJson),
         TotalDailyExpenditureKcal = d.TotalDailyExpenditureKcal,
         DailyGoalDeltaKcal = d.DailyGoalDeltaKcal,
         CaloriesRemainingToDailyTargetKcal = d.CaloriesRemainingToDailyTargetKcal,
-        ProteinRemainingGrams = d.ProteinRemainingGrams,
         SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
-        SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams,
         SnapshotDailyBaseGoalKcal = d.SnapshotDailyBaseGoalKcal,
         IsFastingDay = d.IsFastingDay,
         HasCalorieBudgetEstimate = d.SnapshotWeightKg.HasValue && d.SnapshotHeightCm.HasValue
@@ -433,12 +407,7 @@ public class DailyLogController : ControllerBase
         PortionDescription = f.PortionDescription,
         Quantity = f.Quantity,
         CaloriesKcal = f.CaloriesKcal,
-        ProteinGrams = f.ProteinGrams,
-        FatGrams = f.FatGrams,
-        CarbsGrams = f.CarbsGrams,
-        AlcoholGrams = f.AlcoholGrams,
-        SugarGrams = f.SugarGrams,
-        WaterMl = f.WaterMl,
+        Macros = f.Macros.EnsureCore().ToDictionary(),
         SortOrder = f.SortOrder,
         Notes = f.Notes
     };
@@ -463,17 +432,13 @@ public class DailyLogController : ControllerBase
         DailyLogId = d.DailyLogId,
         LogDate = d.LogDate,
         TotalFoodCaloriesKcal = d.TotalFoodCaloriesKcal,
-        TotalProteinGrams = d.TotalProteinGrams,
-        TotalSugarGrams = d.TotalSugarGrams,
-        TotalWaterMl = d.TotalWaterMl,
+        MacroTotals = d.MacroTotals.EnsureCore().ToDictionary(),
         MacroTargets = MapMacroTargets(d.MacroTargetsJson),
         HasEverLoggedFood = hasEverLoggedFood,
         TotalDailyExpenditureKcal = d.TotalDailyExpenditureKcal,
         DailyGoalDeltaKcal = d.DailyGoalDeltaKcal,
         CaloriesRemainingToDailyTargetKcal = d.CaloriesRemainingToDailyTargetKcal,
-        ProteinRemainingGrams = d.ProteinRemainingGrams,
         SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
-        SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams,
         SnapshotDailyBaseGoalKcal = d.SnapshotDailyBaseGoalKcal,
         IsFastingDay = d.IsFastingDay,
         FoodEntries = foods.Select(MapFoodToResponse).ToList(),
@@ -486,9 +451,6 @@ public class DailyLogController : ControllerBase
         SnapshotHeightCm = d.SnapshotHeightCm,
         SnapshotBMRKcal = d.SnapshotBMRKcal,
         SnapshotBodyFatPercent = d.SnapshotBodyFatPercent,
-        TotalFatGrams = d.TotalFatGrams,
-        TotalCarbsGrams = d.TotalCarbsGrams,
-        TotalAlcoholGrams = d.TotalAlcoholGrams,
         TotalActivityCaloriesKcal = d.TotalActivityCaloriesKcal,
         TEFKcal = d.TEFKcal,
         HoursRemainingInDay = d.HoursRemainingInDay,

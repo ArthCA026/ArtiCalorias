@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
@@ -7,7 +7,8 @@ import { ConfirmSheet } from '@/components/ui/ActionSheet';
 import { Button } from '@/components/ui/Button';
 import { Field, DecimalField } from '@/components/ui/Field';
 import { QuantityField, QuickAmountSheet } from '@/components/ui/QuantityField';
-import { MacroStrip, type MacroStripExtra } from '@/components/ui/MacroStrip';
+import { MacroStrip } from '@/components/ui/MacroStrip';
+import { MacroFieldsGrid } from '@/components/ui/MacroFieldsGrid';
 import { ItemRow, ItemMeta } from '@/components/ui/ItemRow';
 import { AmountChip } from '@/components/ui/AmountChip';
 import { SelectionBar, type SelectionAction } from '@/components/ui/SelectionBar';
@@ -16,6 +17,7 @@ import { EmptyState, InlineError } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
 import { useLogSheet } from '@/components/log/LogSheetContext';
 import { MarkFastingButton, FastingState } from '@/components/today/FastingControls';
+import { useMacros } from '@/hooks/useMacros';
 import { foodService } from '@/services/foodService';
 import { activityService } from '@/services/activityService';
 import { foodTemplateService } from '@/services/foodTemplateService';
@@ -23,7 +25,15 @@ import { dailyLogService } from '@/services/dailyLogService';
 import { queryKeys } from '@/lib/queryKeys';
 import { extractApiError } from '@/utils/apiError';
 import { fmt, round1, qtyStr, toDateString } from '@/utils/format';
-import type { ActivityEntryResponse, FoodEntryResponse, MacroKey, UpdateFoodEntryRequest } from '@/types';
+import {
+  macroFieldsFrom,
+  parseMacroFields,
+  perUnitMacros,
+  rowStripItems,
+  scaleMacros,
+  sortKeysByCatalog,
+} from '@/utils/macros';
+import type { ActivityEntryResponse, FoodEntryResponse, UpdateFoodEntryRequest } from '@/types';
 
 const num = (raw: string): number => {
   const n = Number(raw.replace(',', '.'));
@@ -69,8 +79,8 @@ function useSelection<TId>() {
 interface MealsListProps {
   date: string;
   entries: FoodEntryResponse[];
-  /** Extra tracked macros (alcohol/sugar/water) appended to each row's strip */
-  extraMacros?: MacroKey[];
+  /** Macros the day tracks (its frozen targets): decides the extra strip columns and edit fields */
+  trackedKeys: Set<string>;
   /** Drives the empty state tense: still open today, closed on a past day */
   isToday: boolean;
   /** The day is a marked deliberate fast (only meaningful when empty) */
@@ -80,7 +90,7 @@ interface MealsListProps {
 
 function MealRow({
   entry,
-  extraMacros,
+  trackedKeys,
   selectMode,
   selected,
   onTap,
@@ -88,7 +98,7 @@ function MealRow({
   onQty,
 }: {
   entry: FoodEntryResponse;
-  extraMacros: MacroKey[];
+  trackedKeys: Set<string>;
   selectMode: boolean;
   selected: boolean;
   onTap: () => void;
@@ -96,14 +106,8 @@ function MealRow({
   onQty: () => void;
 }) {
   const { t } = useTranslation();
+  const { defs } = useMacros();
   const qty = entry.quantity && entry.quantity > 0 ? entry.quantity : 1;
-  // Null stays null: an entry logged before a macro was tracked shows a dash,
-  // never a fabricated zero.
-  const extras: MacroStripExtra[] = extraMacros.map((key) => ({
-    key,
-    value:
-      key === 'alcohol' ? entry.alcoholGrams : key === 'sugar' ? entry.sugarGrams : entry.waterMl,
-  }));
   return (
     <ItemRow
       title={entry.foodName}
@@ -141,18 +145,15 @@ function MealRow({
         </>
       }
       footer={
-        <MacroStrip
-          protein={entry.proteinGrams}
-          fat={entry.fatGrams}
-          carbs={entry.carbsGrams}
-          extras={extras}
-        />
+        // A macro this entry never captured renders as a dash, never a
+        // fabricated zero (an entry logged before tracking started).
+        <MacroStrip items={rowStripItems(entry.macros, trackedKeys, defs)} />
       }
     />
   );
 }
 
-export function MealsList({ date, entries, extraMacros = [], isToday, isFastingDay, onChanged }: MealsListProps) {
+export function MealsList({ date, entries, trackedKeys, isToday, isFastingDay, onChanged }: MealsListProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { openLog } = useLogSheet();
@@ -172,12 +173,9 @@ export function MealsList({ date, entries, extraMacros = [], isToday, isFastingD
       portionDescription: entry.portionDescription?.slice(0, 100) || t('today.portion_default', '1 serving'),
       defaultQuantity: qty,
       caloriesKcal: round1(entry.caloriesKcal / qty),
-      proteinGrams: round1(entry.proteinGrams / qty),
-      fatGrams: round1(entry.fatGrams / qty),
-      carbsGrams: round1(entry.carbsGrams / qty),
-      alcoholGrams: round1(entry.alcoholGrams / qty),
-      sugarGrams: entry.sugarGrams !== null ? round1(entry.sugarGrams / qty) : null,
-      waterMl: entry.waterMl !== null ? round1(entry.waterMl / qty) : null,
+      // Templates store amounts per 1 portion; a macro the entry never
+      // captured stays absent on the template too.
+      macros: perUnitMacros(entry.macros, qty),
       autoAddToNewDay: false,
     };
   };
@@ -206,12 +204,7 @@ export function MealsList({ date, entries, extraMacros = [], isToday, isFastingD
           portionDescription: e.portionDescription,
           quantity: e.quantity,
           caloriesKcal: e.caloriesKcal,
-          proteinGrams: e.proteinGrams,
-          fatGrams: e.fatGrams,
-          carbsGrams: e.carbsGrams,
-          alcoholGrams: e.alcoholGrams,
-          sugarGrams: e.sugarGrams,
-          waterMl: e.waterMl,
+          macros: e.macros,
           notes: e.notes,
         })),
       }),
@@ -291,7 +284,7 @@ export function MealsList({ date, entries, extraMacros = [], isToday, isFastingD
               <MealRow
                 key={e.foodEntryId}
                 entry={e}
-                extraMacros={extraMacros}
+                trackedKeys={trackedKeys}
                 selectMode={sel.selecting}
                 selected={sel.ids.has(e.foodEntryId)}
                 onTap={() => (sel.selecting ? sel.toggle(e.foodEntryId) : setEditing(e))}
@@ -349,6 +342,7 @@ export function MealsList({ date, entries, extraMacros = [], isToday, isFastingD
         <EditFoodSheet
           date={date}
           entry={editing}
+          trackedKeys={trackedKeys}
           onClose={() => setEditing(null)}
           onChanged={onChanged}
         />
@@ -364,12 +358,7 @@ export function MealsList({ date, entries, extraMacros = [], isToday, isFastingD
       portionDescription: entry.portionDescription,
       quantity: qty,
       caloriesKcal: entry.caloriesKcal,
-      proteinGrams: entry.proteinGrams,
-      fatGrams: entry.fatGrams,
-      carbsGrams: entry.carbsGrams,
-      alcoholGrams: entry.alcoholGrams,
-      sugarGrams: entry.sugarGrams,
-      waterMl: entry.waterMl,
+      macros: entry.macros,
       notes: entry.notes,
     };
     const request =
@@ -379,12 +368,7 @@ export function MealsList({ date, entries, extraMacros = [], isToday, isFastingD
           foodService.update(date, entry.foodEntryId, {
             ...base,
             caloriesKcal: round1(entry.caloriesKcal * qty),
-            proteinGrams: round1(entry.proteinGrams * qty),
-            fatGrams: round1(entry.fatGrams * qty),
-            carbsGrams: round1(entry.carbsGrams * qty),
-            alcoholGrams: round1(entry.alcoholGrams * qty),
-            sugarGrams: entry.sugarGrams !== null ? round1(entry.sugarGrams * qty) : null,
-            waterMl: entry.waterMl !== null ? round1(entry.waterMl * qty) : null,
+            macros: scaleMacros(entry.macros, qty),
             scaleByQuantity: false,
           });
     request
@@ -400,39 +384,49 @@ export function MealsList({ date, entries, extraMacros = [], isToday, isFastingD
 interface EditFoodSheetProps {
   date: string;
   entry: FoodEntryResponse;
+  /** Macros the day tracks: a tracked one this entry never captured gets a blank field to fill in */
+  trackedKeys: Set<string>;
   onClose: () => void;
   onChanged: () => void;
 }
 
-function EditFoodSheet({ date, entry, onClose, onChanged }: EditFoodSheetProps) {
+function EditFoodSheet({ date, entry, trackedKeys, onClose, onChanged }: EditFoodSheetProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { get, coreKeys } = useMacros();
   const [name, setName] = useState(entry.foodName);
   const [qty, setQty] = useState(entry.quantity && entry.quantity > 0 ? entry.quantity : 1);
   const [kcal, setKcal] = useState(String(entry.caloriesKcal));
-  const [protein, setProtein] = useState(String(entry.proteinGrams));
-  const [fat, setFat] = useState(String(entry.fatGrams));
-  const [carbs, setCarbs] = useState(String(entry.carbsGrams));
-  const [sugar, setSugar] = useState(entry.sugarGrams !== null ? String(entry.sugarGrams) : '');
-  const [water, setWater] = useState(entry.waterMl !== null ? String(entry.waterMl) : '');
+
+  // Which macro fields the sheet shows, in catalog order: the core ones,
+  // whatever this entry captured, and whatever the day tracks. A tracked
+  // macro the entry never captured starts blank (its honest "not captured"
+  // state) and stays absent on save unless a value is typed in.
+  const keys = useMemo(
+    () => sortKeysByCatalog([...coreKeys, ...Object.keys(entry.macros), ...trackedKeys], get),
+    [coreKeys, entry.macros, trackedKeys, get],
+  );
+  const [macros, setMacros] = useState<Record<string, string>>(() => macroFieldsFrom(entry.macros, keys));
   const [error, setError] = useState<string | null>(null);
 
-  // Only entries that carry the optional macros show their fields; an old
-  // entry from before tracking keeps its honest "not captured" state.
-  const hasSugar = entry.sugarGrams !== null;
-  const hasWater = entry.waterMl !== null;
+  // The form as a macro map: a blank core field means 0, a blank optional
+  // field stays absent.
+  const formMacros = () => parseMacroFields(macros, { zeroKeys: coreKeys });
 
-  // Changing quantity scales every macro proportionally (what you see is what is saved)
+  // Changing quantity scales calories and every filled-in macro proportionally
+  // (what you see is what is saved); blank fields stay blank.
   const applyQty = (nextQty: number) => {
     const ratio = nextQty / qty;
     setQty(nextQty);
     setKcal((v) => String(round1(num(v) * ratio)));
-    setProtein((v) => String(round1(num(v) * ratio)));
-    setFat((v) => String(round1(num(v) * ratio)));
-    setCarbs((v) => String(round1(num(v) * ratio)));
-    if (hasSugar) setSugar((v) => String(round1(num(v) * ratio)));
-    if (hasWater) setWater((v) => String(round1(num(v) * ratio)));
+    setMacros((prev) => {
+      const next: Record<string, string> = {};
+      for (const [k, raw] of Object.entries(prev)) {
+        next[k] = raw.trim() === '' ? '' : String(round1(num(raw) * ratio));
+      }
+      return next;
+    });
   };
 
   const save = useMutation({
@@ -442,12 +436,7 @@ function EditFoodSheet({ date, entry, onClose, onChanged }: EditFoodSheetProps) 
         portionDescription: entry.portionDescription,
         quantity: qty,
         caloriesKcal: num(kcal),
-        proteinGrams: num(protein),
-        fatGrams: num(fat),
-        carbsGrams: num(carbs),
-        alcoholGrams: entry.alcoholGrams,
-        sugarGrams: hasSugar ? num(sugar) : null,
-        waterMl: hasWater ? num(water) : null,
+        macros: formMacros(),
         notes: entry.notes,
         scaleByQuantity: false,
       }),
@@ -480,12 +469,7 @@ function EditFoodSheet({ date, entry, onClose, onChanged }: EditFoodSheetProps) 
           entry.portionDescription?.slice(0, 100) || t('today.portion_default', '1 serving'),
         defaultQuantity: q,
         caloriesKcal: round1(num(kcal) / q),
-        proteinGrams: round1(num(protein) / q),
-        fatGrams: round1(num(fat) / q),
-        carbsGrams: round1(num(carbs) / q),
-        alcoholGrams: round1(entry.alcoholGrams / q),
-        sugarGrams: hasSugar ? round1(num(sugar) / q) : null,
-        waterMl: hasWater ? round1(num(water) / q) : null,
+        macros: perUnitMacros(formMacros(), q),
         autoAddToNewDay: false,
       });
     },
@@ -514,24 +498,14 @@ function EditFoodSheet({ date, entry, onClose, onChanged }: EditFoodSheetProps) 
             onCommit={applyQty}
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <DecimalField label={t('log.calories', 'Calories')} suffix="kcal" value={kcal} onValueChange={setKcal} />
-          <DecimalField label={t('log.protein', 'Protein')} suffix="g" value={protein} onValueChange={setProtein} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <DecimalField label={t('log.fat', 'Fat')} suffix="g" value={fat} onValueChange={setFat} />
-          <DecimalField label={t('log.carbs', 'Carbs')} suffix="g" value={carbs} onValueChange={setCarbs} />
-        </div>
-        {(hasSugar || hasWater) && (
-          <div className="grid grid-cols-2 gap-3">
-            {hasSugar && (
-              <DecimalField label={t('log.sugar', 'Sugar')} suffix="g" value={sugar} onValueChange={setSugar} />
-            )}
-            {hasWater && (
-              <DecimalField label={t('log.water', 'Water')} suffix="ml" value={water} onValueChange={setWater} />
-            )}
-          </div>
-        )}
+        <MacroFieldsGrid
+          keys={keys}
+          values={macros}
+          onChange={(k, raw) => setMacros((m) => ({ ...m, [k]: raw }))}
+          leading={
+            <DecimalField label={t('log.calories', 'Calories')} suffix="kcal" value={kcal} onValueChange={setKcal} />
+          }
+        />
         {error && <InlineError message={error} />}
         <Button
           variant="primary"

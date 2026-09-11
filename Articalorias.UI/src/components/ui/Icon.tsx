@@ -445,9 +445,35 @@ const paths: Record<string, ReactElement> = {
       <path d="m17.5 15.5 2-2" />
     </>
   ),
+  coffee: (
+    <>
+      <path d="M10 2v2" />
+      <path d="M14 2v2" />
+      <path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1" />
+      <path d="M6 2v2" />
+    </>
+  ),
+  salt: (
+    <>
+      <path d="M9 2h6l1 6H8z" />
+      <path d="M8 8h8v11a3 3 0 0 1-3 3h-2a3 3 0 0 1-3-3z" />
+      <path d="M10 5h.01" />
+      <path d="M12 5h.01" />
+      <path d="M14 5h.01" />
+    </>
+  ),
 };
 
 export type IconName = keyof typeof paths;
+
+/**
+ * Icon names can arrive from the API (the macro catalog), so an unknown name
+ * must degrade to a generic glyph instead of an empty box.
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- the lookup belongs next to the icon table
+export function iconOrFallback(name: string | null | undefined): IconName {
+  return name && name in paths ? (name as IconName) : 'sliders';
+}
 
 interface IconProps {
   name: IconName;
@@ -473,7 +499,7 @@ export function Icon({ name, size = 24, strokeWidth = 2, className, style }: Ico
       style={style}
       aria-hidden="true"
     >
-      {paths[name]}
+      {paths[name] ?? paths.sliders}
     </svg>
   );
 }

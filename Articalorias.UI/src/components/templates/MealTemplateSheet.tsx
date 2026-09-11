@@ -1,17 +1,27 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { AxiosError } from 'axios';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { Field, DecimalField } from '@/components/ui/Field';
+import { MacroFieldsGrid } from '@/components/ui/MacroFieldsGrid';
 import { QuantityField } from '@/components/ui/QuantityField';
 import { Switch } from '@/components/ui/Switch';
 import { InlineError } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
+import { useMacros } from '@/hooks/useMacros';
+import { useMacroPreferences } from '@/hooks/useMacroPreferences';
 import { foodTemplateService } from '@/services/foodTemplateService';
 import { queryKeys } from '@/lib/queryKeys';
 import { extractApiError, isAiRateLimited } from '@/utils/apiError';
+import {
+  macroFieldsFrom,
+  parseMacroFields,
+  perUnitMacros,
+  sortKeysByCatalog,
+  trackedKeysFromPrefs,
+} from '@/utils/macros';
 import type { FoodTemplateResponse } from '@/types';
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -33,6 +43,20 @@ export function MealTemplateSheet({ template, onClose, onDelete }: MealTemplateS
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { coreKeys, get } = useMacros();
+  const { data: prefs } = useMacroPreferences();
+
+  // Core macros, whatever the user tracks right now, plus anything this
+  // template already stores: a template saved with sugar keeps showing (and
+  // keeping) sugar even after sugar tracking is switched off.
+  const keys = useMemo(
+    () =>
+      sortKeysByCatalog(
+        new Set([...coreKeys, ...trackedKeysFromPrefs(prefs), ...Object.keys(template?.macros ?? {})]),
+        get,
+      ),
+    [coreKeys, prefs, template, get],
+  );
 
   const [name, setName] = useState(template?.templateName ?? '');
   const [portion, setPortion] = useState(template?.portionDescription ?? '');
@@ -40,10 +64,9 @@ export function MealTemplateSheet({ template, onClose, onDelete }: MealTemplateS
     template && template.defaultQuantity > 0 ? template.defaultQuantity : 1,
   );
   const [kcal, setKcal] = useState(template ? String(template.caloriesKcal) : '');
-  const [protein, setProtein] = useState(template ? String(template.proteinGrams) : '');
-  const [fat, setFat] = useState(template ? String(template.fatGrams) : '');
-  const [carbs, setCarbs] = useState(template ? String(template.carbsGrams) : '');
-  const [alcohol, setAlcohol] = useState(template?.alcoholGrams ?? 0);
+  const [macros, setMacros] = useState<Record<string, string>>(() =>
+    macroFieldsFrom(template?.macros ?? {}, keys),
+  );
   const [autoAdd, setAutoAdd] = useState(template?.autoAddToNewDay ?? false);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,10 +94,7 @@ export function MealTemplateSheet({ template, onClose, onDelete }: MealTemplateS
       if (food.portionDescription) setPortion(food.portionDescription);
       setQty(q);
       setKcal(String(round1(food.caloriesKcal / q)));
-      setProtein(String(round1(food.proteinGrams / q)));
-      setFat(String(round1(food.fatGrams / q)));
-      setCarbs(String(round1(food.carbsGrams / q)));
-      setAlcohol(round1(food.alcoholGrams / q));
+      setMacros(macroFieldsFrom(perUnitMacros(food.macros, q), keys));
     },
     onError: (err) => {
       if (err instanceof AxiosError && err.response?.status === 422) {
@@ -98,10 +118,10 @@ export function MealTemplateSheet({ template, onClose, onDelete }: MealTemplateS
         portionDescription: portion.trim() || t('templates.portion_default', '1 portion'),
         defaultQuantity: qty,
         caloriesKcal: num(kcal),
-        proteinGrams: num(protein),
-        fatGrams: num(fat),
-        carbsGrams: num(carbs),
-        alcoholGrams: alcohol,
+        // A blank core field is a real 0; any other blank stays "not captured".
+        // Keys that showed up after mount (preferences loading late) are
+        // merged in so a core macro is never missing from the saved map.
+        macros: parseMacroFields({ ...macroFieldsFrom({}, keys), ...macros }, { zeroKeys: coreKeys }),
         autoAddToNewDay: autoAdd,
       };
       return template
@@ -182,32 +202,20 @@ export function MealTemplateSheet({ template, onClose, onDelete }: MealTemplateS
             {t('templates.macros', 'Nutrition')}
           </p>
           <p className="text-[13px] text-ink-3 mb-1.5">{t('templates.per_portion', 'Per 1 portion')}</p>
-          <div className="grid grid-cols-2 gap-3">
-            <DecimalField
-              label={t('templates.calories', 'Calories')}
-              suffix="kcal"
-              value={kcal}
-              onValueChange={setKcal}
-            />
-            <DecimalField
-              label={t('templates.protein', 'Protein')}
-              suffix="g"
-              value={protein}
-              onValueChange={setProtein}
-            />
-            <DecimalField
-              label={t('templates.fat', 'Fat')}
-              suffix="g"
-              value={fat}
-              onValueChange={setFat}
-            />
-            <DecimalField
-              label={t('templates.carbs', 'Carbs')}
-              suffix="g"
-              value={carbs}
-              onValueChange={setCarbs}
-            />
-          </div>
+          <MacroFieldsGrid
+            keys={keys}
+            values={macros}
+            onChange={(key, raw) => setMacros((prev) => ({ ...prev, [key]: raw }))}
+            leading={
+              <DecimalField
+                label={t('templates.calories', 'Calories')}
+                suffix="kcal"
+                placeholder="0"
+                value={kcal}
+                onValueChange={setKcal}
+              />
+            }
+          />
         </div>
         <div className="flex items-center justify-between gap-3 py-1">
           <span className="text-[15px] font-semibold text-ink">

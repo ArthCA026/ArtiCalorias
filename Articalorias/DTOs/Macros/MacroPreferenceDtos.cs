@@ -2,15 +2,17 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Articalorias.DTOs.Macros;
 
-/// <summary>One optional macro's tracking configuration, defaults merged in.</summary>
+/// <summary>One macro's tracking configuration, catalog defaults merged in. Protein included.</summary>
 public class MacroPreferenceResponse
 {
-    /// <summary>"carbs" | "fat" | "alcohol" | "sugar" | "water"</summary>
+    /// <summary>Catalog macro key.</summary>
     public string MacroKey { get; set; } = string.Empty;
     public bool IsTracked { get; set; }
     /// <summary>"auto" | "custom"</summary>
     public string TargetMode { get; set; } = "auto";
     public decimal? CustomTargetValue { get; set; }
+    /// <summary>The auto-formula parameter in effect (protein g/kg); null when the macro has none.</summary>
+    public decimal? AutoParam { get; set; }
     /// <summary>What the auto formula currently yields (null = profile incomplete or no formula, e.g. alcohol).</summary>
     public decimal? AutoTargetValue { get; set; }
     /// <summary>The target that would be frozen onto a new day right now.</summary>
@@ -30,8 +32,13 @@ public class UpdateMacroPreferenceItem
     [RegularExpression("^(auto|custom)$")]
     public string TargetMode { get; set; } = "auto";
 
-    [Range(0, 20000)]
+    /// <summary>Omitted = keep the stored value. Validated against the catalog range.</summary>
+    [Range(0, 100000)]
     public decimal? CustomTargetValue { get; set; }
+
+    /// <summary>Omitted = keep the stored value. Only macros with an adjustable formula accept it.</summary>
+    [Range(0, 1000)]
+    public decimal? AutoParam { get; set; }
 }
 
 public class UpdateMacroPreferencesRequest

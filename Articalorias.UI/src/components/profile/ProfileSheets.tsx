@@ -10,8 +10,6 @@ import { Icon } from '@/components/ui/Icon';
 import { InlineError } from '@/components/ui/States';
 import { useUnits } from '@/hooks/useUnits';
 import { kgToDisplay, displayToKg, weightLabel, cmToFtIn, ftInToCm } from '@/utils/units';
-import { PROTEIN_PRESETS, getAgeProteinMinimum } from '@/config/proteinPresets';
-import { cn } from '@/utils/cn';
 import { useNotificationSettings } from '@/hooks/useNotificationSettings';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { toTimeInputValue, fromTimeInputValue } from '@/utils/notifications';
@@ -302,153 +300,9 @@ export function BodySheet({ open, onClose, profile, onSave, saving, initialAdvan
 /* The goal chooser moved to its own page (/profile/goal): the pace-vs-target
    planner outgrew a bottom sheet. See src/pages/GoalPage.tsx. */
 
-/* ------------------------------------------------------------------ */
-/* Protein                                                             */
-/* ------------------------------------------------------------------ */
-
-export function ProteinSheet({ open, onClose, profile, onSave, saving }: EditSheetProps) {
-  const { t } = useTranslation();
-  const weight = profile.currentWeightKg;
-  const ageMin = getAgeProteinMinimum(profile.age ?? 30);
-  const gramsFor = (perKg: number) =>
-    weight !== null ? Math.round(weight * Math.max(perKg, ageMin)) : null;
-
-  // Preselect the stored preset when the profile is in auto mode.
-  const storedPreset =
-    profile.autoCalculateProteinGoal && profile.proteinGoalGramsPerKg !== null
-      ? PROTEIN_PRESETS.find((p) => p.gramsPerKg === profile.proteinGoalGramsPerKg)?.id
-      : undefined;
-
-  const [selected, setSelected] = useState<string>(storedPreset ?? 'everyday');
-  const [showCustom, setShowCustom] = useState(
-    !profile.autoCalculateProteinGoal && profile.proteinGoalGrams !== null,
-  );
-  const [customGrams, setCustomGrams] = useState(
-    profile.proteinGoalGrams !== null ? String(Math.round(profile.proteinGoalGrams)) : '',
-  );
-  const [error, setError] = useState<string | null>(null);
-
-  // Re-derive on every open: the target may have been saved since mount.
-  /* eslint-disable react-hooks/set-state-in-effect -- bounded open-transition reset */
-  useEffect(() => {
-    if (!open) return;
-    setCustomGrams(profile.proteinGoalGrams !== null ? String(Math.round(profile.proteinGoalGrams)) : '');
-    setShowCustom(!profile.autoCalculateProteinGoal && profile.proteinGoalGrams !== null);
-    setError(null);
-  }, [open, profile.proteinGoalGrams, profile.autoCalculateProteinGoal]);
-  /* eslint-enable react-hooks/set-state-in-effect */
-
-  const save = () => {
-    if (showCustom) {
-      const g = num(customGrams);
-      if (g === null || g < 40 || g > 300) {
-        setError(t('profile.protein_custom_error', 'Enter a value between 40 and 300 grams.'));
-        return;
-      }
-      onSave({ proteinGoalGrams: g, autoCalculateProteinGoal: false, proteinGoalGramsPerKg: null });
-    } else {
-      // A preset stores its multiplier: the goal follows the weight from now
-      // on, and if there is no weight yet it activates the moment one is set.
-      const preset = PROTEIN_PRESETS.find((p) => p.id === selected)!;
-      onSave({
-        proteinGoalGrams: null,
-        autoCalculateProteinGoal: true,
-        proteinGoalGramsPerKg: preset.gramsPerKg,
-      });
-    }
-  };
-
-  return (
-    <Sheet open={open} onClose={onClose} title={t('profile.protein_title', 'Protein target')}>
-      <div className="space-y-2" role="radiogroup" aria-label={t('profile.protein_title', 'Protein target')}>
-        {PROTEIN_PRESETS.map((p) => {
-          const active = !showCustom && selected === p.id;
-          const grams = gramsFor(p.gramsPerKg);
-          return (
-            <button
-              key={p.id}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => {
-                setSelected(p.id);
-                setShowCustom(false);
-                setError(null);
-              }}
-              className={cn(
-                'pressable w-full rounded-card px-4 py-3 text-left flex items-center gap-3',
-                active ? 'bg-primary-soft ring-2 ring-primary/60' : 'bg-inset',
-              )}
-            >
-              <span className="flex-1">
-                <span className="text-[15px] font-bold text-ink">
-                  {t(`protein.${p.id}`, p.label)}
-                </span>
-                <span className="block text-[12px] text-ink-2 mt-0.5">
-                  {p.gramsPerKg} g/kg{grams !== null ? ` = ${grams} g` : ''}
-                </span>
-              </span>
-              {active && <Icon name="checkCircle" size={20} className="text-primary" />}
-            </button>
-          );
-        })}
-      </div>
-
-      {!showCustom ? (
-        <button
-          type="button"
-          className="pressable mt-3 text-sm font-semibold text-primary-soft-ink py-1"
-          onClick={() => {
-            setShowCustom(true);
-            setError(null);
-          }}
-        >
-          {t('profile.protein_custom_link', 'Set custom grams')}
-        </button>
-      ) : (
-        <div className="mt-3">
-          <DecimalField
-            label={t('profile.protein_custom_label', 'Grams per day')}
-            suffix="g"
-            placeholder="120"
-            value={customGrams}
-            onValueChange={(v) => {
-              setCustomGrams(v);
-              setError(null);
-            }}
-          />
-        </div>
-      )}
-
-      {!showCustom && weight === null && (
-        <p className="mt-3 text-[13px] text-ink-3 leading-relaxed">
-          {t('profile.protein_no_weight_hint', 'No weight on your profile yet: the target switches on by itself the moment you add one.')}
-        </p>
-      )}
-
-      {error && <InlineError message={error} />}
-
-      <Button variant="primary" size="lg" fullWidth className="mt-4" loading={saving} onClick={save}>
-        {t('common.save', 'Save')}
-      </Button>
-
-      {/* Protein is optional like any other macro: turning it off clears the
-          goal, hides the bar from today on, and past days keep theirs. */}
-      {(profile.proteinGoalGrams !== null || profile.autoCalculateProteinGoal) && (
-        <Button
-          variant="ghost"
-          size="md"
-          fullWidth
-          className="mt-2"
-          loading={saving}
-          onClick={() => onSave({ proteinGoalGrams: null, autoCalculateProteinGoal: false })}
-        >
-          {t('profile.protein_turn_off', 'Stop tracking protein')}
-        </Button>
-      )}
-    </Sheet>
-  );
-}
+/* The protein target editor is now the generic MacroTargetSheet
+   (src/components/profile/MacroTargetSheet.tsx): every macro, protein
+   included, edits its target through the macro catalog. */
 
 /* ------------------------------------------------------------------ */
 /* Sleep & daily movement (NEAT)                                       */

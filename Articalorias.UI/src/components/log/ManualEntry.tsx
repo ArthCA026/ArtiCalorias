@@ -3,12 +3,15 @@ import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Field, DecimalField } from '@/components/ui/Field';
+import { MacroFieldsGrid } from '@/components/ui/MacroFieldsGrid';
 import { InlineError } from '@/components/ui/States';
 import { Icon } from '@/components/ui/Icon';
 import { foodService } from '@/services/foodService';
 import { activityService } from '@/services/activityService';
 import { useMacroPreferences } from '@/hooks/useMacroPreferences';
+import { useMacros } from '@/hooks/useMacros';
 import { extractApiError } from '@/utils/apiError';
+import { coreZeros, parseMacroFields, sortKeysByCatalog, trackedKeysFromPrefs } from '@/utils/macros';
 
 interface ManualProps {
   /** yyyy-MM-dd day the entry is logged to */
@@ -28,36 +31,37 @@ export function ManualFood({ date, onBack, onDone }: ManualProps) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [kcal, setKcal] = useState('');
-  const [protein, setProtein] = useState('');
   const [showMore, setShowMore] = useState(false);
   const [portion, setPortion] = useState('');
-  const [fat, setFat] = useState('');
-  const [carbs, setCarbs] = useState('');
-  const [alcohol, setAlcohol] = useState('');
-  const [sugar, setSugar] = useState('');
-  const [water, setWater] = useState('');
+  // Raw field strings keyed by macro key; a key never typed into is simply absent.
+  const [macros, setMacros] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
-  // Sugar / water fields only appear for people who track them: everyone
-  // else keeps the exact form they know.
-  const { data: macroPrefs } = useMacroPreferences();
-  const tracksSugar = (macroPrefs ?? []).some((p) => p.macroKey === 'sugar' && p.isTracked);
-  const tracksWater = (macroPrefs ?? []).some((p) => p.macroKey === 'water' && p.isTracked);
+  // Protein stays up front; the other core macros plus whatever the user
+  // tracks (sugar, water...) live under "More details", so everyone else
+  // keeps the exact form they know.
+  const { defs, get, coreKeys } = useMacros();
+  const { data: prefs } = useMacroPreferences();
+  const tracked = trackedKeysFromPrefs(prefs);
+  const alwaysKeys = ['protein'];
+  const moreKeys = sortKeysByCatalog([...coreKeys, ...tracked].filter((k) => k !== 'protein'), get);
+  const setMacro = (key: string, raw: string) => setMacros((m) => ({ ...m, [key]: raw }));
 
   const save = useMutation({
     mutationFn: () => {
+      // Every shown field counts: a blank core or tracked macro is a real 0
+      // on a new entry (the user was tracking it when they logged), never a
+      // "not captured" gap.
+      const zeroKeys = [...coreKeys, ...tracked];
+      const values: Record<string, string> = {};
+      for (const key of [...alwaysKeys, ...moreKeys]) values[key] = macros[key] ?? '';
       return foodService
         .create(date, {
           foodName: name.trim(),
           portionDescription: portion.trim() || null,
           quantity: 1,
           caloriesKcal: num(kcal) ?? 0,
-          proteinGrams: num(protein) ?? 0,
-          fatGrams: num(fat) ?? 0,
-          carbsGrams: num(carbs) ?? 0,
-          alcoholGrams: num(alcohol) ?? 0,
-          sugarGrams: tracksSugar ? (num(sugar) ?? 0) : null,
-          waterMl: tracksWater ? (num(water) ?? 0) : null,
+          macros: { ...coreZeros(defs), ...parseMacroFields(values, { zeroKeys }) },
         })
         .then(() => date);
     },
@@ -85,22 +89,20 @@ export function ManualFood({ date, onBack, onDone }: ManualProps) {
         enterKeyHint="next"
         required
       />
-      <div className="grid grid-cols-2 gap-3">
-        <DecimalField
-          label={t('log.calories', 'Calories')}
-          placeholder="0"
-          suffix="kcal"
-          value={kcal}
-          onValueChange={setKcal}
-        />
-        <DecimalField
-          label={t('log.protein', 'Protein')}
-          placeholder="0"
-          suffix="g"
-          value={protein}
-          onValueChange={setProtein}
-        />
-      </div>
+      <MacroFieldsGrid
+        keys={alwaysKeys}
+        values={macros}
+        onChange={setMacro}
+        leading={
+          <DecimalField
+            label={t('log.calories', 'Calories')}
+            placeholder="0"
+            suffix="kcal"
+            value={kcal}
+            onValueChange={setKcal}
+          />
+        }
+      />
 
       <button
         type="button"
@@ -120,51 +122,7 @@ export function ManualFood({ date, onBack, onDone }: ManualProps) {
             onChange={(e) => setPortion(e.target.value)}
             autoComplete="off"
           />
-          <div className="grid grid-cols-3 gap-3">
-            <DecimalField
-              label={t('log.fat', 'Fat')}
-              placeholder="0"
-              suffix="g"
-              value={fat}
-              onValueChange={setFat}
-            />
-            <DecimalField
-              label={t('log.carbs', 'Carbs')}
-              placeholder="0"
-              suffix="g"
-              value={carbs}
-              onValueChange={setCarbs}
-            />
-            <DecimalField
-              label={t('log.alcohol', 'Alcohol')}
-              placeholder="0"
-              suffix="g"
-              value={alcohol}
-              onValueChange={setAlcohol}
-            />
-          </div>
-          {(tracksSugar || tracksWater) && (
-            <div className="grid grid-cols-2 gap-3">
-              {tracksSugar && (
-                <DecimalField
-                  label={t('log.sugar', 'Sugar')}
-                  placeholder="0"
-                  suffix="g"
-                  value={sugar}
-                  onValueChange={setSugar}
-                />
-              )}
-              {tracksWater && (
-                <DecimalField
-                  label={t('log.water', 'Water')}
-                  placeholder="0"
-                  suffix="ml"
-                  value={water}
-                  onValueChange={setWater}
-                />
-              )}
-            </div>
-          )}
+          <MacroFieldsGrid keys={moreKeys} values={macros} onChange={setMacro} />
         </div>
       )}
 

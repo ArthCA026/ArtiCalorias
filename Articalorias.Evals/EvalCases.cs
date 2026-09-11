@@ -16,6 +16,9 @@ public class FoodCase
     public decimal? TotalKcal { get; set; }
     public decimal TotalKcalTolerancePct { get; set; } = 40;
 
+    /// <summary>Optional macros to request for this case (catalog keys: "sugar", "water", "caffeine", ...).</summary>
+    public List<string> OptionalMacros { get; set; } = [];
+
     public List<FoodExpectation> Expect { get; set; } = [];
 }
 
@@ -41,6 +44,9 @@ public class FoodExpectation
 
     /// <summary>Alcoholic items must report at least this many alcohol grams.</summary>
     public decimal? AlcoholMin { get; set; }
+
+    /// <summary>Expected amounts by catalog key (any macro), ± MacroToleranceGrams.</summary>
+    public Dictionary<string, decimal> Macros { get; set; } = new();
 }
 
 public class ActivityCase

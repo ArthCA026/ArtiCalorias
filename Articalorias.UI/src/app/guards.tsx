@@ -9,7 +9,7 @@ import { isNotFound } from '@/utils/apiError';
 import { Spinner } from '@/components/ui/Button';
 
 /** Full-screen splash while a guard is deciding. Never a blank screen. */
-function GuardSplash() {
+export function GuardSplash() {
   const { t } = useTranslation();
   return (
     <div className="min-h-dvh flex flex-col items-center justify-center gap-3 text-ink-2">

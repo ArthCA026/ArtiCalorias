@@ -34,8 +34,8 @@ public class ErrorHandlingMiddleware
 
         if (exception is ApiException apiEx)
         {
-            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-            var response = new { StatusCode = (int)HttpStatusCode.BadRequest, Message = apiEx.Message, ErrorCode = apiEx.ErrorCode };
+            context.Response.StatusCode = apiEx.StatusCode;
+            var response = new { StatusCode = apiEx.StatusCode, Message = apiEx.Message, ErrorCode = apiEx.ErrorCode };
             await context.Response.WriteAsync(JsonSerializer.Serialize(response));
             return;
         }

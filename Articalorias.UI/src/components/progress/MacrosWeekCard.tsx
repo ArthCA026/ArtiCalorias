@@ -2,18 +2,25 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/Progress';
-import { Icon } from '@/components/ui/Icon';
+import { Icon, iconOrFallback } from '@/components/ui/Icon';
 import { isLoggedDay } from '@/components/progress/weekMath';
-import { MACRO_META, PROTEIN_META, dayTargetFor, formatMacroAmount, macroLabel, macroTotalFor } from '@/utils/macros';
+import { useMacros } from '@/hooks/useMacros';
+import {
+  dayTargetFor,
+  formatMacroAmount,
+  macroColor,
+  macroTotalFor,
+  sortKeysByCatalog,
+} from '@/utils/macros';
 import { cn } from '@/utils/cn';
-import type { DailyLogResponse, MacroKey } from '@/types';
+import type { DailyLogResponse, DayMacroTarget, MacroKey } from '@/types';
 
 interface MacrosWeekCardProps {
   days: DailyLogResponse[];
 }
 
 interface Row {
-  key: MacroKey | 'protein';
+  key: MacroKey;
   avg: number;
   target: number | null;
   direction: 'hit' | 'limit';
@@ -28,47 +35,38 @@ interface Row {
  */
 export function MacrosWeekCard({ days }: MacrosWeekCardProps) {
   const { t } = useTranslation();
+  const { get, label } = useMacros();
 
   const rows = useMemo<Row[]>(() => {
     const logged = days.filter(isLoggedDay);
     if (logged.length === 0) return [];
 
+    // Every macro any logged day froze a target for, in catalog order.
+    // Protein is one of them like any other; a retired macro still resolves
+    // through get(), so history keeps rendering.
+    const keys = sortKeysByCatalog(
+      logged.flatMap((d) => d.macroTargets.map((m) => m.macroKey)),
+      get,
+    );
+
     const out: Row[] = [];
-
-    // Protein first: it always tracks, via its own long-standing goal.
-    const proteinDays = logged.filter((d) => d.snapshotProteinGoalGrams > 0);
-    if (proteinDays.length > 0) {
-      out.push({
-        key: 'protein',
-        avg: proteinDays.reduce((s, d) => s + d.totalProteinGrams, 0) / proteinDays.length,
-        target:
-          proteinDays.reduce((s, d) => s + d.snapshotProteinGoalGrams, 0) / proteinDays.length,
-        direction: 'hit',
-        daysCounted: proteinDays.length,
-      });
-    }
-
-    for (const key of ['carbs', 'fat', 'sugar', 'alcohol', 'water'] as MacroKey[]) {
+    for (const key of keys) {
       const tracked = logged
         .map((d) => ({ day: d, target: dayTargetFor(d, key) }))
-        .filter((x) => x.target !== undefined);
+        .filter((x): x is { day: DailyLogResponse; target: DayMacroTarget } => x.target !== undefined);
       if (tracked.length === 0) continue;
-      const withTargets = tracked.filter((x) => x.target!.target !== null);
+      const targets = tracked.map((x) => x.target.target).filter((v): v is number => v !== null);
       out.push({
         key,
-        avg:
-          tracked.reduce((s, x) => s + (macroTotalFor(x.day, key) ?? 0), 0) / tracked.length,
-        target:
-          withTargets.length > 0
-            ? withTargets.reduce((s, x) => s + (x.target!.target as number), 0) / withTargets.length
-            : null,
-        direction: tracked[0].target!.direction,
+        avg: tracked.reduce((s, x) => s + (macroTotalFor(x.day, key) ?? 0), 0) / tracked.length,
+        target: targets.length > 0 ? targets.reduce((s, v) => s + v, 0) / targets.length : null,
+        direction: get(key).direction,
         daysCounted: tracked.length,
       });
     }
 
     return out;
-  }, [days]);
+  }, [days, get]);
 
   // Nothing beyond a zero-protein plan: the card would only say "no data".
   if (rows.length === 0 || (rows.length === 1 && rows[0].key === 'protein')) return null;
@@ -84,19 +82,17 @@ export function MacrosWeekCard({ days }: MacrosWeekCardProps) {
 
       <div className="mt-3 space-y-3">
         {rows.map((r) => {
-          const meta = r.key === 'protein'
-            ? { icon: PROTEIN_META.icon, color: PROTEIN_META.color, unit: 'g' as const }
-            : MACRO_META[r.key];
-          const label = r.key === 'protein' ? t('today.protein', 'Protein') : macroLabel(t, r.key);
-          const fmt = (v: number) =>
-            r.key === 'protein' ? `${Math.round(v)}g` : formatMacroAmount(r.key, v);
+          const def = get(r.key);
+          const name = label(def);
+          const color = macroColor(r.key);
+          const fmt = (v: number) => formatMacroAmount(def, v);
           const limitBroken = r.direction === 'limit' && r.target !== null && r.avg > r.target;
           return (
             <div key={r.key}>
               <div className="flex items-center justify-between mb-1">
                 <span className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
-                  <Icon name={meta.icon} size={14} style={{ color: meta.color }} />
-                  {label}
+                  <Icon name={iconOrFallback(def.icon)} size={14} style={{ color }} />
+                  {name}
                 </span>
                 <span className={cn('text-[13px] font-bold tabular-nums', limitBroken ? 'text-warning' : 'text-ink')}>
                   {fmt(r.avg)}
@@ -108,8 +104,8 @@ export function MacrosWeekCard({ days }: MacrosWeekCardProps) {
               <ProgressBar
                 progress={r.target !== null && r.target > 0 ? r.avg / r.target : 0}
                 height={6}
-                color={limitBroken ? 'var(--t-warning)' : meta.color}
-                label={t('macros.bar_aria', '{{macro}} progress', { macro: label })}
+                color={limitBroken ? 'var(--t-warning)' : color}
+                label={t('macros.bar_aria', '{{macro}} progress', { macro: name })}
               />
             </div>
           );

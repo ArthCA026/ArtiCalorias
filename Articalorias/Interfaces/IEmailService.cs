@@ -2,5 +2,5 @@ namespace Articalorias.Interfaces;
 
 public interface IEmailService
 {
-    Task SendPasswordResetEmailAsync(string toEmail, string resetToken);
+    Task SendPasswordResetEmailAsync(string toEmail, string resetToken, CancellationToken ct = default);
 }

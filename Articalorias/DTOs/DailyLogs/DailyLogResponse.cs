@@ -8,16 +8,15 @@ public class DailyLogResponse
 
     // Ingesta
     public decimal TotalFoodCaloriesKcal { get; set; }
-    public decimal TotalProteinGrams { get; set; }
-    public decimal TotalFatGrams { get; set; }
-    public decimal TotalCarbsGrams { get; set; }
-    public decimal TotalAlcoholGrams { get; set; }
-    /// <summary>Null = no entry of the day carried sugar data (not tracked then).</summary>
-    public decimal? TotalSugarGrams { get; set; }
-    /// <summary>Null = no entry of the day carried water data (not tracked then).</summary>
-    public decimal? TotalWaterMl { get; set; }
 
-    /// <summary>Extended macro targets frozen on this day (empty = only protein was tracked).</summary>
+    /// <summary>
+    /// Consumed amounts keyed by catalog macro key. Absent key = no entry of
+    /// the day carried it (the macro was not tracked then); core macros are
+    /// always present.
+    /// </summary>
+    public Dictionary<string, decimal> MacroTotals { get; set; } = new();
+
+    /// <summary>Every macro target frozen on this day, protein included, in catalog order. Empty = nothing tracked that day.</summary>
     public List<DayMacroTargetResponse> MacroTargets { get; set; } = [];
 
     // Gasto
@@ -26,11 +25,9 @@ public class DailyLogResponse
     // Balance
     public decimal DailyGoalDeltaKcal { get; set; }
     public decimal CaloriesRemainingToDailyTargetKcal { get; set; }
-    public decimal ProteinRemainingGrams { get; set; }
     public decimal SuggestedDailyAverageRemainingKcal { get; set; }
 
     // Snapshot usado
-    public decimal SnapshotProteinGoalGrams { get; set; }
     public decimal SnapshotDailyBaseGoalKcal { get; set; }
 
     // Estado

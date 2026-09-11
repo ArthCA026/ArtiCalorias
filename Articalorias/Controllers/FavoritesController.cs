@@ -7,6 +7,7 @@ using Articalorias.Filters;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
 using Articalorias.Services;
+using Articalorias.Services.Macros;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -24,6 +25,7 @@ public class FavoritesController : ControllerBase
     private readonly ICombinedParsingService _combinedParsing;
     private readonly IDailyLogService _dailyLogService;
     private readonly IUserProfileService _userProfileService;
+    private readonly IMacroPreferenceService _macroPreferences;
     private readonly ILogger<FavoritesController> _logger;
 
     public FavoritesController(
@@ -34,6 +36,7 @@ public class FavoritesController : ControllerBase
         ICombinedParsingService combinedParsing,
         IDailyLogService dailyLogService,
         IUserProfileService userProfileService,
+        IMacroPreferenceService macroPreferences,
         ILogger<FavoritesController> logger)
     {
         _foodTemplateService = foodTemplateService;
@@ -43,6 +46,7 @@ public class FavoritesController : ControllerBase
         _combinedParsing = combinedParsing;
         _dailyLogService = dailyLogService;
         _userProfileService = userProfileService;
+        _macroPreferences = macroPreferences;
         _logger = logger;
     }
 
@@ -67,12 +71,7 @@ public class FavoritesController : ControllerBase
             PortionDescription = request.PortionDescription,
             DefaultQuantity = request.DefaultQuantity,
             CaloriesKcal = request.CaloriesKcal,
-            ProteinGrams = request.ProteinGrams,
-            FatGrams = request.FatGrams,
-            CarbsGrams = request.CarbsGrams,
-            AlcoholGrams = request.AlcoholGrams,
-            SugarGrams = request.SugarGrams,
-            WaterMl = request.WaterMl,
+            Macros = MacroAmounts.FromRequest(request.Macros),
             AutoAddToNewDay = request.AutoAddToNewDay,
         };
         var created = await _foodTemplateService.CreateAsync(template, ct);
@@ -91,12 +90,7 @@ public class FavoritesController : ControllerBase
             PortionDescription = request.PortionDescription,
             DefaultQuantity = request.DefaultQuantity,
             CaloriesKcal = request.CaloriesKcal,
-            ProteinGrams = request.ProteinGrams,
-            FatGrams = request.FatGrams,
-            CarbsGrams = request.CarbsGrams,
-            AlcoholGrams = request.AlcoholGrams,
-            SugarGrams = request.SugarGrams,
-            WaterMl = request.WaterMl,
+            Macros = MacroAmounts.FromRequest(request.Macros),
             AutoAddToNewDay = request.AutoAddToNewDay,
         };
         var updated = await _foodTemplateService.UpdateAsync(template, ct);
@@ -171,15 +165,16 @@ public class FavoritesController : ControllerBase
             return BadRequest(new { message = "Invalid input." });
         }
 
-        var foods = await _foodParsing.ParseFreeTextAsync(request.Text);
+        // Same contract as the day parse: the user's country and tracked
+        // macros shape the answer, and the sanitizer already enforces the
+        // catalog ceilings, so no second range ladder here.
+        var userId = GetUserId();
+        var profile = await _userProfileService.GetByUserIdAsync(userId);
+        var options = await _macroPreferences.GetParsingOptionsAsync(userId, ct);
+        var foods = await _foodParsing.ParseFreeTextAsync(request.Text, profile?.Country, options);
 
         var items = foods
             .Where(f => !string.IsNullOrWhiteSpace(f.FoodName))
-            .Where(f => f.CaloriesKcal >= 0 && f.CaloriesKcal <= 9999.99m)
-            .Where(f => f.ProteinGrams >= 0 && f.ProteinGrams <= 9999.99m)
-            .Where(f => f.FatGrams >= 0 && f.FatGrams <= 9999.99m)
-            .Where(f => f.CarbsGrams >= 0 && f.CarbsGrams <= 9999.99m)
-            .Where(f => f.AlcoholGrams >= 0 && f.AlcoholGrams <= 9999.99m)
             .Select(f => new ParsedFavoriteItem { Type = "food", Food = f })
             .ToList();
 
@@ -205,12 +200,16 @@ public class FavoritesController : ControllerBase
         IReadOnlyList<ParsedActivityItem> activities;
         IReadOnlyList<ParsedFoodItem> foods;
 
+        var userId = GetUserId();
+        var profile = await _userProfileService.GetByUserIdAsync(userId);
+        var options = await _macroPreferences.GetParsingOptionsAsync(userId, ct);
+
         if (request.Type is null)
         {
             // Type-agnostic: ONE combined OpenAI call instead of two parallel
             // ones — half the cost, and a pure-activity text no longer makes
             // the food parser fail the whole request.
-            var combined = await _combinedParsing.ParseAsync(request.Text);
+            var combined = await _combinedParsing.ParseAsync(request.Text, options);
             activities = combined.Activities;
             foods = combined.Foods;
         }
@@ -220,7 +219,7 @@ public class FavoritesController : ControllerBase
                 ? await _activityParsing.ParseFreeTextAsync(request.Text)
                 : [];
             foods = request.Type == "food"
-                ? await _foodParsing.ParseFreeTextAsync(request.Text)
+                ? await _foodParsing.ParseFreeTextAsync(request.Text, profile?.Country, options)
                 : [];
         }
 
@@ -237,12 +236,8 @@ public class FavoritesController : ControllerBase
 
         foreach (var f in foods)
         {
+            // The sanitizer already clamps every macro to the catalog ceilings.
             if (string.IsNullOrWhiteSpace(f.FoodName)) continue;
-            if (f.CaloriesKcal < 0 || f.CaloriesKcal > 9999.99m) continue;
-            if (f.ProteinGrams < 0 || f.ProteinGrams > 9999.99m) continue;
-            if (f.FatGrams < 0 || f.FatGrams > 9999.99m) continue;
-            if (f.CarbsGrams < 0 || f.CarbsGrams > 9999.99m) continue;
-            if (f.AlcoholGrams < 0 || f.AlcoholGrams > 9999.99m) continue;
             items.Add(new ParsedFavoriteItem { Type = "food", Food = f });
         }
 
@@ -378,12 +373,7 @@ public class FavoritesController : ControllerBase
         PortionDescription = t.PortionDescription,
         DefaultQuantity = t.DefaultQuantity,
         CaloriesKcal = t.CaloriesKcal,
-        ProteinGrams = t.ProteinGrams,
-        FatGrams = t.FatGrams,
-        CarbsGrams = t.CarbsGrams,
-        AlcoholGrams = t.AlcoholGrams,
-        SugarGrams = t.SugarGrams,
-        WaterMl = t.WaterMl,
+        Macros = t.Macros.EnsureCore().ToDictionary(),
         AutoAddToNewDay = t.AutoAddToNewDay,
         IsActive = t.IsActive,
     };

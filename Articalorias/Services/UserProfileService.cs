@@ -57,9 +57,6 @@ public class UserProfileService : IUserProfileService
                 ? null   // let ApplyAutoCalculations compute a fresh, validated value
                 : profile.BodyFatPercent;
             existing.DailyBaseGoalKcal = profile.DailyBaseGoalKcal;
-            existing.ProteinGoalGrams = profile.ProteinGoalGrams;
-            existing.AutoCalculateProteinGoal = profile.AutoCalculateProteinGoal;
-            existing.ProteinGoalGramsPerKg = profile.ProteinGoalGramsPerKg;
             existing.GoalTargetWeightKg = profile.GoalTargetWeightKg;
             existing.GoalTargetBodyFatPercent = profile.GoalTargetBodyFatPercent;
             existing.GoalTargetDate = profile.GoalTargetDate;

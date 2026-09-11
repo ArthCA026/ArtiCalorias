@@ -1,21 +1,9 @@
-export type ProteinPresetId = "light" | "everyday" | "weight-loss-support" | "active-training" | "muscle-gain";
-
-export interface ProteinPreset {
-  id: ProteinPresetId;
-  label: string;
-  gramsPerKg: number;
-  description: string;
-}
-
-export const PROTEIN_PRESETS: ProteinPreset[] = [
-  { id: "light",              label: "Light",               gramsPerKg: 1.0, description: "A simple target if protein is not your main focus." },
-  { id: "everyday",           label: "Everyday",            gramsPerKg: 1.2, description: "A balanced target for general daily eating." },
-  { id: "weight-loss-support", label: "Weight Loss Support", gramsPerKg: 1.6, description: "A higher target to support fullness and muscle retention during weight loss." },
-  { id: "active-training",    label: "Active Training",     gramsPerKg: 1.8, description: "A strong target for people who train regularly." },
-  { id: "muscle-gain",        label: "Muscle Gain",         gramsPerKg: 2.0, description: "A high-protein target for lifting, recovery, and muscle gain goals." },
-];
-
 // ── Age-aware minimum protein ─────────────────────────────────────────────────
+//
+// The protein presets themselves (light 1.0 ... muscle gain 2.0 g/kg) now come
+// from the macro catalog (GET /api/macros/catalog, macro "protein",
+// autoPresets). Only the age floor stays client-side: it is what turns a
+// preset into a grams preview before the server answers.
 
 /** Evidence-informed minimum protein multipliers (g/kg body weight) by age tier. */
 export const AGE_PROTEIN_MINIMUMS = {
@@ -30,25 +18,11 @@ export const AGE_PROTEIN_MINIMUMS = {
 /**
  * Returns the evidence-informed minimum protein multiplier (g/kg) for the
  * given age. The result is used as a floor: the final multiplier is
- * Math.max(selectedPreset.gramsPerKg, getAgeProteinMinimum(age)).
+ * Math.max(selectedPreset.param, getAgeProteinMinimum(age)). Mirrors the
+ * backend (MacroFormulas.AgeMinimumGramsPerKg).
  */
 export function getAgeProteinMinimum(age: number): number {
   if (age >= 65) return AGE_PROTEIN_MINIMUMS.FROM_65;
   if (age >= 50) return AGE_PROTEIN_MINIMUMS.FROM_50;
   return AGE_PROTEIN_MINIMUMS.UNDER_50;
-}
-
-/**
- * The grams an AUTO protein goal works out to right now, mirroring the
- * backend (ProteinMath.GoalGrams): weight x max(stored g/kg, age minimum).
- * Null = no weight yet; the goal activates when the weight arrives.
- * A null multiplier is the legacy 2.0 g/kg auto mode.
- */
-export function effectiveAutoProteinGrams(
-  weightKg: number | null,
-  age: number | null,
-  gramsPerKg: number | null,
-): number | null {
-  if (weightKg === null || weightKg <= 0) return null;
-  return Math.round(weightKg * Math.max(gramsPerKg ?? 2.0, getAgeProteinMinimum(age ?? 30)));
 }

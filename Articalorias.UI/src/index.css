@@ -51,6 +51,12 @@
   --color-alcohol-soft: var(--t-alcohol-soft);
   --color-water: var(--t-water);
   --color-water-soft: var(--t-water-soft);
+  --color-caffeine: var(--t-caffeine);
+  --color-caffeine-soft: var(--t-caffeine-soft);
+  --color-sodium: var(--t-sodium);
+  --color-sodium-soft: var(--t-sodium-soft);
+  --color-macro-default: var(--t-macro-default);
+  --color-macro-default-soft: var(--t-macro-default-soft);
 
   --color-ring-track: var(--t-ring-track);
 

@@ -44,6 +44,7 @@ export const termsEn: PolicyDocument = {
       paragraphs: [
         'ArtiCalorias provides informational estimates based on general formulas. It is not a medical device and does not replace advice from medical or nutrition professionals.',
         'Consult a professional before making significant changes to your diet or exercise, especially if you have a health condition or a history of eating disorders. The app applies minimum safety limits to calorie goals, but that does not turn its calculations into medical recommendations.',
+        'Nutrient targets and limits shown in the app, for example for protein, caffeine or sodium, are general public-health reference values, not personalized recommendations. Pregnancy, medication and medical conditions change what is right for you.',
       ],
     },
     {

@@ -7,6 +7,7 @@ import { Icon } from '@/components/ui/Icon';
 import { usePremium } from '@/hooks/usePremium';
 import { parseDate } from '@/utils/format';
 import { deltaFor, hasComparablePlan } from '@/utils/calorieMath';
+import { dayTargetFor } from '@/utils/macros';
 import { isLoggedDay, longestLoggedRun } from './weekMath';
 import { FEATURES } from '@/config/features';
 import type { CalorieMode } from '@/hooks/useCalorieMode';
@@ -55,14 +56,16 @@ export function PremiumInsightCard({ monday, days, mode }: PremiumInsightCardPro
       );
     }
 
-    // Average protein vs goal.
-    const withGoal = logged.filter((d) => d.snapshotProteinGoalGrams > 0);
-    if (withGoal.length > 0) {
+    // Average protein vs goal, each day against the protein target frozen on it.
+    const proteinTargets = logged
+      .map((d) => dayTargetFor(d, 'protein')?.target ?? null)
+      .filter((v): v is number => v !== null);
+    if (proteinTargets.length > 0) {
       const avg = Math.round(
-        logged.reduce((s, d) => s + d.totalProteinGrams, 0) / logged.length,
+        logged.reduce((s, d) => s + (d.macroTotals.protein ?? 0), 0) / logged.length,
       );
       const goal = Math.round(
-        withGoal.reduce((s, d) => s + d.snapshotProteinGoalGrams, 0) / withGoal.length,
+        proteinTargets.reduce((s, v) => s + v, 0) / proteinTargets.length,
       );
       list.push(
         t('progress.insight_protein', 'Protein averaged {{avg}} g a day against your {{goal}} g goal.', {

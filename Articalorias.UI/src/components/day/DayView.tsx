@@ -6,8 +6,7 @@ import { CalorieHero } from '@/components/today/CalorieHero';
 import { DayDetailsSheet } from '@/components/today/DayDetailsSheet';
 import { MealsList, ActivitiesList } from '@/components/today/EntryLists';
 import { ChecklistCard } from '@/components/today/ChecklistCard';
-import { WaterCard } from '@/components/today/WaterCard';
-import { AlcoholCard } from '@/components/today/AlcoholCard';
+import { QuickAddCard } from '@/components/today/QuickAddCard';
 import { TodaySkeleton } from '@/components/today/TodaySkeleton';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { ActionSheet } from '@/components/ui/ActionSheet';
@@ -22,6 +21,7 @@ import { queryKeys, invalidateDayData } from '@/lib/queryKeys';
 import { useCalorieMode } from '@/hooks/useCalorieMode';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import { usePersistedState } from '@/hooks/usePersistedState';
+import { trackedKeysFromTargets } from '@/utils/macros';
 
 type ListTab = 'meals' | 'activities';
 
@@ -109,15 +109,9 @@ export function DayView({ date, isToday }: DayViewProps) {
         ? t('sort.kcal', 'Highest calories')
         : t('sort.newest', 'Newest first');
 
-  // Extra tracked macros for the meal-row strips, from the day's own frozen
-  // targets: a past day shows the columns it was lived under.
-  const extraMacros = useMemo(
-    () =>
-      (dash?.macroTargets ?? [])
-        .map((m) => m.macroKey)
-        .filter((k) => k === 'alcohol' || k === 'sugar' || k === 'water'),
-    [dash?.macroTargets],
-  );
+  // Macros tracked on this day, from its own frozen targets: the meal-row
+  // strips and the edit sheet show the columns a past day was lived under.
+  const trackedKeys = useMemo(() => trackedKeysFromTargets(dash?.macroTargets), [dash?.macroTargets]);
 
   return (
     <div className="space-y-4">
@@ -175,9 +169,7 @@ export function DayView({ date, isToday }: DayViewProps) {
             <ChecklistCard hasGoal={dash.hasCalorieBudgetEstimate} />
           )}
 
-          <WaterCard date={date} log={dash} />
-
-          <AlcoholCard date={date} log={dash} />
+          <QuickAddCard date={date} log={dash} />
 
           <div data-tour="lists" className="flex items-center gap-2">
             <div className="flex-1 min-w-0">
@@ -210,7 +202,7 @@ export function DayView({ date, isToday }: DayViewProps) {
             <MealsList
               date={date}
               entries={sortedMeals}
-              extraMacros={extraMacros}
+              trackedKeys={trackedKeys}
               isToday={isToday}
               isFastingDay={dash.isFastingDay}
               onChanged={onChanged}

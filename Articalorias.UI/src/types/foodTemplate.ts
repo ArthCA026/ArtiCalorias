@@ -1,15 +1,13 @@
+import type { MacroAmounts } from './macros';
+
 export interface FoodTemplateResponse {
   foodTemplateId: number;
   templateName: string;
   portionDescription: string;
   defaultQuantity: number;
   caloriesKcal: number;
-  proteinGrams: number;
-  fatGrams: number;
-  carbsGrams: number;
-  alcoholGrams: number;
-  sugarGrams: number | null;
-  waterMl: number | null;
+  /** Amounts PER 1 PORTION keyed by macro key (absent = not captured). */
+  macros: MacroAmounts;
   autoAddToNewDay: boolean;
   isActive: boolean;
 }
@@ -19,12 +17,8 @@ export interface CreateFoodTemplateRequest {
   portionDescription: string;
   defaultQuantity: number;
   caloriesKcal: number;
-  proteinGrams: number;
-  fatGrams: number;
-  carbsGrams: number;
-  alcoholGrams: number;
-  sugarGrams?: number | null;
-  waterMl?: number | null;
+  /** Amounts PER 1 PORTION keyed by macro key. */
+  macros: MacroAmounts;
   autoAddToNewDay: boolean;
 }
 
@@ -33,11 +27,7 @@ export interface UpdateFoodTemplateRequest {
   portionDescription: string;
   defaultQuantity: number;
   caloriesKcal: number;
-  proteinGrams: number;
-  fatGrams: number;
-  carbsGrams: number;
-  alcoholGrams: number;
-  sugarGrams?: number | null;
-  waterMl?: number | null;
+  /** Amounts PER 1 PORTION keyed by macro key. */
+  macros: MacroAmounts;
   autoAddToNewDay: boolean;
 }

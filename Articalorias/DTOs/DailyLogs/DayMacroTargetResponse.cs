@@ -7,10 +7,10 @@ namespace Articalorias.DTOs.DailyLogs;
 /// </summary>
 public class DayMacroTargetResponse
 {
-    /// <summary>"carbs" | "fat" | "alcohol" | "sugar" | "water"</summary>
+    /// <summary>Catalog macro key ("protein", "carbs", "water", "caffeine", ...).</summary>
     public string MacroKey { get; set; } = string.Empty;
 
-    /// <summary>Grams per day (ml for water). Null = tracked amount-only, no bar.</summary>
+    /// <summary>Amount per day in the macro unit. Null = tracked amount-only, no bar.</summary>
     public decimal? Target { get; set; }
 
     /// <summary>"hit" (a goal to reach) or "limit" (warn when exceeded).</summary>

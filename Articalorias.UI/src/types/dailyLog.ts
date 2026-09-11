@@ -1,14 +1,14 @@
 import type { FoodEntryResponse } from './food';
 import type { ActivityEntryResponse } from './activity';
-import type { MacroKey } from './macros';
+import type { MacroAmounts, MacroDirection, MacroKey } from './macros';
 
 /** One tracked macro as frozen on a specific day (past days keep theirs). */
 export interface DayMacroTarget {
   macroKey: MacroKey;
-  /** Grams (ml for water). Null = tracked amount-only, no bar. */
+  /** Amount per day in the macro unit. Null = tracked amount-only, no bar. */
   target: number | null;
   /** "hit" = goal to reach, "limit" = warn when exceeded. */
-  direction: 'hit' | 'limit';
+  direction: MacroDirection;
 }
 
 export interface DailyLogResponse {
@@ -16,25 +16,20 @@ export interface DailyLogResponse {
   logDate: string;
 
   totalFoodCaloriesKcal: number;
-  totalProteinGrams: number;
-  totalFatGrams: number;
-  totalCarbsGrams: number;
-  totalAlcoholGrams: number;
-  /** Null = no entry of the day carried sugar data (not tracked then). */
-  totalSugarGrams: number | null;
-  /** Null = no entry of the day carried water data (not tracked then). */
-  totalWaterMl: number | null;
-  /** Extended macro targets frozen on this day (empty = only protein tracked). */
+  /**
+   * Consumed amounts keyed by macro key. Absent key = no entry of the day
+   * carried it (the macro was not tracked then); core macros are always present.
+   */
+  macroTotals: MacroAmounts;
+  /** Every macro target frozen on this day, protein included, catalog order. Empty = nothing tracked that day. */
   macroTargets: DayMacroTarget[];
 
   totalDailyExpenditureKcal: number;
 
   dailyGoalDeltaKcal: number;
   caloriesRemainingToDailyTargetKcal: number;
-  proteinRemainingGrams: number;
   suggestedDailyAverageRemainingKcal: number;
 
-  snapshotProteinGoalGrams: number;
   snapshotDailyBaseGoalKcal: number;
   /** User explicitly marked this day as a deliberate fast. */
   isFastingDay: boolean;
@@ -52,7 +47,6 @@ export interface DailyDashboardResponse extends DailyLogResponse {
   snapshotHeightCm: number | null;
   hasCalorieBudgetEstimate: boolean;
   hasCalorieEstimate: boolean;
-  hasProteinGoal: boolean;
   /** False until the user logs food themself for the first time ever. */
   hasEverLoggedFood: boolean;
 

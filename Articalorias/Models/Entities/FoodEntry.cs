@@ -1,3 +1,5 @@
+using Articalorias.Services.Macros;
+
 namespace Articalorias.Models.Entities;
 
 public class FoodEntry
@@ -10,16 +12,15 @@ public class FoodEntry
     public decimal? Quantity { get; set; }
 
     public decimal CaloriesKcal { get; set; }
-    public decimal ProteinGrams { get; set; }
-    public decimal FatGrams { get; set; }
-    public decimal CarbsGrams { get; set; }
-    public decimal AlcoholGrams { get; set; }
 
-    // Optional macro tracking (nullable: NULL = not captured when this entry
-    // was logged, 0 = captured and genuinely zero — the distinction lets old
-    // days say "not tracked then" instead of showing a fake 0).
-    public decimal? SugarGrams { get; set; }
-    public decimal? WaterMl { get; set; }
+    /// <summary>
+    /// TOTAL amounts eaten (already multiplied by Quantity), keyed by catalog
+    /// macro key and stored as JSON. Absent key = not captured when this
+    /// entry was logged (the macro was not tracked then), present 0 = captured
+    /// and genuinely zero; that distinction lets old days say "not tracked
+    /// then" instead of showing a fake 0. Core macros are always present.
+    /// </summary>
+    public MacroAmounts Macros { get; set; } = MacroAmounts.Empty;
 
     public int SortOrder { get; set; }
     public string? Notes { get; set; }

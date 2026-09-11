@@ -64,28 +64,8 @@ public class HistoryController : ControllerBase
         return long.Parse(claim.Value);
     }
 
-    private static DailyLogResponse MapDailyLogToResponse(DailyLog d) => new()
-    {
-        DailyLogId = d.DailyLogId,
-        LogDate = d.LogDate,
-        TotalFoodCaloriesKcal = d.TotalFoodCaloriesKcal,
-        TotalProteinGrams = d.TotalProteinGrams,
-        TotalFatGrams = d.TotalFatGrams,
-        TotalCarbsGrams = d.TotalCarbsGrams,
-        TotalAlcoholGrams = d.TotalAlcoholGrams,
-        TotalSugarGrams = d.TotalSugarGrams,
-        TotalWaterMl = d.TotalWaterMl,
-        MacroTargets = DailyLogController.MapMacroTargets(d.MacroTargetsJson),
-        TotalDailyExpenditureKcal = d.TotalDailyExpenditureKcal,
-        DailyGoalDeltaKcal = d.DailyGoalDeltaKcal,
-        CaloriesRemainingToDailyTargetKcal = d.CaloriesRemainingToDailyTargetKcal,
-        ProteinRemainingGrams = d.ProteinRemainingGrams,
-        SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
-        SnapshotProteinGoalGrams = d.SnapshotProteinGoalGrams,
-        SnapshotDailyBaseGoalKcal = d.SnapshotDailyBaseGoalKcal,
-        IsFastingDay = d.IsFastingDay,
-        HasCalorieBudgetEstimate = d.SnapshotWeightKg.HasValue && d.SnapshotHeightCm.HasValue
-    };
+    /// <summary>One mapper for every daily payload (see DailyLogController.MapToResponse).</summary>
+    private static DailyLogResponse MapDailyLogToResponse(DailyLog d) => DailyLogController.MapToResponse(d);
 
     private static MonthlySummaryResponse MapMonthlyToResponse(MonthlySummary m) => new()
     {

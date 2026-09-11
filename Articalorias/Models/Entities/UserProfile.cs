@@ -17,16 +17,7 @@ public class UserProfile
 
     // Metas vigentes
     public decimal DailyBaseGoalKcal { get; set; }
-    public decimal? ProteinGoalGrams { get; set; }
-    public bool AutoCalculateProteinGoal { get; set; }
-
-    /// <summary>
-    /// Preset multiplier behind an AUTO protein goal (g per kg of body
-    /// weight). The effective goal re-derives from the current weight on
-    /// every snapshot, so it follows the body. NULL = historical 2.0 g/kg.
-    /// See <see cref="Services.ProteinMath"/>.
-    /// </summary>
-    public decimal? ProteinGoalGramsPerKg { get; set; }
+    // Protein (and every other macro target) lives in UserMacroPreference.
 
     /// <summary>
     /// Optional "reach X by DATE" goal behind DailyBaseGoalKcal. Purely

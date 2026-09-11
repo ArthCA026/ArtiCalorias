@@ -7,23 +7,20 @@ import { ListRow } from '@/components/ui/ListRow';
 import { Switch } from '@/components/ui/Switch';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { ConfirmSheet } from '@/components/ui/ActionSheet';
-import { Icon } from '@/components/ui/Icon';
+import { Icon, iconOrFallback } from '@/components/ui/Icon';
 import { ErrorState } from '@/components/ui/States';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { CalorieModeSheet } from '@/components/ui/CalorieModeSheet';
 import { calorieModeShortLabel } from '@/components/ui/calorieModeLabels';
-import {
-  BodySheet,
-  ProteinSheet,
-  RemindersSheet,
-  SleepNeatSheet,
-} from '@/components/profile/ProfileSheets';
+import { BodySheet, RemindersSheet, SleepNeatSheet } from '@/components/profile/ProfileSheets';
+import { MacroTargetSheet } from '@/components/profile/MacroTargetSheet';
 import { ConsentStatusSheet, WithdrawConsentSheet } from '@/components/profile/LegalSheets';
 import { Spinner } from '@/components/ui/Button';
 import { consentService } from '@/services/consentService';
 import { POLICY_VERSIONS } from '@/legal/policyVersions';
-import { useMacroPreferences } from '@/hooks/useMacroPreferences';
+import { useMacros } from '@/hooks/useMacros';
+import { useMacroPreferences, useUpdateMacroPreference } from '@/hooks/useMacroPreferences';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme, type Theme } from '@/hooks/useTheme';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -42,10 +39,10 @@ import { profileToRequest } from '@/utils/profile';
 import { extractApiError } from '@/utils/apiError';
 import { formatWeight } from '@/utils/units';
 import { matchPreset, GOAL_PRESETS } from '@/utils/goalUtils';
-import { effectiveAutoProteinGrams } from '@/config/proteinPresets';
+import { formatMacroAmount } from '@/utils/macros';
 import { useBodyStaleDays, BODY_VERY_STALE_DAYS } from '@/hooks/useBodyStaleDays';
 import { FEATURES } from '@/config/features';
-import type { UserProfileRequest } from '@/types';
+import type { MacroPreference, UserProfileRequest } from '@/types';
 
 type OpenSheet = 'body' | 'protein' | 'mode' | 'reminders' | 'sleep-neat' | 'consent-status' | 'withdraw-consent' | null;
 type ConfirmKind = 'streak-reset' | 'clear-history' | 'delete-account' | 'bmr-review' | null;
@@ -72,8 +69,24 @@ export default function ProfilePage() {
   const [confirm, setConfirm] = useState<ConfirmKind>(null);
   // The review nudge reopens the body sheet with the advanced section shown.
   const [bodyAdvanced, setBodyAdvanced] = useState(false);
+  const { get } = useMacros();
   const { data: macroPrefs } = useMacroPreferences();
+  const updatePref = useUpdateMacroPreference();
+  // Protein is one preference among the others now, so it is inside the count.
   const trackedMacroCount = (macroPrefs ?? []).filter((m) => m.isTracked).length;
+  const proteinDef = get('protein');
+  // No stored row yet (fresh account, preferences still loading): the catalog
+  // default, tracked and auto, is what the server would answer anyway.
+  const proteinPref: MacroPreference = (macroPrefs ?? []).find((p) => p.macroKey === 'protein') ?? {
+    macroKey: 'protein',
+    isTracked: true,
+    targetMode: 'auto',
+    customTargetValue: null,
+    autoParam: proteinDef.targetFormula.defaultParam,
+    autoTargetValue: null,
+    effectiveTarget: null,
+    direction: 'hit',
+  };
 
   const profileQuery = useQuery({
     queryKey: queryKeys.profile(),
@@ -199,9 +212,14 @@ export default function ProfilePage() {
     return t('profile.goal_custom_value', 'Custom');
   })();
 
-  const proteinTracked = profile
-    ? profile.proteinGoalGrams !== null || profile.autoCalculateProteinGoal
-    : true;
+  const proteinLabel = (() => {
+    if (!proteinPref.isTracked) return t('profile.protein_off', 'Off');
+    if (proteinPref.targetMode === 'custom' && proteinPref.customTargetValue !== null)
+      return formatMacroAmount(proteinDef, proteinPref.customTargetValue);
+    if (proteinPref.autoTargetValue !== null)
+      return t('profile.protein_auto_value', '{{g}} g auto', { g: Math.round(proteinPref.autoTargetValue) });
+    return t('profile.auto', 'Auto');
+  })();
 
   const staleDays = useBodyStaleDays();
   const bodyVeryStale = staleDays !== null && staleDays > BODY_VERY_STALE_DAYS;
@@ -299,20 +317,9 @@ export default function ProfilePage() {
                 onClick={() => navigate('/profile/goal')}
               />
               <ListRow
-                icon="drumstick"
+                icon={iconOrFallback(proteinDef.icon)}
                 title={t('profile.row_protein', 'Protein target')}
-                right={(() => {
-                  if (!proteinTracked) return t('profile.protein_off', 'Off');
-                  if (profile.proteinGoalGrams !== null) return `${Math.round(profile.proteinGoalGrams)} g`;
-                  const autoGrams = effectiveAutoProteinGrams(
-                    profile.currentWeightKg,
-                    profile.age,
-                    profile.proteinGoalGramsPerKg,
-                  );
-                  return autoGrams !== null
-                    ? t('profile.protein_auto_value', '{{g}} g auto', { g: autoGrams })
-                    : t('profile.auto', 'Auto');
-                })()}
+                right={proteinLabel}
                 chevron
                 onClick={() => setSheet('protein')}
               />
@@ -320,10 +327,8 @@ export default function ProfilePage() {
                 icon="sliders"
                 title={t('profile.row_macros', 'Macro tracking')}
                 right={
-                  trackedMacroCount + (proteinTracked ? 1 : 0) > 0
-                    ? t('profile.macros_tracked_n', '{{n}} tracked', {
-                        n: trackedMacroCount + (proteinTracked ? 1 : 0),
-                      })
+                  trackedMacroCount > 0
+                    ? t('profile.macros_tracked_n', '{{n}} tracked', { n: trackedMacroCount })
                     : t('profile.macros_none', 'None')
                 }
                 chevron
@@ -550,12 +555,23 @@ export default function ProfilePage() {
             }
             saving={save.isPending}
           />
-          <ProteinSheet
+          <MacroTargetSheet
             open={sheet === 'protein'}
             onClose={() => setSheet(null)}
+            def={proteinDef}
+            pref={proteinPref}
             profile={profile}
-            onSave={(patch) => save.mutate(patch)}
-            saving={save.isPending}
+            saving={updatePref.isPending}
+            onSave={(item) =>
+              updatePref.mutate(item, {
+                onSuccess: () => {
+                  setSheet(null);
+                  toast('success', t('macros.saved', 'Tracking updated. Applies from today.'));
+                },
+                onError: (err) =>
+                  toast('error', extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
+              })
+            }
           />
           <SleepNeatSheet
             open={sheet === 'sleep-neat'}

@@ -12,6 +12,7 @@ import { activityService } from '@/services/activityService';
 import { foodService } from '@/services/foodService';
 import { queryKeys } from '@/lib/queryKeys';
 import { fmt, round1, qtyStr } from '@/utils/format';
+import { scaleMacros } from '@/utils/macros';
 import { extractApiError } from '@/utils/apiError';
 import type { ActivityTemplateResponse, FoodTemplateResponse } from '@/types';
 import type { LogTab } from './LogSheetContext';
@@ -56,10 +57,8 @@ export function TemplateQuickPick({ tab, date: targetDate, onBack, onAdded }: Te
           portionDescription: tpl.portionDescription,
           quantity: tpl.defaultQuantity,
           caloriesKcal: round1(tpl.caloriesKcal * tpl.defaultQuantity),
-          proteinGrams: round1(tpl.proteinGrams * tpl.defaultQuantity),
-          fatGrams: round1(tpl.fatGrams * tpl.defaultQuantity),
-          carbsGrams: round1(tpl.carbsGrams * tpl.defaultQuantity),
-          alcoholGrams: round1(tpl.alcoholGrams * tpl.defaultQuantity),
+          // Templates store amounts per 1 portion; every captured macro scales.
+          macros: scaleMacros(tpl.macros, tpl.defaultQuantity),
           foodTemplateId: tpl.foodTemplateId,
         })
         .then(() => ({ date, name: tpl.templateName, id: tpl.foodTemplateId }));
