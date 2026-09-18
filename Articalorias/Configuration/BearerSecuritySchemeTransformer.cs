@@ -40,7 +40,8 @@ internal sealed class BearerSecuritySchemeTransformer(
 
         if (document.Paths is null) return;
 
-        foreach (var operation in document.Paths!.Values.SelectMany(p => p.Operations.Values))
+        foreach (var operation in document.Paths.Values
+            .SelectMany(p => p.Operations?.Values ?? Enumerable.Empty<OpenApiOperation>()))
         {
             operation.Security ??= [];
             operation.Security.Add(requirement);
