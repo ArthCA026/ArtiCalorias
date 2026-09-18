@@ -1,3 +1,5 @@
+using Articalorias.Services;
+
 namespace Articalorias.Models.Entities;
 
 public class UserProfile
@@ -37,9 +39,13 @@ public class UserProfile
     // Safety settings
     public bool MinCaloriesSafeguardEnabled { get; set; } = false;
 
-    // Sleep & NEAT fixed daily costs
-    public decimal SleepHours { get; set; } = 8.0m;
-    public decimal NeatHours { get; set; } = 3.0m;
+    /// <summary>
+    /// Hours per day reserved for sleep and for everyday movement outside
+    /// workouts (NEAT). Priced by <see cref="ExpenditureModel"/>; snapshotted
+    /// onto each day at creation so past days keep the hours they were lived under.
+    /// </summary>
+    public decimal SleepHours { get; set; } = ExpenditureModel.DefaultSleepHours;
+    public decimal NeatHours { get; set; } = ExpenditureModel.DefaultNeatHours;
 
     public bool IsOnboardingCompleted { get; set; }
 

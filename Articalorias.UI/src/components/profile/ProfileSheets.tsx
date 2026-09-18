@@ -13,6 +13,7 @@ import { kgToDisplay, displayToKg, weightLabel, cmToFtIn, ftInToCm } from '@/uti
 import { useNotificationSettings } from '@/hooks/useNotificationSettings';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { toTimeInputValue, fromTimeInputValue } from '@/utils/notifications';
+import { MAX_NEAT_HOURS, MAX_RESERVED_HOURS, MAX_SLEEP_HOURS, reservedHoursFit } from '@/utils/expenditure';
 import type { UserProfileRequest, UserProfileResponse } from '@/types';
 
 export interface EditSheetProps {
@@ -322,9 +323,8 @@ export function SleepNeatSheet({ open, onClose, profile, onSave, saving }: EditS
   }, [open, profile.sleepHours, profile.neatHours]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  // Backend rule: at least 1 hour of the day must stay unreserved.
-  const total = sleep + neat;
-  const valid = total <= 23;
+  // Same limits the API enforces: at least 1 hour of the day stays unreserved.
+  const valid = reservedHoursFit(sleep, neat);
 
   return (
     <Sheet open={open} onClose={onClose} title={t('profile.sleep_neat_title', 'Sleep & daily movement')}>
@@ -336,7 +336,7 @@ export function SleepNeatSheet({ open, onClose, profile, onSave, saving }: EditS
           <QuantityField
             value={sleep}
             min={0}
-            max={16}
+            max={MAX_SLEEP_HOURS}
             step={0.5}
             suffix={t('common.hour_suffix', 'h')}
             onCommit={setSleep}
@@ -349,19 +349,26 @@ export function SleepNeatSheet({ open, onClose, profile, onSave, saving }: EditS
           <QuantityField
             value={neat}
             min={0}
-            max={16}
+            max={MAX_NEAT_HOURS}
             step={0.5}
             suffix={t('common.hour_suffix', 'h')}
             onCommit={setNeat}
           />
           <p className="mt-1.5 text-[13px] text-ink-3 leading-relaxed">
-            {t('profile.neat_hint', 'Hours you spend up and moving outside workouts: chores, cooking, walking around.')}
+            {t(
+              'profile.neat_hint',
+              'Hours on your feet outside workouts: chores, cooking, standing, moving around the house. Anything you log as an activity, a walk included, is already counted there, so leave it out here.',
+            )}
           </p>
         </div>
 
         {!valid && (
           <InlineError
-            message={t('profile.sleep_neat_error', 'Sleep plus movement cannot exceed 23 hours. At least 1 hour must remain for everything else.')}
+            message={t(
+              'profile.sleep_neat_error',
+              'Sleep plus movement cannot exceed {{max}} hours. At least 1 hour must remain for everything else.',
+              { max: MAX_RESERVED_HOURS },
+            )}
           />
         )}
 

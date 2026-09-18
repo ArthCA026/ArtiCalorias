@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Articalorias.Services;
 
 namespace Articalorias.DTOs.UserProfiles;
 
@@ -53,10 +54,12 @@ public class UserProfileRequest
     // Safety settings
     public bool MinCaloriesSafeguardEnabled { get; set; } = false;
 
-    // Sleep & NEAT fixed daily costs
-    [Range(0, 23)]
-    public decimal SleepHours { get; set; } = 8.0m;
+    // Sleep & everyday movement (NEAT) hours. Same per-field limits as the
+    // editor in the app; the joint "at most 23 h together" rule is checked
+    // by the service and answered with SLEEP_NEAT_HOURS_EXCEEDED.
+    [Range(0, ExpenditureModel.MaxSleepHours)]
+    public decimal SleepHours { get; set; } = ExpenditureModel.DefaultSleepHours;
 
-    [Range(0, 23)]
-    public decimal NeatHours { get; set; } = 3.0m;
+    [Range(0, ExpenditureModel.MaxNeatHours)]
+    public decimal NeatHours { get; set; } = ExpenditureModel.DefaultNeatHours;
 }

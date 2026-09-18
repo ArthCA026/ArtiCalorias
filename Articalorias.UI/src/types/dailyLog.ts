@@ -39,20 +39,38 @@ export interface DailyLogResponse {
 export interface DailyDashboardResponse extends DailyLogResponse {
   foodEntries: FoodEntryResponse[];
   activityEntries: ActivityEntryResponse[];
-  sleepCaloriesKcal: number;
-  neatCaloriesKcal: number;
-  snapshotSleepHours: number | null;
-  snapshotNeatHours: number | null;
   snapshotWeightKg: number | null;
   snapshotHeightCm: number | null;
+  snapshotBMRKcal: number;
   hasCalorieBudgetEstimate: boolean;
   hasCalorieEstimate: boolean;
   /** False until the user logs food themself for the first time ever. */
   hasEverLoggedFood: boolean;
 
-  // Expenditure detail (populated by the dashboard mapper)
+  // Expenditure detail (populated by the dashboard mapper). The blocks add up
+  // exactly to totalDailyExpenditureKcal:
+  //   snapshotBMRKcal + sleepCaloriesKcal + neatCaloriesKcal + idleTimeCaloriesKcal
+  //   + (totalActivityCaloriesKcal - activityRestingOffsetKcal) + tefKcal
+  // Every *CaloriesKcal below is a delta from resting, so sleep is negative.
+  /** Gross burn of the logged activities, resting share included (what a watch reports). */
   totalActivityCaloriesKcal: number;
+  /** Resting share inside the gross activity figures. */
+  activityRestingOffsetKcal: number;
+  /** Hours covered by logged activities. */
+  activityHours: number;
   tefKcal: number;
+  /** Awake hours left after sleep, everyday movement and activities. */
+  hoursRemainingInDay: number;
+  idleTimeCaloriesKcal: number;
+  /** Zero or negative: sleep burns less than resting. */
+  sleepCaloriesKcal: number;
+  neatCaloriesKcal: number;
+  /** Profile hours snapshotted on this day. Null = the day predates the feature. */
+  snapshotSleepHours: number | null;
+  snapshotNeatHours: number | null;
+  /** Hours actually priced; equal to the snapshots unless activities squeezed them to fit 24 h. */
+  sleepHoursUsed: number | null;
+  neatHoursUsed: number | null;
   netBalanceKcal: number;
 
   // Weekly context (Monday-based week, populated by the dashboard mapper)

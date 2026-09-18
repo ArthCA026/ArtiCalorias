@@ -1,4 +1,5 @@
 using Articalorias.Data;
+using Articalorias.Exceptions;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -135,12 +136,17 @@ public class UserProfileService : IUserProfileService
         }
     }
 
+    /// <summary>
+    /// Per-field ranges are enforced by the request DTO; this is the joint rule.
+    /// Thrown as an ApiException so the client gets a machine-readable code
+    /// instead of a bare 400 with an English sentence.
+    /// </summary>
     private static void ValidateSleepNeatHours(decimal sleepHours, decimal neatHours)
     {
-        if (sleepHours + neatHours > 23m)
-            throw new InvalidOperationException(
-                $"Sleep ({sleepHours}h) + NEAT ({neatHours}h) cannot exceed 23 hours per day. " +
-                "At least 1 hour must remain for other activities.");
+        if (!ExpenditureModel.ReservedHoursFit(sleepHours, neatHours))
+            throw new ApiException(ErrorCodes.SleepNeatHoursExceeded,
+                $"Sleep ({sleepHours}h) plus everyday movement ({neatHours}h) cannot exceed " +
+                $"{ExpenditureModel.MaxReservedHours} hours per day. At least 1 hour must remain for everything else.");
     }
 
     /// <summary>

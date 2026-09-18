@@ -35,6 +35,7 @@ import { getAgeProteinMinimum } from '@/config/proteinPresets';
 import { macroColor, macroSoftColor, pickLabel, previewAutoTarget } from '@/utils/macros';
 import { macroService } from '@/services/macroService';
 import { parseDate } from '@/utils/format';
+import { DEFAULT_NEAT_HOURS, DEFAULT_SLEEP_HOURS, estimateDailyBudgetKcal } from '@/utils/expenditure';
 import { extractApiError } from '@/utils/apiError';
 import { cn } from '@/utils/cn';
 import { PolicySheet } from '@/components/legal/PolicySheet';
@@ -165,12 +166,19 @@ export default function OnboardingPage() {
     const offset = sex === 'M' ? 5 : sex === 'F' ? -161 : -78;
     return Math.round(10 * weightKg + 6.25 * h - 5 * (a ?? 30) + offset);
   })();
-  const maintenancePreview = bmrPreview !== null && weightKg !== null
-    ? Math.round(bmrPreview + 4.8 * weightKg)
-    : null;
-  const budgetPreview = maintenancePreview !== null && goalSelection !== null
-    ? maintenancePreview + goalSelection.dailyBaseGoalKcal
-    : null;
+  // Same model the server prices the day with (see utils/expenditure.ts):
+  // BMR plus the sleep, everyday-movement and idle deltas for the default
+  // hours, the signed goal, grossed up for a typical diet's TEF. It is the
+  // number the Today "goal" budget settles on once the day has been eaten.
+  const budgetPreview =
+    bmrPreview !== null && weightKg !== null && goalSelection !== null
+      ? Math.round(
+          estimateDailyBudgetKcal(
+            { bmrKcal: bmrPreview, weightKg, sleepHours: DEFAULT_SLEEP_HOURS, neatHours: DEFAULT_NEAT_HOURS },
+            goalSelection.dailyBaseGoalKcal,
+          ),
+        )
+      : null;
 
   // Deurenberg estimate (same formula the server auto-calculates with) so the
   // planner can offer a body-fat target even before the profile exists. A
@@ -228,8 +236,10 @@ export default function OnboardingPage() {
           goalTargetDate: goalSelection?.goalTargetDate ?? null,
           calorieDisplayMode: 'adjusted',
           minCaloriesSafeguardEnabled: true,
-          sleepHours: 8,
-          neatHours: 3,
+          // Onboarding does not ask for these; the defaults are editable in
+          // Profile > Sleep & daily movement.
+          sleepHours: DEFAULT_SLEEP_HOURS,
+          neatHours: DEFAULT_NEAT_HOURS,
         })
         .then((r) => r.data);
 

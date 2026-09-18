@@ -32,18 +32,38 @@ public class DailyDashboardResponse
     /// </summary>
     public bool HasEverLoggedFood { get; set; }
 
-    // Gasto
+    // Gasto. The blocks below add up exactly to TotalDailyExpenditureKcal:
+    //   SnapshotBMRKcal + SleepCaloriesKcal + NeatCaloriesKcal + IdleTimeCaloriesKcal
+    //   + (TotalActivityCaloriesKcal - ActivityRestingOffsetKcal) + TEFKcal
+    /// <summary>Gross burn of the logged activities, resting share included (what a watch reports).</summary>
     public decimal TotalActivityCaloriesKcal { get; set; }
+    /// <summary>Resting share inside the gross activity figures; subtract it to get the burn above resting.</summary>
+    public decimal ActivityRestingOffsetKcal { get; set; }
+    /// <summary>Hours covered by logged activities.</summary>
+    public decimal ActivityHours { get; set; }
     public decimal TEFKcal { get; set; }
+    /// <summary>Awake hours left after sleep, everyday movement and activities.</summary>
     public decimal HoursRemainingInDay { get; set; }
+    /// <summary>Delta above resting for the idle hours.</summary>
     public decimal IdleTimeCaloriesKcal { get; set; }
+    /// <summary>Delta from resting for the sleep hours: zero or NEGATIVE, sleep burns less than resting.</summary>
     public decimal SleepCaloriesKcal { get; set; }
+    /// <summary>Delta above resting for the everyday-movement hours.</summary>
     public decimal NeatCaloriesKcal { get; set; }
     public decimal TotalDailyExpenditureKcal { get; set; }
 
-    // Snapshot sleep/NEAT (null = log predates this feature)
+    // Profile hours snapshotted on this day (null = log predates this feature)
     public decimal? SnapshotSleepHours { get; set; }
     public decimal? SnapshotNeatHours { get; set; }
+
+    /// <summary>
+    /// Sleep and everyday-movement hours the pipeline actually priced. They
+    /// equal the snapshots except when logged activities left less than the
+    /// reserved hours free, in which case they were squeezed to fit 24 h.
+    /// Null = log predates the feature.
+    /// </summary>
+    public decimal? SleepHoursUsed { get; set; }
+    public decimal? NeatHoursUsed { get; set; }
 
     // Balance
     public decimal NetBalanceKcal { get; set; }

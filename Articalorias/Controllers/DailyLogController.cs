@@ -7,6 +7,7 @@ using Articalorias.DTOs.FoodParsing;
 using Articalorias.Filters;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
+using Articalorias.Services;
 using Articalorias.Services.Macros;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -427,41 +428,54 @@ public class DailyLogController : ControllerBase
         DailyLog d,
         IReadOnlyList<FoodEntry> foods,
         IReadOnlyList<ActivityEntry> activities,
-        bool hasEverLoggedFood) => new()
+        bool hasEverLoggedFood)
     {
-        DailyLogId = d.DailyLogId,
-        LogDate = d.LogDate,
-        TotalFoodCaloriesKcal = d.TotalFoodCaloriesKcal,
-        MacroTotals = d.MacroTotals.EnsureCore().ToDictionary(),
-        MacroTargets = MapMacroTargets(d.MacroTargetsJson),
-        HasEverLoggedFood = hasEverLoggedFood,
-        TotalDailyExpenditureKcal = d.TotalDailyExpenditureKcal,
-        DailyGoalDeltaKcal = d.DailyGoalDeltaKcal,
-        CaloriesRemainingToDailyTargetKcal = d.CaloriesRemainingToDailyTargetKcal,
-        SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
-        SnapshotDailyBaseGoalKcal = d.SnapshotDailyBaseGoalKcal,
-        IsFastingDay = d.IsFastingDay,
-        FoodEntries = foods.Select(MapFoodToResponse).ToList(),
-        ActivityEntries = activities.Select(MapActivityToResponse).ToList(),
-        SleepCaloriesKcal = d.SleepCaloriesKcal,
-        NeatCaloriesKcal = d.NeatCaloriesKcal,
-        SnapshotSleepHours = d.SnapshotSleepHours,
-        SnapshotNeatHours = d.SnapshotNeatHours,
-        SnapshotWeightKg = d.SnapshotWeightKg,
-        SnapshotHeightCm = d.SnapshotHeightCm,
-        SnapshotBMRKcal = d.SnapshotBMRKcal,
-        SnapshotBodyFatPercent = d.SnapshotBodyFatPercent,
-        TotalActivityCaloriesKcal = d.TotalActivityCaloriesKcal,
-        TEFKcal = d.TEFKcal,
-        HoursRemainingInDay = d.HoursRemainingInDay,
-        IdleTimeCaloriesKcal = d.IdleTimeCaloriesKcal,
-        NetBalanceKcal = d.NetBalanceKcal,
-        WeekStartDate = d.WeekStartDate,
-        WeekEndDate = d.WeekEndDate,
-        WeeklyTargetKcal = d.WeeklyTargetKcal,
-        WeeklyActualToDateKcal = d.WeeklyActualToDateKcal,
-        WeeklyExpectedToDateKcal = d.WeeklyExpectedToDateKcal,
-        WeeklyDifferenceKcal = d.WeeklyDifferenceKcal,
-        WeeklyRemainingTargetKcal = d.WeeklyRemainingTargetKcal,
-    };
+        // Same fit the pipeline priced the day with, so the burn breakdown the
+        // app shows adds up to the stored total even on a day whose profile
+        // hours grew after activities were logged.
+        var activityMinutes = activities.Sum(a => a.DurationMinutes ?? 0m);
+        var hours = ExpenditureModel.FitDay(d.SnapshotSleepHours, d.SnapshotNeatHours, activityMinutes);
+
+        return new()
+        {
+            DailyLogId = d.DailyLogId,
+            LogDate = d.LogDate,
+            TotalFoodCaloriesKcal = d.TotalFoodCaloriesKcal,
+            MacroTotals = d.MacroTotals.EnsureCore().ToDictionary(),
+            MacroTargets = MapMacroTargets(d.MacroTargetsJson),
+            HasEverLoggedFood = hasEverLoggedFood,
+            TotalDailyExpenditureKcal = d.TotalDailyExpenditureKcal,
+            DailyGoalDeltaKcal = d.DailyGoalDeltaKcal,
+            CaloriesRemainingToDailyTargetKcal = d.CaloriesRemainingToDailyTargetKcal,
+            SuggestedDailyAverageRemainingKcal = d.SuggestedDailyAverageRemainingKcal,
+            SnapshotDailyBaseGoalKcal = d.SnapshotDailyBaseGoalKcal,
+            IsFastingDay = d.IsFastingDay,
+            FoodEntries = foods.Select(MapFoodToResponse).ToList(),
+            ActivityEntries = activities.Select(MapActivityToResponse).ToList(),
+            SleepCaloriesKcal = d.SleepCaloriesKcal,
+            NeatCaloriesKcal = d.NeatCaloriesKcal,
+            SnapshotSleepHours = d.SnapshotSleepHours,
+            SnapshotNeatHours = d.SnapshotNeatHours,
+            SleepHoursUsed = hours.SleepHours,
+            NeatHoursUsed = hours.NeatHours,
+            ActivityHours = hours.ActivityHours,
+            ActivityRestingOffsetKcal = ActivityCalorieMath.RestingOffset(d.SnapshotWeightKg ?? 0m, activityMinutes),
+            SnapshotWeightKg = d.SnapshotWeightKg,
+            SnapshotHeightCm = d.SnapshotHeightCm,
+            SnapshotBMRKcal = d.SnapshotBMRKcal,
+            SnapshotBodyFatPercent = d.SnapshotBodyFatPercent,
+            TotalActivityCaloriesKcal = d.TotalActivityCaloriesKcal,
+            TEFKcal = d.TEFKcal,
+            HoursRemainingInDay = d.HoursRemainingInDay,
+            IdleTimeCaloriesKcal = d.IdleTimeCaloriesKcal,
+            NetBalanceKcal = d.NetBalanceKcal,
+            WeekStartDate = d.WeekStartDate,
+            WeekEndDate = d.WeekEndDate,
+            WeeklyTargetKcal = d.WeeklyTargetKcal,
+            WeeklyActualToDateKcal = d.WeeklyActualToDateKcal,
+            WeeklyExpectedToDateKcal = d.WeeklyExpectedToDateKcal,
+            WeeklyDifferenceKcal = d.WeeklyDifferenceKcal,
+            WeeklyRemainingTargetKcal = d.WeeklyRemainingTargetKcal,
+        };
+    }
 }

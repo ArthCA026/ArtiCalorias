@@ -14,23 +14,20 @@ public interface IFormulaContext
 
 /// <summary>
 /// The one place a <see cref="TargetFormula"/> turns into a number. Auto
-/// targets derive from the profile the same way the onboarding preview does
-/// (maintenance = BMR + 4.8 kcal/kg covering NEAT, idle and sleep deltas, plus
-/// the signed goal, floored at 800 kcal).
+/// targets derive from the same daily budget the onboarding preview shows:
+/// <see cref="ExpenditureModel.EstimateDailyBudgetKcal"/>, i.e. the pipeline's
+/// own sleep / NEAT / idle pricing for the profile's hours, the signed goal
+/// and a nominal TEF, floored at 800 kcal.
 /// </summary>
 public static class MacroFormulas
 {
-    private const decimal MaintenanceKcalPerKg = 4.8m;
     private const decimal BudgetFloorKcal = 800m;
 
     /// <summary>Intake budget estimate; null until the profile has a weight and a BMR.</summary>
     public static decimal? CalorieBudget(UserProfile? profile)
     {
-        if (profile is null || !profile.CurrentWeightKg.HasValue || profile.BMRKcal <= 0m)
-            return null;
-
-        var maintenance = profile.BMRKcal + MaintenanceKcalPerKg * profile.CurrentWeightKg.Value;
-        return Math.Max(maintenance + profile.DailyBaseGoalKcal, BudgetFloorKcal);
+        var budget = ExpenditureModel.EstimateDailyBudgetKcal(profile);
+        return budget is null ? null : Math.Max(budget.Value, BudgetFloorKcal);
     }
 
     /// <summary>Evidence-informed minimum protein g/kg by age (mirrors the frontend).</summary>

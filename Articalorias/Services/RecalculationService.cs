@@ -115,24 +115,25 @@ public class RecalculationService : IRecalculationService
         var activityRestingOffsetKcal = ActivityCalorieMath.RestingOffset(
             log.SnapshotWeightKg ?? 0m, totalActivityMinutes);
 
-        // ── Step 3b: Recompute idle-time expenditure (unregistered hours) ──
-        var totalActivityHours = totalActivityMinutes / 60m;
-        // Sleep & NEAT hours reduce idle time (NULL = log predates the feature; treat as 0)
-        var sleepH = log.SnapshotSleepHours ?? 0m;
-        var neatH  = log.SnapshotNeatHours  ?? 0m;
-        var totalKnownHours = totalActivityHours + sleepH + neatH;
-        log.HoursRemainingInDay = Math.Max(0m, 24m - totalKnownHours);
-        // Idle MET 1.2 minus 1 MET (resting component already in BMR) = 0.2 net
+        // ── Step 3b: Fit the day's hours and price the non-activity blocks ──
+        // Activities keep their logged hours, then sleep, then everyday movement
+        // (NEAT); whatever is left is idle awake time, so the priced hours never
+        // exceed 24 even when the profile hours grew after activities were logged.
+        // Sleep/NEAT snapshots are NULL on days that predate the feature: those
+        // blocks are skipped and their hours stay idle, so old days never change.
+        // Each block contributes only its delta from resting (MET - 1); the
+        // resting share is already inside the BMR line of Step 5. Constants and
+        // formulas live in ExpenditureModel, shared with the budget estimate.
         // Weight ?? 0m: when weight is absent all MET-based calorie burns are 0.
-        log.IdleTimeCaloriesKcal = (1.2m - 1m) * (log.SnapshotWeightKg ?? 0m) * log.HoursRemainingInDay;
-        // Sleep & NEAT calories: (MET - 1) × weight × hours  (same formula as ActivityEntry)
-        // MET constants: Sleep = 0.9, NEAT = 3.0 (not user-configurable)
-        // Skipped when snapshots are NULL so old daily logs are never retroactively changed.
-        log.SleepCaloriesKcal = log.SnapshotSleepHours.HasValue
-            ? (0.9m - 1m) * (log.SnapshotWeightKg ?? 0m) * sleepH
+        var weightKg = log.SnapshotWeightKg ?? 0m;
+        var hours = ExpenditureModel.FitDay(log.SnapshotSleepHours, log.SnapshotNeatHours, totalActivityMinutes);
+        log.HoursRemainingInDay = hours.IdleHours;
+        log.IdleTimeCaloriesKcal = ExpenditureModel.IdleDeltaKcal(weightKg, hours.IdleHours);
+        log.SleepCaloriesKcal = hours.SleepHours.HasValue
+            ? ExpenditureModel.SleepDeltaKcal(weightKg, hours.SleepHours.Value)
             : 0m;
-        log.NeatCaloriesKcal = log.SnapshotNeatHours.HasValue
-            ? (3.0m - 1m) * (log.SnapshotWeightKg ?? 0m) * neatH
+        log.NeatCaloriesKcal = hours.NeatHours.HasValue
+            ? ExpenditureModel.NeatDeltaKcal(weightKg, hours.NeatHours.Value)
             : 0m;
 
         // ── Step 4: Recompute TEF (per-macro rates from the catalog) ──

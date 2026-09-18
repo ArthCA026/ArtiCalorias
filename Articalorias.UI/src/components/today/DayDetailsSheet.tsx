@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Sheet } from '@/components/ui/Sheet';
@@ -17,7 +18,7 @@ import {
   sortKeysByCatalog,
   trackedKeysFromTargets,
 } from '@/utils/macros';
-import { toDateString } from '@/utils/format';
+import { qtyStr, toDateString } from '@/utils/format';
 import { cn } from '@/utils/cn';
 import type { CalorieMode } from '@/hooks/useCalorieMode';
 import type { DailyDashboardResponse } from '@/types';
@@ -62,6 +63,43 @@ export function DayDetailsSheet({ open, onClose, dash, mode, date, isToday }: Da
   const budget = Math.max(budgetFor(dash, mode), 1);
   const remaining = budget - dash.totalFoodCaloriesKcal;
   const isSurplus = isSurplusGoalDay(dash);
+
+  // What the "Burned" figure is made of, one tap deeper. Every block after
+  // the first is a delta from resting, so sleep reads as a minus: the hours
+  // set in Profile become visible consequences instead of hidden inputs.
+  const [showBurn, setShowBurn] = useState(false);
+  const signed = (kcal: number) => {
+    const n = Math.round(kcal);
+    if (n === 0) return '0';
+    return `${n < 0 ? '−' : '+'}${Math.abs(n).toLocaleString()}`;
+  };
+  const hoursMeta = (h: number) => `${qtyStr(h)} ${t('common.hour_suffix', 'h')}`;
+  const hasActivities = dash.activityHours > 0 || dash.totalActivityCaloriesKcal > 0;
+  const burnRows: { key: string; label: string; meta: string; kcal: number; plain?: boolean }[] = [
+    {
+      key: 'resting',
+      label: t('today.burn_resting', 'Resting metabolism (BMR)'),
+      meta: t('today.burn_all_day', 'all day'),
+      kcal: dash.snapshotBMRKcal,
+      plain: true,
+    },
+    ...(dash.sleepHoursUsed !== null
+      ? [{ key: 'sleep', label: t('today.burn_sleep', 'Sleep, below resting'), meta: hoursMeta(dash.sleepHoursUsed), kcal: dash.sleepCaloriesKcal }]
+      : []),
+    ...(dash.neatHoursUsed !== null
+      ? [{ key: 'neat', label: t('today.burn_neat', 'Everyday movement'), meta: hoursMeta(dash.neatHoursUsed), kcal: dash.neatCaloriesKcal }]
+      : []),
+    { key: 'idle', label: t('today.burn_idle', 'Other awake time'), meta: hoursMeta(dash.hoursRemainingInDay), kcal: dash.idleTimeCaloriesKcal },
+    ...(hasActivities
+      ? [{
+          key: 'activities',
+          label: t('today.burn_activities', 'Activities, above resting'),
+          meta: dash.activityHours > 0 ? hoursMeta(dash.activityHours) : '',
+          kcal: dash.totalActivityCaloriesKcal - dash.activityRestingOffsetKcal,
+        }]
+      : []),
+    { key: 'tef', label: t('today.burn_tef', 'Digesting food'), meta: '', kcal: dash.tefKcal },
+  ];
 
   // The bottom line follows the day's goal direction: on a surplus (gaining)
   // day reaching the budget is the win, on a deficit day staying under is.
@@ -129,6 +167,50 @@ export function DayDetailsSheet({ open, onClose, dash, mode, date, isToday }: Da
             </div>
           )}
         </div>
+
+        {dash.hasCalorieEstimate && (
+          <div className="rounded-card bg-inset px-4 py-1">
+            <button
+              type="button"
+              aria-expanded={showBurn}
+              className="pressable flex w-full items-center justify-between h-11 text-left"
+              onClick={() => setShowBurn((v) => !v)}
+            >
+              <span className="text-[14px] font-semibold text-ink-2">
+                {t('today.burn_breakdown_toggle', 'What makes up the burn')}
+              </span>
+              <Icon name={showBurn ? 'chevronUp' : 'chevronDown'} size={16} className="text-ink-3 shrink-0" />
+            </button>
+
+            {showBurn && (
+              <div className="border-t border-hairline/60 pb-2">
+                {burnRows.map((r) => (
+                  <div key={r.key} className="flex items-center justify-between gap-3 h-10">
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink-2">
+                      {r.label}
+                      {r.meta && <span className="ml-1.5 font-medium text-ink-3">{r.meta}</span>}
+                    </span>
+                    <span className="shrink-0 text-[13px] font-bold tabular-nums text-ink">
+                      {r.plain ? Math.round(r.kcal).toLocaleString() : signed(r.kcal)} kcal
+                    </span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between h-10 border-t border-hairline/60">
+                  <span className="text-[13px] font-bold text-ink">{t('today.burned', 'Burned')}</span>
+                  <span className="text-[13px] font-extrabold tabular-nums text-ink">
+                    {e(dash.totalDailyExpenditureKcal)} kcal
+                  </span>
+                </div>
+                <p className="mt-1 text-[12px] text-ink-3 leading-relaxed">
+                  {t(
+                    'today.burn_note',
+                    'Activities show only what they add above resting; their resting share already sits in the first line. Sleep and movement hours are set in Profile.',
+                  )}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="rounded-card bg-inset px-4 py-3">
           <p className="text-[13px] font-bold text-ink-2 uppercase tracking-wide mb-2">

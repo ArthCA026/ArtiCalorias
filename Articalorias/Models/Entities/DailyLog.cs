@@ -36,14 +36,25 @@ public class DailyLog
     public string? MacroTargetsJson { get; set; }
 
     // Gasto del día
+    /// <summary>Gross burn of the logged activities (resting share included, like a watch reports it).</summary>
     public decimal TotalActivityCaloriesKcal { get; set; }
     public decimal TEFKcal { get; set; }
+
+    // The three non-activity blocks of the day, priced by ExpenditureModel.
+    // Each *CaloriesKcal below is a DELTA from resting, (MET - 1) x kg x h,
+    // because the resting share of every hour already sits in SnapshotBMRKcal.
+    // Sleep is therefore negative: it burns less than resting.
+
+    /// <summary>Awake hours not covered by sleep, NEAT or a logged activity, as fitted by the pipeline.</summary>
     public decimal HoursRemainingInDay { get; set; }
+    /// <summary>Delta above resting for the idle hours (1.2 MET).</summary>
     public decimal IdleTimeCaloriesKcal { get; set; }
-    // Sleep & NEAT snapshots (nullable: NULL = log predates this feature, skip computation)
+    // Sleep & NEAT snapshots of the profile hours (nullable: NULL = log predates this feature, blocks skipped)
     public decimal? SnapshotSleepHours { get; set; }
     public decimal? SnapshotNeatHours { get; set; }
+    /// <summary>Delta below resting for the sleep hours (0.9 MET): zero or negative.</summary>
     public decimal SleepCaloriesKcal { get; set; }
+    /// <summary>Delta above resting for the everyday-movement hours (2.3 MET).</summary>
     public decimal NeatCaloriesKcal { get; set; }
     public decimal TotalDailyExpenditureKcal { get; set; }
 
