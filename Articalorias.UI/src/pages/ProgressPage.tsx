@@ -10,7 +10,6 @@ import { CalorieModeTag } from '@/components/ui/CalorieModeTag';
 import { WeekDeltaChart } from '@/components/progress/WeekDeltaChart';
 import { WeekPickerSheet } from '@/components/progress/WeekPickerSheet';
 import { WeekDetailsSheet } from '@/components/progress/WeekDetailsSheet';
-import { WeeklyInsightCard } from '@/components/progress/WeeklyInsightCard';
 import { BodyCard } from '@/components/progress/BodyCard';
 import { MacrosWeekCard } from '@/components/progress/MacrosWeekCard';
 import { StreakCard } from '@/components/progress/StreakCard';
@@ -283,8 +282,6 @@ export default function ProgressPage() {
             days={days}
             isCurrentWeek={isCurrentWeek}
           />
-
-          <WeeklyInsightCard monday={monday} days={days} mode={mode} />
 
           <WeekDeltaChart monday={monday} days={days} mode={mode} />
 
