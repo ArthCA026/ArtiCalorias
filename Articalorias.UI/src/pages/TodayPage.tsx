@@ -10,11 +10,12 @@ import { AppTour } from '@/components/today/AppTour';
 import { Icon } from '@/components/ui/Icon';
 import { ConfirmSheet } from '@/components/ui/ActionSheet';
 import { useGetStreak } from '@/hooks/useStreak';
-import { dailyLogService } from '@/services/dailyLogService';
+import { useDayDashboard } from '@/hooks/useDayDashboard';
+import { useLocalToday } from '@/hooks/useLocalToday';
 import { profileService } from '@/services/profileService';
 import { measurementService } from '@/services/measurementService';
 import { queryKeys } from '@/lib/queryKeys';
-import { toDateString, parseDate, mondayOf } from '@/utils/format';
+import { parseDate, mondayOf } from '@/utils/format';
 import type { UserProfileResponse } from '@/types';
 
 /** One celebration per calendar day, surviving reloads and remounts. */
@@ -30,15 +31,12 @@ export default function TodayPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const today = toDateString();
+  // Tracks midnight while the app stays open: the day below rolls over with it.
+  const today = useLocalToday();
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  // Same key as DayView's query: shared cache entry, no extra request
-  const { data: dash } = useQuery({
-    queryKey: queryKeys.dashboard(today),
-    queryFn: () => dailyLogService.getDashboard(today).then((r) => r.data),
-    staleTime: 5 * 60 * 1000,
-  });
+  // Same hook as DayView's query: shared cache entry, no extra request
+  const { data: dash } = useDayDashboard(today);
 
   // A marked fasting day counts as logged: streak safe, celebration eligible.
   const hasLoggedToday = (dash?.foodEntries.length ?? 0) > 0 || (dash?.isFastingDay ?? false);

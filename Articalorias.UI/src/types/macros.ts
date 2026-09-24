@@ -1,14 +1,14 @@
 /**
  * Macro keys are open-ended: whatever the API catalog (GET /api/macros/catalog)
- * defines. "protein", "fat", "carbs", "alcohol", "sugar", "water", "caffeine",
- * "sodium" today; anything the backend adds tomorrow renders without a UI change.
+ * defines. "protein", "fat", "carbs", "alcohol", "fiber", "sugar", "water",
+ * "caffeine", "sodium" today; anything the backend adds tomorrow renders
+ * without a UI change.
  */
 export type MacroKey = string;
 
 export type MacroUnit = 'g' | 'ml' | 'mg';
 export type MacroDirection = 'hit' | 'limit';
 export type MacroTargetMode = 'auto' | 'custom';
-export type MacroRowStrip = 'always' | 'whenTracked';
 
 /** Amounts keyed by macro key. Absent key = not captured (never a fake 0). */
 export type MacroAmounts = Record<string, number>;
@@ -74,7 +74,17 @@ export interface MacroDefinition {
   customTargetMax: number;
   quickAdds: MacroQuickAdd[];
   showInHeroBars: boolean;
-  rowStrip: MacroRowStrip;
+  /**
+   * Listed in the day's macro totals even when untracked (protein, fat,
+   * carbs: where the calories came from). Meal and template rows never use
+   * it: their strip shows tracked macros only.
+   */
+  alwaysInDayTotals: boolean;
+  /**
+   * Calories one unit of this macro adds on its own: 0 for a non-energy macro
+   * and for a subset of another (sugar is already inside carbs).
+   */
+  energyKcalPerGram: number;
   hasOwnCard: boolean;
   /** Retired macros keep rendering history but cannot be tracked anew. */
   isActive: boolean;
@@ -82,6 +92,8 @@ export interface MacroDefinition {
 
 export interface MacroCatalogResponse {
   catalogVersion: string;
+  /** How many macros can be tracked at a time, protein included. The server enforces it. */
+  maxTrackedMacros: number;
   macros: MacroDefinition[];
 }
 

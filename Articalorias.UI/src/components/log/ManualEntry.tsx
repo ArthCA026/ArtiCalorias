@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Field, DecimalField } from '@/components/ui/Field';
 import { MacroFieldsGrid } from '@/components/ui/MacroFieldsGrid';
+import { MacroEnergyHint } from '@/components/ui/MacroEnergyHint';
 import { InlineError } from '@/components/ui/States';
 import { Icon } from '@/components/ui/Icon';
 import { foodService } from '@/services/foodService';
@@ -126,6 +127,7 @@ export function ManualFood({ date, onBack, onDone }: ManualProps) {
         </div>
       )}
 
+      <MacroEnergyHint calories={kcal} macros={macros} />
       {error && <InlineError message={error} />}
 
       <Button type="submit" variant="primary" size="lg" fullWidth loading={save.isPending} disabled={!valid}>

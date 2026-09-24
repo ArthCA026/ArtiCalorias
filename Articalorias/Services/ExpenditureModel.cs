@@ -61,9 +61,14 @@ public static class ExpenditureModel
 
     /// <summary>
     /// Thermic effect of a typical mixed diet, as a fraction of intake. The
-    /// pipeline prices TEF from the macros actually eaten; budget ESTIMATES
-    /// (onboarding preview, macro targets) use this nominal rate instead so
-    /// they land where the Today budget ends up once the day has been eaten.
+    /// pipeline prices TEF from what was actually eaten (<see cref="Macros.MacroTef"/>);
+    /// this nominal rate covers what cannot be priced that way: the budget
+    /// ESTIMATES (onboarding preview, macro targets), so they land where the
+    /// Today budget ends up once the day has been eaten, and logged calories
+    /// that carry no macros at all. The Today budget itself is never
+    /// estimated ahead: it only counts the TEF of food already logged, so it
+    /// grows a little with every meal (a deliberate choice, 2026-09-18: no
+    /// guessed numbers on the day view).
     /// </summary>
     public const decimal NominalTefFraction = 0.10m;
 
@@ -123,8 +128,11 @@ public static class ExpenditureModel
     /// The intake that closes the day on the profile's goal: maintenance plus
     /// the signed goal, grossed up for the TEF of eating that much. Solves
     /// budget = maintenance + TEF(budget) + goal with TEF at the nominal rate,
-    /// which is what the Today "goal" budget converges to once the food is in.
-    /// Null until the profile has a weight and a BMR.
+    /// which is what the Today "goal" budget converges to once the food is in
+    /// (on a day with no logged workouts), with the same minimum-intake
+    /// safeguard the Today budget applies, so macro targets add up to the
+    /// calorie budget the day ends on. Null until the profile has a weight
+    /// and a BMR.
     /// </summary>
     public static decimal? EstimateDailyBudgetKcal(UserProfile? profile)
     {
@@ -132,6 +140,13 @@ public static class ExpenditureModel
         if (maintenance is null)
             return null;
 
-        return (maintenance.Value + profile!.DailyBaseGoalKcal) / (1m - NominalTefFraction);
+        var budget = (maintenance.Value + profile!.DailyBaseGoalKcal) / (1m - NominalTefFraction);
+        if (!profile.MinCaloriesSafeguardEnabled)
+            return budget;
+
+        var floor = IntakeSafeguard.MinimumDailyIntakeKcal(
+            profile.BiologicalSex, profile.BMRKcal, profile.CurrentWeightKg, profile.BodyFatPercent,
+            exerciseKcalAboveResting: 0m);
+        return Math.Max(budget, floor);
     }
 }

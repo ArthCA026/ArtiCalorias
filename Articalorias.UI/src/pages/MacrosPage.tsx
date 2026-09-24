@@ -13,7 +13,8 @@ import { MacroTargetSheet } from '@/components/profile/MacroTargetSheet';
 import { useMacros } from '@/hooks/useMacros';
 import { useMacroPreferences, useUpdateMacroPreference } from '@/hooks/useMacroPreferences';
 import { formatMacroAmount, macroColor, macroSoftColor } from '@/utils/macros';
-import { extractApiError } from '@/utils/apiError';
+import { extractApiError, extractApiErrorCode } from '@/utils/apiError';
+import { cn } from '@/utils/cn';
 import { profileService } from '@/services/profileService';
 import { queryKeys } from '@/lib/queryKeys';
 import type { MacroDefinition, MacroPreference } from '@/types';
@@ -36,6 +37,13 @@ const defaultPref = (def: MacroDefinition): MacroPreference => ({
  * reads as broken), what kind of target it is, and an Adjust button that
  * opens the target editor. Protein is just the first row now. Changes apply
  * from today; past days keep what they were lived under.
+ *
+ * At most `maxTracked` macros can be on at once (the server enforces it, the
+ * catalog ships the number). The slot meter on top makes the limit visible
+ * before it is hit; once it is, the remaining switches dim but stay
+ * tappable, because a dead control explains nothing: the tap answers with
+ * what to do instead. Accounts that were above the limit when it arrived
+ * keep everything they track and only lose the ability to add more.
  */
 export default function MacrosPage() {
   const { t } = useTranslation();
@@ -56,9 +64,30 @@ export default function MacrosPage() {
   const prefsByKey = new Map((prefsQuery.data ?? []).map((p) => [p.macroKey, p]));
   const prefFor = (def: MacroDefinition) => prefsByKey.get(def.key) ?? defaultPref(def);
 
+  // Counted over the ACTIVE catalog, exactly like the server does: a retired
+  // macro still marked as tracked holds no slot.
+  const max = catalog.maxTracked;
+  const hasLimit = Number.isFinite(max);
+  const trackedCount = catalog.defs.filter((d) => prefFor(d).isTracked).length;
+  const atLimit = hasLimit && trackedCount >= max;
+  const limitMessage = () =>
+    t('macros.limit_reached', 'You are tracking {{max}} of {{max}}. Turn one off to add another.', { max });
+
   const saved = () => toast('success', t('macros.saved', 'Tracking updated. Applies from today.'));
-  const failed = (err: unknown) =>
+  const failed = (err: unknown) => {
+    // The server has the last word on the limit (another device may have
+    // taken the last slot): say so in the user's language and resync.
+    if (extractApiErrorCode(err) === 'MACRO_TRACK_LIMIT') {
+      // A tab opened before the limit shipped still holds a catalog without
+      // the number: fall back to the server's own sentence and fetch the
+      // current catalog so the meter appears.
+      toast('info', hasLimit ? limitMessage() : extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.')));
+      void prefsQuery.refetch();
+      catalog.refetch();
+      return;
+    }
     toast('error', extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.')));
+  };
 
   const targetLine = (def: MacroDefinition, pref: MacroPreference): string => {
     if (pref.targetMode === 'custom' && pref.customTargetValue !== null)
@@ -101,11 +130,44 @@ export default function MacrosPage() {
         />
       )}
 
+      {!showError && prefsQuery.data && hasLimit && (
+        <Card>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[15px] font-bold text-ink">
+              {t('macros.limit_count', '{{n}} of {{max}} tracked', { n: trackedCount, max })}
+            </p>
+            <div className="flex shrink-0 items-center gap-1" aria-hidden="true">
+              {Array.from({ length: max }, (_, i) => (
+                <span
+                  key={i}
+                  className={cn('h-2 w-4 rounded-full', i < trackedCount ? 'bg-primary' : 'bg-press')}
+                />
+              ))}
+            </div>
+          </div>
+          <p className="mt-1.5 text-[13px] text-ink-2 leading-relaxed">
+            {trackedCount > max
+              ? t(
+                  'macros.limit_over',
+                  'The limit is {{max}} at a time. Everything you track keeps working; turn some off before adding others.',
+                  { max },
+                )
+              : t(
+                  'macros.limit_hint',
+                  'Up to {{max}} at a time. A short list keeps your day readable and your meal estimates sharp.',
+                  { max },
+                )}
+          </p>
+        </Card>
+      )}
+
       {!showError &&
         prefsQuery.data &&
         catalog.defs.map((def) => {
           const pref = prefFor(def);
           const name = catalog.label(def);
+          // Out of slots: this switch cannot go on until another goes off.
+          const locked = atLimit && !pref.isTracked;
           return (
             <Card key={def.key}>
               <div className="flex items-center gap-3">
@@ -123,17 +185,31 @@ export default function MacrosPage() {
                       : t('macros.kind_hit', 'A goal: fill the bar to reach it')}
                   </p>
                 </div>
-                <Switch
-                  checked={pref.isTracked}
-                  disabled={update.pendingKey === def.key}
-                  onChange={(on) =>
-                    update.mutate(
-                      { macroKey: def.key, isTracked: on, targetMode: pref.targetMode },
-                      { onSuccess: saved, onError: failed },
-                    )
-                  }
-                  label={t('macros.track_toggle_aria', 'Track {{macro}}', { macro: name })}
-                />
+                <span className={cn('shrink-0 flex', locked && 'opacity-50')}>
+                  <Switch
+                    checked={pref.isTracked}
+                    // One switch at a time while the limit is in play: two
+                    // quick taps must not both claim the last free slot.
+                    disabled={update.pendingKey === def.key || (hasLimit && update.isPending)}
+                    onChange={(on) => {
+                      if (on && locked) {
+                        toast('info', limitMessage());
+                        return;
+                      }
+                      update.mutate(
+                        { macroKey: def.key, isTracked: on, targetMode: pref.targetMode },
+                        { onSuccess: saved, onError: failed },
+                      );
+                    }}
+                    label={
+                      locked
+                        ? t('macros.track_toggle_locked_aria', 'Track {{macro}}. Limit reached, turn another macro off first', {
+                            macro: name,
+                          })
+                        : t('macros.track_toggle_aria', 'Track {{macro}}', { macro: name })
+                    }
+                  />
+                </span>
               </div>
 
               {pref.isTracked && (

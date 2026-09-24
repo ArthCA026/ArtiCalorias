@@ -6,8 +6,8 @@
  * text the user never saw.
  */
 export const POLICY_VERSIONS = {
-  terms: '2026-09-09',
-  privacy: '2026-09-09',
+  terms: '2026-09-18',
+  privacy: '2026-09-18',
   health_data: '2026-09-09',
 } as const;
 

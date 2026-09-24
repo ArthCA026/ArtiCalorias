@@ -3,7 +3,7 @@ import { POLICY_VERSIONS } from '../policyVersions';
 
 export const privacyEs: PolicyDocument = {
   version: POLICY_VERSIONS.privacy,
-  effectiveDate: '2026-09-09',
+  effectiveDate: '2026-09-18',
   title: 'Aviso de Privacidad',
   draftBanner:
     'BORRADOR PARA REVISIÓN LEGAL. Este documento está pendiente de validación por un profesional en derecho en Costa Rica y su texto puede cambiar.',
@@ -55,6 +55,15 @@ export const privacyEs: PolicyDocument = {
       ],
     },
     {
+      heading: 'Datos de suscripción y pago',
+      bullets: [
+        'Tu plan, su precio, su estado y sus fechas: inicio, renovación, cancelación.',
+        'Los identificadores que ONVO Pay, nuestro procesador de pagos, te asigna como cliente y asigna a tu suscripción.',
+        'Un registro de tus eventos de cobro: cuándo iniciaste un pago y con qué precio y versión de los términos, cuándo se confirmó un pago, cuándo cancelaste.',
+        'No recibimos ni guardamos el número de tu tarjeta, su fecha de vencimiento ni su código de seguridad. Los escribes en el formulario de pago de ONVO Pay y van directamente a ONVO Pay.',
+      ],
+    },
+    {
       heading: 'Para qué usamos tus datos',
       bullets: [
         'Calcular tu presupuesto de calorías y macronutrientes y mostrar tu progreso.',
@@ -62,6 +71,7 @@ export const privacyEs: PolicyDocument = {
         'Enviarte recordatorios de comidas, solo si los activas.',
         'Enviarte correos de recuperación de contraseña.',
         'Mantener la seguridad de tu cuenta.',
+        'Cobrar tu suscripción, reconocer que has pagado y gestionar cancelaciones, pagos fallidos y reembolsos.',
       ],
       paragraphs: [
         'No usamos tus datos para publicidad, no los vendemos y la aplicación no incluye rastreadores de analítica de terceros.',
@@ -75,6 +85,7 @@ export const privacyEs: PolicyDocument = {
         'Open Food Facts (Francia): recibe únicamente el código de barras que escanees, para buscar el producto.',
         'Servicios de notificaciones del navegador (Google, Mozilla o Apple, según tu navegador): reciben el identificador técnico necesario para entregar los recordatorios.',
         'Proveedor de correo electrónico: recibe tu dirección para enviarte los códigos de recuperación de contraseña.',
+        'ONVO Pay (Costa Rica): nuestro procesador de pagos. Recibe tu nombre de usuario y tu correo electrónico para crear tu registro de cliente, y los datos de la tarjeta que escribes en su formulario de pago, para cobrar tu suscripción.',
         'Microsoft Azure (Estados Unidos): aloja la aplicación y la base de datos.',
       ],
     },
@@ -89,6 +100,7 @@ export const privacyEs: PolicyDocument = {
       bullets: [
         'Obligatorios: nombre de usuario, correo y contraseña. Sin ellos no se puede crear la cuenta.',
         'Opcionales pero centrales: peso, estatura, edad, sexo y demás datos del cuerpo. Puedes omitir algunos, pero los cálculos serán menos precisos o algunas funciones no estarán disponibles. Por ejemplo, las metas automáticas de proteína necesitan tu peso.',
+        'Pago: se necesita un medio de pago válido para suscribirse, y sin suscripción la aplicación no se puede usar. Aun así puedes descargar tus datos y eliminar tu cuenta sin pagar.',
         'Si no consientes el tratamiento de tus datos de salud, la aplicación no puede prestarte el servicio, porque el servicio consiste precisamente en registrar y calcular con esos datos. Puedes negarte, pero en ese caso no es posible usar ArtiCalorias.',
       ],
     },
@@ -101,7 +113,7 @@ export const privacyEs: PolicyDocument = {
     {
       heading: 'Tus derechos y cómo ejercerlos',
       bullets: [
-        'Acceso: puedes ver tus datos dentro de la aplicación y descargarlos completos desde Perfil, sección Legal, opción Descargar mis datos.',
+        'Acceso: puedes ver tus datos dentro de la aplicación y descargarlos completos desde Perfil, sección Legal, opción Descargar mis datos. Incluye tus registros de suscripción, y la descarga también se ofrece en la pantalla de suscripción cuando no tienes una suscripción activa.',
         'Rectificación: puedes corregir tu perfil y tus registros directamente en la aplicación.',
         'Eliminación: puedes borrar tu historial o tu cuenta completa desde Perfil. La eliminación de la cuenta es inmediata y permanente.',
         'Revocación del consentimiento: desde Perfil, sección Legal. Si revocas el consentimiento de datos de salud, la aplicación deja de guardar datos nuevos y te ofrece eliminar tu cuenta.',
@@ -113,7 +125,7 @@ export const privacyEs: PolicyDocument = {
     {
       heading: 'Cuánto tiempo conservamos tus datos',
       paragraphs: [
-        'Conservamos tus datos mientras tu cuenta exista. Si eliminas tu historial o tu cuenta, los datos se borran de la base de datos de forma inmediata y permanente. Las copias de seguridad del proveedor de alojamiento pueden tardar un tiempo adicional limitado en purgarse.',
+        'Conservamos tus datos mientras tu cuenta exista. Si eliminas tu historial o tu cuenta, los datos se borran de la base de datos de forma inmediata y permanente. Las copias de seguridad del proveedor de alojamiento pueden tardar un tiempo adicional limitado en purgarse. Tus registros de suscripción se eliminan junto con tu cuenta. ONVO Pay conserva los registros de los pagos que procesó durante el tiempo que la ley exige a un procesador de pagos.',
       ],
     },
     {

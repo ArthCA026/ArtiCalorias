@@ -70,6 +70,12 @@ public class ConsentEnforcementMiddleware
             path.StartsWithSegments("/api/health"))
             return false;
 
+        // Always allowed: billing. Someone who withdrew consent, or who declines
+        // a new policy version, must still be able to stop paying. It stores no
+        // health data.
+        if (path.StartsWithSegments("/api/billing"))
+            return false;
+
         // Always allowed: the Art. 7 erasure endpoints.
         if (HttpMethods.IsDelete(method) &&
             (path.StartsWithSegments("/api/user/account") || path.StartsWithSegments("/api/user/history")))

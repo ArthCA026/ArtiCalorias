@@ -102,6 +102,7 @@ public class MealReminderService : BackgroundService
             await using var scope = _scopeFactory.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var push = scope.ServiceProvider.GetRequiredService<IPushNotificationService>();
+            var billing = scope.ServiceProvider.GetRequiredService<IBillingService>();
 
             var dueSchedules = await db.NotificationSchedules
                 .Where(s => s.Enabled
@@ -126,6 +127,12 @@ public class MealReminderService : BackgroundService
 
             foreach (var schedule in dueSchedules)
             {
+                // No subscription, no nudges: "log your lunch" is a taunt when
+                // the app opens on a paywall. The schedule is kept, so
+                // reminders resume by themselves with the next payment.
+                if (!await billing.HasAccessAsync(schedule.UserId, ct))
+                    continue;
+
                 var tag = $"articalorias-{schedule.Type.ToString().ToLowerInvariant()}";
                 string title;
                 string body;

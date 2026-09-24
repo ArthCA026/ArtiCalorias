@@ -29,6 +29,15 @@ export const MAX_RESERVED_HOURS = 23;
 /** Thermic effect of a typical mixed diet, as a fraction of intake. */
 export const NOMINAL_TEF_FRACTION = 0.1;
 
+/**
+ * Mirror of Services/IntakeSafeguard.cs: the minimum daily intake the app
+ * will suggest while the safeguard is on (it is on for every new account).
+ */
+export const SAFEGUARD_FEMALE_FLOOR_KCAL = 1200;
+export const SAFEGUARD_DEFAULT_FLOOR_KCAL = 1500;
+export const SAFEGUARD_BMR_SHARE = 0.8;
+export const SAFEGUARD_KCAL_PER_KG_FFM = 30;
+
 export interface MaintenanceInput {
   bmrKcal: number;
   weightKg: number;
@@ -49,13 +58,43 @@ export function estimateMaintenanceKcal({ bmrKcal, weightKg, sleepHours, neatHou
   );
 }
 
+export interface SafeguardInput {
+  sex: 'M' | 'F' | '';
+  bmrKcal: number;
+  weightKg: number | null;
+  /** Measured or estimated; null falls back to the full BMR like the server does. */
+  bodyFatPercent: number | null;
+}
+
+/**
+ * Highest of three floors: the sex-based absolute minimum, 80 % of the BMR,
+ * and 30 kcal per kg of fat-free mass (the full BMR when body fat is
+ * unknown). A day with no logged workouts, so no exercise term.
+ */
+export function minimumDailyIntakeKcal({ sex, bmrKcal, weightKg, bodyFatPercent }: SafeguardInput): number {
+  const sexFloor = sex === 'F' ? SAFEGUARD_FEMALE_FLOOR_KCAL : SAFEGUARD_DEFAULT_FLOOR_KCAL;
+  const bmrFloor = bmrKcal * SAFEGUARD_BMR_SHARE;
+  const eaFloor =
+    bodyFatPercent !== null && bodyFatPercent > 0 && weightKg !== null
+      ? SAFEGUARD_KCAL_PER_KG_FFM * weightKg * (1 - bodyFatPercent / 100)
+      : bmrKcal;
+  return Math.max(sexFloor, eaFloor, bmrFloor);
+}
+
 /**
  * The intake that closes the day on the goal: maintenance plus the signed
- * goal, grossed up for the TEF of eating that much. This is the number the
- * Today "goal" budget settles on once the day has been eaten.
+ * goal, grossed up for the TEF of eating that much, never under the
+ * minimum-intake safeguard when one is given. This is the number the Today
+ * "goal" budget settles on once the day has been eaten (the Today budget
+ * itself only counts the TEF of food already logged).
  */
-export function estimateDailyBudgetKcal(input: MaintenanceInput, goalKcal: number): number {
-  return (estimateMaintenanceKcal(input) + goalKcal) / (1 - NOMINAL_TEF_FRACTION);
+export function estimateDailyBudgetKcal(
+  input: MaintenanceInput,
+  goalKcal: number,
+  safeguard: SafeguardInput | null = null,
+): number {
+  const budget = (estimateMaintenanceKcal(input) + goalKcal) / (1 - NOMINAL_TEF_FRACTION);
+  return safeguard ? Math.max(budget, minimumDailyIntakeKcal(safeguard)) : budget;
 }
 
 export function reservedHoursFit(sleepHours: number, neatHours: number): boolean {

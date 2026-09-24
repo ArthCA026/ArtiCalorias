@@ -11,14 +11,14 @@ import { useMacroPreferences } from '@/hooks/useMacroPreferences';
 import { useMacros } from '@/hooks/useMacros';
 import {
   dayTargetFor,
+  dayTotalsItems,
   formatMacroAmount,
   macroColor,
   macroTotalFor,
-  rowStripItems,
   sortKeysByCatalog,
   trackedKeysFromTargets,
 } from '@/utils/macros';
-import { qtyStr, toDateString } from '@/utils/format';
+import { qtyStr, roundPartsToTotal, toDateString } from '@/utils/format';
 import { cn } from '@/utils/cn';
 import type { CalorieMode } from '@/hooks/useCalorieMode';
 import type { DailyDashboardResponse } from '@/types';
@@ -68,8 +68,7 @@ export function DayDetailsSheet({ open, onClose, dash, mode, date, isToday }: Da
   // the first is a delta from resting, so sleep reads as a minus: the hours
   // set in Profile become visible consequences instead of hidden inputs.
   const [showBurn, setShowBurn] = useState(false);
-  const signed = (kcal: number) => {
-    const n = Math.round(kcal);
+  const signed = (n: number) => {
     if (n === 0) return '0';
     return `${n < 0 ? '−' : '+'}${Math.abs(n).toLocaleString()}`;
   };
@@ -100,6 +99,8 @@ export function DayDetailsSheet({ open, onClose, dash, mode, date, isToday }: Da
       : []),
     { key: 'tef', label: t('today.burn_tef', 'Digesting food'), meta: '', kcal: dash.tefKcal },
   ];
+  // Whole numbers that add up to the "Burned" total shown right under them.
+  const burnKcal = roundPartsToTotal(burnRows.map((r) => r.kcal), dash.totalDailyExpenditureKcal);
 
   // The bottom line follows the day's goal direction: on a surplus (gaining)
   // day reaching the budget is the win, on a deficit day staying under is.
@@ -184,14 +185,14 @@ export function DayDetailsSheet({ open, onClose, dash, mode, date, isToday }: Da
 
             {showBurn && (
               <div className="border-t border-hairline/60 pb-2">
-                {burnRows.map((r) => (
+                {burnRows.map((r, i) => (
                   <div key={r.key} className="flex items-center justify-between gap-3 h-10">
                     <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink-2">
                       {r.label}
                       {r.meta && <span className="ml-1.5 font-medium text-ink-3">{r.meta}</span>}
                     </span>
                     <span className="shrink-0 text-[13px] font-bold tabular-nums text-ink">
-                      {r.plain ? Math.round(r.kcal).toLocaleString() : signed(r.kcal)} kcal
+                      {r.plain ? burnKcal[i].toLocaleString() : signed(burnKcal[i])} kcal
                     </span>
                   </div>
                 ))}
@@ -218,7 +219,7 @@ export function DayDetailsSheet({ open, onClose, dash, mode, date, isToday }: Da
               ? t('today.macro_totals', 'Macros so far')
               : t('day.macro_totals', 'Macros for the day')}
           </p>
-          <MacroStrip unit items={rowStripItems(dash.macroTotals, dayKeys, defs)} />
+          <MacroStrip unit items={dayTotalsItems(dash.macroTotals, dayKeys, defs)} />
 
           {targetKeys.length > 0 && (
             <div className="mt-3 border-t border-hairline/60 pt-1">

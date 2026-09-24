@@ -194,8 +194,9 @@ export function MacroTargetSheet({ open, onClose, def, pref, profile, onSave, sa
         </div>
       )}
 
-      {/* Any limit the app derives for the user is public-health guidance, not a prescription. */}
-      {def.direction === 'limit' && def.targetFormula.hasAutoTarget && (
+      {/* Any target the app derives for the user, goal or limit, is public-health guidance and
+          not a prescription (kidney disease changes protein, bowel conditions change fibre...). */}
+      {mode === 'auto' && def.targetFormula.hasAutoTarget && (
         <p className="mt-3 text-[12px] text-ink-3 leading-relaxed">
           {t('macros.guidance_disclaimer', 'General guidance, not medical advice. Pregnancy, medication and health conditions change what is right for you.')}
         </p>

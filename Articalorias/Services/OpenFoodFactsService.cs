@@ -48,12 +48,14 @@ public class OpenFoodFactsService : IOpenFoodFactsService
 
         // Per-serving value when the product declares a serving, else per 100 g.
         // A missing per-serving figure is derived from the per-100 g one so a
-        // half-filled label still yields the right portion.
-        decimal? Pick(string key)
+        // half-filled label still yields the right portion. A concentration
+        // (alcohol % vol) is ALWAYS derived: OFF repeats the percentage in the
+        // per-serving field instead of scaling it to the serving.
+        decimal? Pick(string key, bool isConcentration = false)
         {
             if (useServing)
             {
-                var perServing = Num(nutriments, $"{key}_serving");
+                var perServing = isConcentration ? null : Num(nutriments, $"{key}_serving");
                 if (perServing.HasValue)
                     return perServing;
 
@@ -78,7 +80,7 @@ public class OpenFoodFactsService : IOpenFoodFactsService
         {
             foreach (var source in def.OffSources)
             {
-                var value = Pick(source.NutrimentKey);
+                var value = Pick(source.NutrimentKey, source.IsConcentration);
                 if (!value.HasValue)
                     continue;
                 item.Macros[def.Key] = Math.Round(value.Value * source.UnitFactor, 2);

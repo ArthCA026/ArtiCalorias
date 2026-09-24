@@ -60,3 +60,20 @@ the designed mechanism for rolling out attorney-approved wording.
    (`Articalorias.UI/src/legal/content/*.ts`), fills in the controller
    address, bumps both version constants, and removes the draft banners.
 3. Every user is asked to accept the approved version on next use.
+
+## Subscription billing (added 2026-09-18)
+
+- The app is subscription-only. Terms and Privacy Notice are at version
+  **2026-09-18** (health-data consent text unchanged, still 2026-09-09). The
+  bump re-runs the consent gate for every existing account.
+- Payments run through ONVO Pay. Card data goes from the browser to ONVO's
+  form and never reaches ArtiCalorias. See `third-party-transfers.md`.
+- Accounts without a subscription keep the Art. 7 rights without paying:
+  data export and account deletion stay open on the paywall itself, and the
+  API leaves `api/user/*` outside the paywall
+  (`Middleware/SubscriptionEnforcementMiddleware.cs`).
+- A user who declines a new policy version can still cancel their
+  subscription from the consent gate (`api/billing` is exempt from the
+  consent middleware), so nobody pays for an app they are locked out of.
+- Unreviewed legal questions specific to billing: Q10 to Q17 in
+  `open-questions-for-counsel.md`. Q13 (IVA, invoicing) gates going live.

@@ -3,7 +3,7 @@ import { POLICY_VERSIONS } from '../policyVersions';
 
 export const termsEn: PolicyDocument = {
   version: POLICY_VERSIONS.terms,
-  effectiveDate: '2026-09-09',
+  effectiveDate: '2026-09-18',
   title: 'Terms of Use',
   draftBanner:
     'DRAFT FOR LEGAL REVIEW. This document is pending validation by a legal professional in Costa Rica and its text may change.',
@@ -32,6 +32,29 @@ export const termsEn: PolicyDocument = {
       ],
     },
     {
+      heading: 'Subscription and payment',
+      paragraphs: [
+        'ArtiCalorias is a paid service: using the app requires an active subscription. Creating an account, completing the initial setup, downloading your data and deleting your account never require a payment.',
+      ],
+      bullets: [
+        'Plans and prices: a monthly plan at USD 9.99 per month and a yearly plan at USD 29.99 per year. The plan and the price that apply to you are the ones shown in the app when you subscribe, and the amount shown before you pay is the total amount we charge.',
+        'Prices are in US dollars. Your bank or card issuer may apply currency conversion or other fees that we do not control.',
+        'Automatic renewal: your subscription renews by itself at the end of each period, monthly or yearly, and the payment method you provided is charged the price of your plan. This continues until you cancel.',
+        'Cancellation: you can cancel at any time inside the app, under Profile, Subscription. Cancelling stops all future charges. You keep access until the end of the period you already paid for, and you can undo the cancellation before that date.',
+        'Failed payments: if a renewal payment fails, the charge may be retried and you keep access for a short grace period, currently 3 days. If the payment still cannot be collected, access is suspended until you subscribe again. Your data is kept.',
+        'Refunds: payments are not refunded for periods that are partially used, except where the law that applies to you grants a right of withdrawal or a refund. Nothing in these terms limits those rights. To ask for a refund write to r2chaves026@gmail.com.',
+        'Price changes: if the price of your plan changes, we tell you in the app or by email at least 30 days before it applies to you, and it only applies from a renewal after that notice. If you do not agree you can cancel before that renewal.',
+        'Deleting your account cancels your subscription immediately and ends your access. The time left on the subscription is not refunded, except where the law requires it.',
+        'Complimentary access: we may let some accounts use the app without a subscription, at our discretion, and we may end that access at any time.',
+      ],
+    },
+    {
+      heading: 'How payments are processed',
+      paragraphs: [
+        'Payments are processed by ONVO Pay, a payment processor based in Costa Rica. You type your card details directly into ONVO Pay’s payment form. ArtiCalorias never receives or stores your card number, its expiry date or its security code. The Privacy Notice explains what is shared with ONVO Pay.',
+      ],
+    },
+    {
       heading: 'Acceptable use',
       bullets: [
         'Do not attempt to access other users’ data or interfere with the operation of the service.',
@@ -56,7 +79,7 @@ export const termsEn: PolicyDocument = {
     {
       heading: 'Service availability and changes',
       paragraphs: [
-        'The service may change, be temporarily interrupted, or be discontinued. We will make reasonable efforts to give advance notice of significant changes.',
+        'The service may change, be temporarily interrupted, or be discontinued. We will make reasonable efforts to give advance notice of significant changes. If the service is discontinued, renewals stop and the unused part of any period already paid is refunded.',
       ],
     },
     {

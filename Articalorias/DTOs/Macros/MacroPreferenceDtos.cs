@@ -43,6 +43,12 @@ public class UpdateMacroPreferenceItem
 
 public class UpdateMacroPreferencesRequest
 {
+    /// <summary>
+    /// One item per macro at most. The ceiling is far above any real catalog
+    /// and only keeps an oversized body from being walked item by item; the
+    /// service rejects unknown and repeated keys.
+    /// </summary>
     [Required]
+    [MaxLength(100)]
     public List<UpdateMacroPreferenceItem> Items { get; set; } = [];
 }

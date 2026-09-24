@@ -2,6 +2,7 @@ import { Outlet } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { AppTabBar } from '@/components/AppTabBar';
 import { LogSheetProvider } from '@/components/log/LogSheetContext';
+import { BillingBanner } from '@/components/billing/BillingBanner';
 import { Spinner } from '@/components/ui/Button';
 import { useHeartbeat } from '@/hooks/useHeartbeat';
 
@@ -27,6 +28,7 @@ export default function AppLayout() {
   return (
     <LogSheetProvider>
       <main className="mx-auto max-w-md px-4 pt-4 pb-32">
+        <BillingBanner />
         <Outlet />
       </main>
       <AppTabBar />

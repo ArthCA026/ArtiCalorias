@@ -9,3 +9,4 @@ export type * from './favorites';
 export type * from './macros';
 export type * from './measurement';
 export type * from './consent';
+export type * from './billing';

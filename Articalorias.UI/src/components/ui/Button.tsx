@@ -2,7 +2,7 @@
 import { cn } from '@/utils/cn';
 import { Icon, type IconName } from './Icon';
 
-type Variant = 'primary' | 'secondary' | 'soft' | 'ghost' | 'danger' | 'premium';
+type Variant = 'primary' | 'secondary' | 'soft' | 'ghost' | 'danger';
 type Size = 'lg' | 'md' | 'sm';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -21,7 +21,6 @@ const variantClasses: Record<Variant, string> = {
   soft: 'bg-primary-soft text-primary-soft-ink active:bg-press font-semibold',
   ghost: 'bg-transparent text-ink-2 active:bg-inset font-medium',
   danger: 'bg-danger-soft text-danger active:bg-press font-semibold',
-  premium: 'bg-premium text-white active:opacity-90 font-semibold',
 };
 
 const sizeClasses: Record<Size, string> = {

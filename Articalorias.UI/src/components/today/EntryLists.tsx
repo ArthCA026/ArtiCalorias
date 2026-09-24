@@ -9,6 +9,7 @@ import { Field, DecimalField } from '@/components/ui/Field';
 import { QuantityField, QuickAmountSheet } from '@/components/ui/QuantityField';
 import { MacroStrip } from '@/components/ui/MacroStrip';
 import { MacroFieldsGrid } from '@/components/ui/MacroFieldsGrid';
+import { MacroEnergyHint } from '@/components/ui/MacroEnergyHint';
 import { ItemRow, ItemMeta } from '@/components/ui/ItemRow';
 import { AmountChip } from '@/components/ui/AmountChip';
 import { SelectionBar, type SelectionAction } from '@/components/ui/SelectionBar';
@@ -79,7 +80,7 @@ function useSelection<TId>() {
 interface MealsListProps {
   date: string;
   entries: FoodEntryResponse[];
-  /** Macros the day tracks (its frozen targets): decides the extra strip columns and edit fields */
+  /** Macros the day tracks (its frozen targets): decides the strip columns and the extra edit fields */
   trackedKeys: Set<string>;
   /** Drives the empty state tense: still open today, closed on a past day */
   isToday: boolean;
@@ -108,6 +109,10 @@ function MealRow({
   const { t } = useTranslation();
   const { defs } = useMacros();
   const qty = entry.quantity && entry.quantity > 0 ? entry.quantity : 1;
+  // Only what the day tracks. A macro this entry never captured renders as a
+  // dash, never a fabricated zero (an entry logged before tracking started);
+  // a day that tracks nothing gets no strip and no empty gap under the row.
+  const stripItems = rowStripItems(entry.macros, trackedKeys, defs);
   return (
     <ItemRow
       title={entry.foodName}
@@ -144,11 +149,7 @@ function MealRow({
           )}
         </>
       }
-      footer={
-        // A macro this entry never captured renders as a dash, never a
-        // fabricated zero (an entry logged before tracking started).
-        <MacroStrip items={rowStripItems(entry.macros, trackedKeys, defs)} />
-      }
+      footer={stripItems.length > 0 ? <MacroStrip items={stripItems} /> : undefined}
     />
   );
 }
@@ -506,6 +507,7 @@ function EditFoodSheet({ date, entry, trackedKeys, onClose, onChanged }: EditFoo
             <DecimalField label={t('log.calories', 'Calories')} suffix="kcal" value={kcal} onValueChange={setKcal} />
           }
         />
+        <MacroEnergyHint calories={kcal} macros={macros} />
         {error && <InlineError message={error} />}
         <Button
           variant="primary"

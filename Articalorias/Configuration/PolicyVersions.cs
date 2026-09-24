@@ -47,8 +47,9 @@ public static class ConsentLocales
 /// </summary>
 public static class PolicyVersions
 {
-    public const string Terms = "2026-09-09";
-    public const string Privacy = "2026-09-09";
+    // 2026-09-18: subscription, billing and the ONVO payment processor.
+    public const string Terms = "2026-09-18";
+    public const string Privacy = "2026-09-18";
     public const string HealthData = "2026-09-09";
 
     public static readonly IReadOnlyDictionary<string, string> Current = new Dictionary<string, string>

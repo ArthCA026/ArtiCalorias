@@ -1,6 +1,6 @@
 # Data inventory (Ley 8968)
 
-> DRAFT FOR LEGAL REVIEW. Snapshot of the production schema as of 2026-09-09.
+> DRAFT FOR LEGAL REVIEW. Snapshot of the production schema as of 2026-09-18.
 > Sources: `Articalorias.UI/Database/DatabaseCreationScript.sql` plus the
 > migrations in `Articalorias/Database/Migrations/` and the EF entities in
 > `Articalorias/Models/Entities/`.
@@ -16,6 +16,30 @@ Classification legend: **P** personal data, **S** sensitive (health) data,
 | PasswordHash, PasswordSalt | T | HMACSHA512 + per-user salt. Never exported. |
 | PasswordResetToken (+ expiry) | T | 6-digit code, 15-min TTL. Stored in plain text (see security-posture.md). |
 | LastActiveAtUtc | B | App-open heartbeat. |
+
+## `app.UserSubscription` — subscription mirror (added 2026-09-18)
+
+Local copy of the ONVO Pay recurring charge, refreshed from the ONVO API.
+Cascade-deletes with the account. Included in the data export.
+
+| Column | Class | Notes |
+|---|---|---|
+| PlanCode, PriceCents, Currency | P | What the user bought and at what price. |
+| Status, CancelAtPeriodEnd, CanceledAtUtc | P | Billing state mirrored from ONVO. |
+| CurrentPeriodStartUtc, CurrentPeriodEndUtc, PaidThroughUtc | P | PaidThroughUtc (end of the last VERIFIED paid period) is the only column that grants access. |
+| OnvoCustomerId, OnvoSubscriptionId, LastPaymentIntentId | P | Processor identifiers. They link the account to ONVO's records; no card data. |
+| OnvoMode | T | `test` or `live`. |
+
+**No card data is stored anywhere in ArtiCalorias.** Card number, expiry and
+CVV go from the browser to ONVO's SDK form and never reach the API.
+
+## `app.BillingEvent` — billing audit trail (added 2026-09-18)
+
+| Column | Class | Notes |
+|---|---|---|
+| EventType, Detail, CreatedAtUtc | P | Append-only: checkout started (plan, price, terms version and language shown), payment verified, renewal failed, cancellation requested/undone, refund. Evidence for payment disputes. Cascade-deletes with the account (see Q12). Included in the data export. |
+
+`app.BillingPrice` caches ONVO product/price ids per plan. It holds no user data.
 
 ## `app.UserProfile` — core health profile
 

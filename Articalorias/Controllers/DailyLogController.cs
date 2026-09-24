@@ -51,19 +51,25 @@ public class DailyLogController : ControllerBase
         _macroPreferences = macroPreferences;
     }
 
+    /// <summary>
+    /// Both reads create the day on first request. The optional
+    /// <paramref name="today"/> query param is the device's local date: it
+    /// decides whether this is the user's today (routine auto-add) on the
+    /// calendar the user actually sees. Same rule as the fasting endpoint.
+    /// </summary>
     [HttpGet("{date}")]
-    public async Task<IActionResult> GetByDate(DateOnly date)
+    public async Task<IActionResult> GetByDate(DateOnly date, [FromQuery] DateOnly? today)
     {
         var userId = GetUserId();
-        var log = await _dailyLogService.GetOrCreateAsync(userId, date);
+        var log = await _dailyLogService.GetOrCreateAsync(userId, date, today);
         return Ok(MapToResponse(log));
     }
 
     [HttpGet("{date}/dashboard")]
-    public async Task<IActionResult> GetDashboard(DateOnly date)
+    public async Task<IActionResult> GetDashboard(DateOnly date, [FromQuery] DateOnly? today)
     {
         var userId = GetUserId();
-        var log = await _dailyLogService.GetOrCreateAsync(userId, date);
+        var log = await _dailyLogService.GetOrCreateAsync(userId, date, today);
 
         var foods = await _foodEntryService.GetByDailyLogAsync(log.DailyLogId);
         var activities = await _activityService.GetEntriesByDailyLogAsync(log.DailyLogId);
@@ -459,7 +465,8 @@ public class DailyLogController : ControllerBase
             SleepHoursUsed = hours.SleepHours,
             NeatHoursUsed = hours.NeatHours,
             ActivityHours = hours.ActivityHours,
-            ActivityRestingOffsetKcal = ActivityCalorieMath.RestingOffset(d.SnapshotWeightKg ?? 0m, activityMinutes),
+            // Two decimals, exactly as the pipeline summed it into the stored total.
+            ActivityRestingOffsetKcal = Math.Round(ActivityCalorieMath.RestingOffset(d.SnapshotWeightKg ?? 0m, activityMinutes), 2),
             SnapshotWeightKg = d.SnapshotWeightKg,
             SnapshotHeightCm = d.SnapshotHeightCm,
             SnapshotBMRKcal = d.SnapshotBMRKcal,

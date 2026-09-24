@@ -67,6 +67,12 @@ export function MealTemplates() {
   const { data: macroPrefs } = useMacroPreferences();
   const { defs } = useMacros();
   const trackedKeys = useMemo(() => trackedKeysFromPrefs(macroPrefs), [macroPrefs]);
+  // Tracked macros only, like the day rows. Nothing tracked = no strip, and
+  // no footer at all so the row does not keep an empty gap under it.
+  const stripFooter = (tpl: FoodTemplateResponse) => {
+    const stripItems = rowStripItems(scaleMacros(tpl.macros, tpl.defaultQuantity), trackedKeys, defs);
+    return stripItems.length > 0 ? <MacroStrip items={stripItems} /> : undefined;
+  };
   const toggleSelect = (id: number) =>
     setSelectIds((prev) => {
       const next = new Set(prev ?? []);
@@ -263,11 +269,7 @@ export function MealTemplates() {
                     })}
                   </ItemMeta>
                 }
-                footer={
-                  <MacroStrip
-                    items={rowStripItems(scaleMacros(tpl.macros, tpl.defaultQuantity), trackedKeys, defs)}
-                  />
-                }
+                footer={stripFooter(tpl)}
               />
             ))}
           </div>

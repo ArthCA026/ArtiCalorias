@@ -38,8 +38,7 @@
   --color-protein-soft: var(--t-protein-soft);
   --color-streak: var(--t-streak);
   --color-streak-soft: var(--t-streak-soft);
-  --color-premium: var(--t-premium);
-  --color-premium-soft: var(--t-premium-soft);
+  --color-payment-surface: var(--t-payment-surface);
 
   --color-carbs: var(--t-carbs);
   --color-carbs-soft: var(--t-carbs-soft);

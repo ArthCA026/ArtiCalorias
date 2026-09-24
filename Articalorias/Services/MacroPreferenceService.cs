@@ -34,9 +34,20 @@ public class MacroPreferenceService : IMacroPreferenceService
         foreach (var item in request.Items)
             ValidateItem(item);
 
+        // Two items for one macro would make the outcome depend on their order.
+        if (request.Items.Select(i => i.MacroKey).Distinct(StringComparer.Ordinal).Count() != request.Items.Count)
+            throw new ApiException(ErrorCodes.InvalidInput, "Each macro may appear only once.");
+
+        // Serializable: the ceiling is a count over this user's rows, so two
+        // switches flipped at the same moment (two devices) must not both
+        // read "one slot left" and both take it.
+        await using var transaction = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+
         var stored = await _db.UserMacroPreferences
             .Where(m => m.UserId == userId)
             .ToListAsync(ct);
+
+        EnforceTrackingLimit(request.Items, stored);
 
         foreach (var item in request.Items)
         {
@@ -66,9 +77,45 @@ public class MacroPreferenceService : IMacroPreferenceService
         }
 
         await _db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
 
         var profile = await _db.UserProfiles.AsNoTracking().FirstOrDefaultAsync(p => p.UserId == userId, ct);
         return Merge(profile, stored);
+    }
+
+    /// <summary>
+    /// At most <see cref="MacroCatalog.MaxTrackedMacros"/> macros at a time
+    /// (the catalog explains why). Only switching a macro ON can be refused:
+    /// switching off and editing targets always go through, so an account
+    /// that was already above the ceiling when it was introduced keeps
+    /// working and simply cannot add more until it is back under it. Retired
+    /// macros hold no slot. The client mirrors this to disable the switches;
+    /// this is the check that counts.
+    /// </summary>
+    private static void EnforceTrackingLimit(
+        IReadOnlyCollection<UpdateMacroPreferenceItem> items,
+        IReadOnlyCollection<UserMacroPreference> stored)
+    {
+        var requested = items.ToDictionary(i => i.MacroKey, i => i.IsTracked, StringComparer.Ordinal);
+
+        var trackedAfter = 0;
+        var switchesOn = false;
+        foreach (var def in MacroCatalog.Active)
+        {
+            var before = MacroTargetEngine.IsTracked(def, stored.FirstOrDefault(m => m.MacroKey == def.Key));
+            var after = requested.TryGetValue(def.Key, out var wanted) ? wanted : before;
+            if (after)
+                trackedAfter++;
+            if (after && !before)
+                switchesOn = true;
+        }
+
+        if (switchesOn && trackedAfter > MacroCatalog.MaxTrackedMacros)
+        {
+            throw new ApiException(
+                ErrorCodes.MacroTrackLimit,
+                $"You can track up to {MacroCatalog.MaxTrackedMacros} macros at a time. Turn one off to add another.");
+        }
     }
 
     public async Task<FoodParsingOptions> GetParsingOptionsAsync(long userId, CancellationToken ct = default)

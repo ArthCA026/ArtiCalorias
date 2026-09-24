@@ -2,8 +2,10 @@ using System.Text;
 using Articalorias.Data;
 using Articalorias.Interfaces;
 using Articalorias.Services;
+using Articalorias.Services.Billing;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Articalorias.Configuration;
@@ -58,6 +60,9 @@ public static class ServiceCollectionExtensions
         // Recalculation pipeline — the heart of the system
         services.AddScoped<IRecalculationService, RecalculationService>();
 
+        // One-off re-pricing of stored days whenever the TEF rules change
+        services.AddHostedService<TefRepricingBackfill>();
+
         // Logging streak
         services.AddScoped<IStreakService, StreakService>();
 
@@ -89,6 +94,26 @@ public static class ServiceCollectionExtensions
         // Meal reminder background service
         services.Configure<MealReminderSettings>(configuration.GetSection(MealReminderSettings.SectionName));
         services.AddHostedService<MealReminderService>();
+
+        // Subscription billing (ONVO Pay). Billing:Enabled is the paywall
+        // switch; the Onvo section holds the account keys.
+        services.Configure<BillingSettings>(configuration.GetSection(BillingSettings.SectionName));
+        services.Configure<OnvoSettings>(configuration.GetSection(OnvoSettings.SectionName));
+        services.AddScoped<IBillingService, BillingService>();
+
+        services.AddHttpClient<IOnvoClient, OnvoClient>((sp, client) =>
+        {
+            var settings = sp.GetRequiredService<IOptions<OnvoSettings>>().Value;
+            var baseUrl = new Uri(settings.ApiBaseUrl.TrimEnd('/') + "/");
+
+            // The secret key rides on every request: never over plain HTTP,
+            // except to a local stub while testing.
+            if (baseUrl.Scheme != Uri.UriSchemeHttps && !baseUrl.IsLoopback)
+                throw new InvalidOperationException("Onvo:ApiBaseUrl must use HTTPS.");
+
+            client.BaseAddress = baseUrl;
+            client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
+        });
 
         // Open Food Facts barcode lookup
         services.Configure<OpenFoodFactsSettings>(

@@ -52,7 +52,7 @@ public class DailyLogService : IDailyLogService
             .ToListAsync();
     }
 
-    public async Task<DailyLog> GetOrCreateAsync(long userId, DateOnly date)
+    public async Task<DailyLog> GetOrCreateAsync(long userId, DateOnly date, DateOnly? clientToday = null)
     {
         var existing = await GetSummaryByDateAsync(userId, date);
         if (existing is not null)
@@ -98,13 +98,17 @@ public class DailyLogService : IDailyLogService
         // 1. Local-today check: browsing an old (or future) date creates its
         //    row for viewing/editing, and auto-adding meals to a day the user
         //    opened just to LOOK at would silently rewrite their history.
+        //    The device's own date wins when the client sends it (sanity
+        //    windowed): the profile timezone only updates on a profile save,
+        //    so a traveller's real today would otherwise miss its routine
+        //    meals around midnight.
         // 2. Activity window: if the user has not actively opened the app in
         //    AutoAddPauseAfterDays, the routine meals stop materializing, so an
         //    abandoned account or a forgotten open tab cannot generate zombie
         //    logs every midnight. NULL LastActiveAtUtc (brand-new account or
         //    pre-feature user mid-rollout) counts as active: pausing them
         //    would break auto-add on their very first day.
-        var isUsersToday = date == LocalDates.TodayFor(profile.TimeZoneId);
+        var isUsersToday = date == LocalDates.Resolve(clientToday, profile.TimeZoneId);
         var lastActive = await _db.Users
             .AsNoTracking()
             .Where(u => u.UserId == userId)
@@ -207,7 +211,7 @@ public class DailyLogService : IDailyLogService
     public async Task<DailyLog> SetFastingAsync(long userId, DateOnly date, bool isFasting, DateOnly referenceToday)
     {
         // Ensure the day exists (snapshots included) before flagging it.
-        await GetOrCreateAsync(userId, date);
+        await GetOrCreateAsync(userId, date, referenceToday);
 
         // GetOrCreateAsync returns an untracked summary; re-query tracked.
         var log = await _db.DailyLogs

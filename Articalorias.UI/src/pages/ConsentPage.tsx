@@ -9,9 +9,12 @@ import { InlineError } from '@/components/ui/States';
 import { ConfirmSheet } from '@/components/ui/ActionSheet';
 import { ConsentCheckboxes, type ConsentValues } from '@/components/legal/ConsentCheckboxes';
 import { PolicySheet } from '@/components/legal/PolicySheet';
+import { CancelSubscriptionSheet } from '@/components/billing/CancelSubscriptionSheet';
+import { deleteAccountBody } from '@/components/billing/billingCopy';
 import type { PolicyDocKey } from '@/legal/documents';
 import { useAuth } from '@/hooks/useAuth';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useBillingStatus } from '@/hooks/useBilling';
 import { consentService } from '@/services/consentService';
 import { userService } from '@/services/userService';
 import { queryKeys } from '@/lib/queryKeys';
@@ -22,7 +25,9 @@ import { extractApiError } from '@/utils/apiError';
  * Blocking consent gate (Ley 8968). Existing accounts created before consent
  * existed, and every user after a policy version bump, land here from
  * RequireConsented and cannot reach the app until they accept. The escape
- * hatches are honest ones: sign out, or delete the account entirely.
+ * hatches are honest ones: sign out, or delete the account entirely. A
+ * subscriber gets a third: cancel the subscription. Nobody should keep paying
+ * for an app they are locked out of because they declined new terms.
  */
 export default function ConsentPage() {
   const { t } = useTranslation();
@@ -36,9 +41,15 @@ export default function ConsentPage() {
   const [termsError, setTermsError] = useState<string | undefined>();
   const [healthError, setHealthError] = useState<string | undefined>();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [openDoc, setOpenDoc] = useState<PolicyDocKey | null>(null);
 
   const from = (location.state as { from?: string } | null)?.from ?? '/today';
+
+  // Billing stays reachable without consent (it holds no health data).
+  const billing = useBillingStatus();
+  const subState = billing.data?.subscription?.state;
+  const canCancelSubscription = subState === 'active' || subState === 'past_due';
 
   const accept = useMutation({
     mutationFn: () =>
@@ -154,6 +165,15 @@ export default function ConsentPage() {
         <button type="button" className="pressable text-[13px] font-semibold text-ink-3" onClick={() => logout()}>
           {t('profile.row_logout', 'Sign out')}
         </button>
+        {canCancelSubscription && (
+          <button
+            type="button"
+            className="pressable block w-full text-[13px] font-semibold text-ink-3"
+            onClick={() => setConfirmCancel(true)}
+          >
+            {t('billing.consent_cancel', 'Cancel my subscription')}
+          </button>
+        )}
         <button
           type="button"
           className="pressable block w-full text-[13px] font-semibold text-danger"
@@ -164,15 +184,13 @@ export default function ConsentPage() {
       </div>
 
       <PolicySheet doc={openDoc} onClose={() => setOpenDoc(null)} />
+      <CancelSubscriptionSheet open={confirmCancel} onClose={() => setConfirmCancel(false)} />
 
       <ConfirmSheet
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}
         title={t('profile.delete_account_title', 'Delete your account?')}
-        body={t(
-          'profile.delete_account_body',
-          'Your account and all your data are permanently deleted. There is no way back. If you only want a fresh start, clear your history instead.',
-        )}
+        body={deleteAccountBody(t, billing.data)}
         confirmLabel={t('profile.delete_account_confirm', 'Delete my account forever')}
         cancelLabel={t('common.cancel', 'Cancel')}
         loading={deleteAccount.isPending}

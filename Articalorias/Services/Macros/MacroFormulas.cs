@@ -16,8 +16,10 @@ public interface IFormulaContext
 /// The one place a <see cref="TargetFormula"/> turns into a number. Auto
 /// targets derive from the same daily budget the onboarding preview shows:
 /// <see cref="ExpenditureModel.EstimateDailyBudgetKcal"/>, i.e. the pipeline's
-/// own sleep / NEAT / idle pricing for the profile's hours, the signed goal
-/// and a nominal TEF, floored at 800 kcal.
+/// own sleep / NEAT / idle pricing for the profile's hours, the signed goal,
+/// a nominal TEF and the same minimum-intake safeguard the Today budget
+/// applies; 800 kcal is only the last resort for a profile that switched the
+/// safeguard off.
 /// </summary>
 public static class MacroFormulas
 {
@@ -100,8 +102,14 @@ public static class MacroFormulas
             {
                 var budget = CalorieBudget(profile);
                 if (budget is null)
-                    return null;
-                return Math.Round(budget.Value / 1000m * perThousand.ValuePer1000Kcal);
+                    return perThousand.Min; // the reference minimum until the body is known (null = no target yet)
+
+                var amount = Math.Round(budget.Value / 1000m * perThousand.ValuePer1000Kcal);
+                if (perThousand.Min is { } min)
+                    amount = Math.Max(amount, min);
+                if (perThousand.Max is { } max)
+                    amount = Math.Min(amount, max);
+                return amount;
             }
 
             default:

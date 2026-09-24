@@ -3,7 +3,7 @@ import { POLICY_VERSIONS } from '../policyVersions';
 
 export const privacyEn: PolicyDocument = {
   version: POLICY_VERSIONS.privacy,
-  effectiveDate: '2026-09-09',
+  effectiveDate: '2026-09-18',
   title: 'Privacy Notice',
   draftBanner:
     'DRAFT FOR LEGAL REVIEW. This document is pending validation by a legal professional in Costa Rica and its text may change.',
@@ -55,6 +55,15 @@ export const privacyEn: PolicyDocument = {
       ],
     },
     {
+      heading: 'Subscription and payment data',
+      bullets: [
+        'Your plan, its price, its status and its dates: start, renewal, cancellation.',
+        'The identifiers that ONVO Pay, our payment processor, assigns to you as a customer and to your subscription.',
+        'A record of your billing events: when you started a payment and at which price and terms version, when a payment was confirmed, when you cancelled.',
+        'We do not receive or store your card number, its expiry date or its security code. You type them into ONVO Pay’s payment form and they go directly to ONVO Pay.',
+      ],
+    },
+    {
       heading: 'What we use your data for',
       bullets: [
         'Computing your calorie and macronutrient budget and showing your progress.',
@@ -62,6 +71,7 @@ export const privacyEn: PolicyDocument = {
         'Sending you meal reminders, only if you enable them.',
         'Sending password recovery emails.',
         'Keeping your account secure.',
+        'Charging your subscription, recognizing that you have paid, and handling cancellations, failed payments and refunds.',
       ],
       paragraphs: [
         'We do not use your data for advertising, we do not sell it, and the app includes no third-party analytics trackers.',
@@ -75,6 +85,7 @@ export const privacyEn: PolicyDocument = {
         'Open Food Facts (France): receives only the barcode you scan, to look up the product.',
         'Browser push services (Google, Mozilla, or Apple, depending on your browser): receive the technical identifier needed to deliver reminders.',
         'Email provider: receives your address to send you password recovery codes.',
+        'ONVO Pay (Costa Rica): our payment processor. Receives your username and email address to create your customer record, and the card details you type into its payment form, in order to charge your subscription.',
         'Microsoft Azure (United States): hosts the application and the database.',
       ],
     },
@@ -89,6 +100,7 @@ export const privacyEn: PolicyDocument = {
       bullets: [
         'Required: username, email, and password. Without them the account cannot be created.',
         'Optional but central: weight, height, age, sex, and the rest of your body data. You can skip some, but calculations become less precise or some features stop being available. For example, automatic protein goals need your weight.',
+        'Payment: a valid payment method is needed to subscribe, and without a subscription the app cannot be used. You can still download your data and delete your account without paying.',
         'If you do not consent to the processing of your health data, the app cannot provide the service, because the service consists precisely of logging and computing with that data. You are free to decline, but in that case ArtiCalorias cannot be used.',
       ],
     },
@@ -101,7 +113,7 @@ export const privacyEn: PolicyDocument = {
     {
       heading: 'Your rights and how to exercise them',
       bullets: [
-        'Access: you can see your data inside the app and download all of it from Profile, Legal section, Download my data.',
+        'Access: you can see your data inside the app and download all of it from Profile, Legal section, Download my data. Subscription records are included, and the download is also offered on the subscription screen when you have no active subscription.',
         'Rectification: you can correct your profile and your entries directly in the app.',
         'Deletion: you can erase your history or your whole account from Profile. Account deletion is immediate and permanent.',
         'Revocation of consent: from Profile, Legal section. If you revoke the health data consent, the app stops saving new data and offers to delete your account.',
@@ -113,7 +125,7 @@ export const privacyEn: PolicyDocument = {
     {
       heading: 'How long we keep your data',
       paragraphs: [
-        'We keep your data while your account exists. If you delete your history or your account, the data is removed from the database immediately and permanently. The hosting provider backups may take a limited additional time to purge.',
+        'We keep your data while your account exists. If you delete your history or your account, the data is removed from the database immediately and permanently. The hosting provider backups may take a limited additional time to purge. Your subscription records are deleted together with your account. ONVO Pay keeps the records of the payments it processed for as long as the law requires of a payment processor.',
       ],
     },
     {

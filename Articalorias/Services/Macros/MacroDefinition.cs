@@ -6,9 +6,6 @@ public enum MacroUnit { Grams, Milliliters, Milligrams }
 /// <summary>How a target reads: a goal to reach ("hit") or a ceiling to stay under ("limit").</summary>
 public enum MacroDirection { Hit, Limit }
 
-/// <summary>When a macro appears in the compact strip under meal and template rows.</summary>
-public enum RowStripMode { Always, WhenTracked }
-
 /// <summary>
 /// How an AUTO target is derived from the profile. A closed set of shapes so
 /// every formula the app supports lives in <see cref="MacroFormulas"/>; a new
@@ -44,8 +41,13 @@ public abstract record TargetFormula
     /// </summary>
     public sealed record PerKgBodyWeightCapped(decimal AdultPerKg, decimal MinorPerKg, decimal Cap, decimal RoundToMultiple = 1m) : TargetFormula;
 
-    /// <summary>An amount per 1000 kcal of the calorie budget (fiber 14 g).</summary>
-    public sealed record PerThousandKcal(decimal ValuePer1000Kcal) : TargetFormula;
+    /// <summary>
+    /// An amount per 1000 kcal of the calorie budget, kept inside a reference
+    /// band (fibre: 14 g per 1000 kcal, never under 25 g nor over 40 g). The
+    /// band matters on a deficit, where the budget shrinks but the need does
+    /// not. <paramref name="Min"/> is also the target until the body is known.
+    /// </summary>
+    public sealed record PerThousandKcal(decimal ValuePer1000Kcal, decimal? Min = null, decimal? Max = null) : TargetFormula;
 
     /// <summary>Stable wire name for the API catalog.</summary>
     public string Kind => this switch
@@ -93,8 +95,12 @@ public sealed record QuickAdd(
 /// An Open Food Facts nutriment the macro can be read from, in priority order.
 /// <paramref name="UnitFactor"/> converts the OFF unit (grams for almost
 /// everything) into the macro unit (x1000 for mg).
+/// <paramref name="IsConcentration"/> marks a nutriment OFF expresses as a
+/// share of the product (alcohol, % vol) and therefore repeats unscaled in
+/// its per-serving field: the amount is always derived from the per-100
+/// figure and the serving size, never read from the per-serving one.
 /// </summary>
-public sealed record OffSource(string NutrimentKey, decimal UnitFactor);
+public sealed record OffSource(string NutrimentKey, decimal UnitFactor, bool IsConcentration = false);
 
 /// <summary>
 /// Everything the app knows about one macro type. One record per macro in
@@ -156,7 +162,13 @@ public sealed record MacroDefinition
 
     /// <summary>Renders as a bar inside the calorie hero (own-card macros are excluded there).</summary>
     public bool ShowInHeroBars { get; init; }
-    public RowStripMode RowStrip { get; init; } = RowStripMode.WhenTracked;
+
+    /// <summary>
+    /// Listed in the day's macro totals even when the user does not track it
+    /// (protein, fat and carbs: where the calories came from). Meal and
+    /// template rows never use this: their strip shows tracked macros only.
+    /// </summary>
+    public bool AlwaysInDayTotals { get; init; }
 
     /// <summary>Icon name in the UI icon set; unknown names fall back to a generic icon there.</summary>
     public required string IconName { get; init; }
@@ -178,5 +190,13 @@ public sealed record MacroDefinition
     };
 
     public string DirectionCode => Direction == MacroDirection.Limit ? "limit" : "hit";
-    public string RowStripCode => RowStrip == RowStripMode.Always ? "always" : "whenTracked";
+
+    /// <summary>
+    /// Energy this macro adds on its own: a child is already counted inside
+    /// its parent (sugar within carbs), so it adds none.
+    /// </summary>
+    public decimal EnergyKcalPerGram => ParentKey is null ? KcalPerGram : 0m;
+
+    /// <summary>Priced by <see cref="MacroTef"/>: an energy macro with a rate that is not a subset of another.</summary>
+    public bool ContributesToTef => EnergyKcalPerGram > 0m && TefRate > 0m;
 }

@@ -111,9 +111,12 @@ public class RecalculationService : IRecalculationService
         // Resting share inside those gross figures, priced at the MET reference rate
         // (1 kcal/kg/h). Subtracted from the BMR line in Step 5 so the BMR only covers
         // the hours of the day without logged activities and nothing is counted twice.
+        // Every block is rounded to the two decimals the day stores BEFORE it
+        // is summed, so the burn breakdown the app shows adds up to the stored
+        // total exactly instead of drifting by a cent per block.
         var totalActivityMinutes = log.ActivityEntries.Sum(a => a.DurationMinutes ?? 0m);
-        var activityRestingOffsetKcal = ActivityCalorieMath.RestingOffset(
-            log.SnapshotWeightKg ?? 0m, totalActivityMinutes);
+        var activityRestingOffsetKcal = Round2(ActivityCalorieMath.RestingOffset(
+            log.SnapshotWeightKg ?? 0m, totalActivityMinutes));
 
         // ── Step 3b: Fit the day's hours and price the non-activity blocks ──
         // Activities keep their logged hours, then sleep, then everyday movement
@@ -128,16 +131,20 @@ public class RecalculationService : IRecalculationService
         var weightKg = log.SnapshotWeightKg ?? 0m;
         var hours = ExpenditureModel.FitDay(log.SnapshotSleepHours, log.SnapshotNeatHours, totalActivityMinutes);
         log.HoursRemainingInDay = hours.IdleHours;
-        log.IdleTimeCaloriesKcal = ExpenditureModel.IdleDeltaKcal(weightKg, hours.IdleHours);
+        log.IdleTimeCaloriesKcal = Round2(ExpenditureModel.IdleDeltaKcal(weightKg, hours.IdleHours));
         log.SleepCaloriesKcal = hours.SleepHours.HasValue
-            ? ExpenditureModel.SleepDeltaKcal(weightKg, hours.SleepHours.Value)
+            ? Round2(ExpenditureModel.SleepDeltaKcal(weightKg, hours.SleepHours.Value))
             : 0m;
         log.NeatCaloriesKcal = hours.NeatHours.HasValue
-            ? ExpenditureModel.NeatDeltaKcal(weightKg, hours.NeatHours.Value)
+            ? Round2(ExpenditureModel.NeatDeltaKcal(weightKg, hours.NeatHours.Value))
             : 0m;
 
-        // ── Step 4: Recompute TEF (per-macro rates from the catalog) ──
-        log.TEFKcal = MacroTef.Calculate(log.MacroTotals);
+        // ── Step 4: Recompute TEF ──
+        // Priced per ENTRY and anchored on each entry's calories (the catalog
+        // rates decide how much, the calories decide of what): calories logged
+        // without macros still earn a typical TEF, and a macro typo can never
+        // earn more than its food could carry. See MacroTef.
+        log.TEFKcal = MacroTef.ForDay(log.FoodEntries.Select(f => (f.CaloriesKcal, f.Macros)));
 
         // ── Step 5: Recompute total daily expenditure ──
         // BMR minus the resting offset = resting energy of the non-activity hours only;
@@ -314,6 +321,60 @@ public class RecalculationService : IRecalculationService
         await RecalculateMonthlySummary(userId, deletedDate.Year, deletedDate.Month);
     }
 
+    public async Task<(int Repriced, int Failed)> RepriceAllDaysAsync(CancellationToken ct = default)
+    {
+        var weeks = await _db.DailyLogs
+            .AsNoTracking()
+            .GroupBy(d => new { d.UserId, d.WeekStartDate })
+            .Select(g => new { g.Key.UserId, g.Key.WeekStartDate })
+            .OrderBy(w => w.UserId).ThenBy(w => w.WeekStartDate)
+            .ToListAsync(ct);
+
+        var repriced = 0;
+        var failed = 0;
+
+        foreach (var week in weeks)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var dayIds = await _db.DailyLogs
+                .AsNoTracking()
+                .Where(d => d.UserId == week.UserId && d.WeekStartDate == week.WeekStartDate)
+                .OrderBy(d => d.LogDate)
+                .Select(d => d.DailyLogId)
+                .ToListAsync(ct);
+
+            try
+            {
+                // Pass 1 gives every day of the week its new net balance. Pass 2
+                // is one cascading run from the last day: each sibling then
+                // rebuilds its weekly context from the week's FINAL balances
+                // instead of a mix of old and new ones.
+                foreach (var id in dayIds)
+                    await RecalculateFullPipelineAsync(id, cascade: false, siblingData: null);
+                if (dayIds.Count > 1)
+                    await RecalculateFullPipelineAsync(dayIds[^1], cascade: true, siblingData: null);
+
+                repriced += dayIds.Count;
+            }
+            catch (Exception ex) when (ex is DbUpdateException or InvalidOperationException)
+            {
+                // The user edited the day at the same moment (row version), or
+                // it was deleted under us. Their own edit already re-priced
+                // what it touched; the caller retries the rest on next start.
+                failed += dayIds.Count;
+            }
+            finally
+            {
+                // One context serves the whole run: without this it would end
+                // up tracking every day and entry in the database.
+                _db.ChangeTracker.Clear();
+            }
+        }
+
+        return (repriced, failed);
+    }
+
     // ─────────────────────────────────────────────────────
     //  Step 8 — Weekly context fields on the DailyLog itself
     // ─────────────────────────────────────────────────────
@@ -417,48 +478,22 @@ public class RecalculationService : IRecalculationService
                 minNetBalanceForDisplay);
     }
 
+    private static decimal Round2(decimal value) => Math.Round(value, 2);
+
     /// <summary>
-    /// Calculates the minimum safe daily calorie intake for a given day using three floors,
-    /// returning the highest (most protective) of the three:
-    ///
-    ///  1. Sex-based absolute floor (1 200 kcal / female, 1 500 kcal / male) — widely cited
-    ///     lower bound below which intake should only occur under medical supervision.
-    ///
-    ///  2. Energy-availability floor — 30 kcal per kg of fat-free mass plus that day's
-    ///     exercise calories. Below ~30 kcal/kg FFM the body may enter low-energy-availability
-    ///     (LEA), impairing hormonal and physiological function.
-    ///     Falls back to full BMR when body-fat % is unavailable.
-    ///
-    ///  3. BMR safety floor — 80 % of the snapshotted BMR. Prevents absurd suggestions
-    ///     for people whose BMR is high enough to make the sex floor alone too permissive.
+    /// The day's minimum safe intake (see <see cref="IntakeSafeguard"/> for the
+    /// three floors), from the day's own snapshots and its exercise calories
+    /// above resting: energy availability is defined against the ADDITIONAL
+    /// cost of exercise, so the resting share inside the gross activity
+    /// figures is removed again here.
     /// </summary>
     private static decimal CalculateMinimumDailyIntakeKcal(DailyLog log, string? biologicalSex, decimal activityRestingOffsetKcal)
-    {
-        // 1. Sex-based absolute floor
-        var sexFloor = biologicalSex == "F" ? 1200m : 1500m;
-
-        // 2. BMR safety floor
-        var bmrFloor = log.SnapshotBMRKcal * 0.8m;
-
-        // 3. Energy-availability floor (requires body-fat % to compute FFM)
-        decimal eaFloor;
-        if (log.SnapshotBodyFatPercent is > 0 && log.SnapshotWeightKg.HasValue)
-        {
-            var ffmKg = log.SnapshotWeightKg.Value * (1m - log.SnapshotBodyFatPercent.Value / 100m);
-            // EA is defined against the ADDITIONAL cost of exercise, so the resting
-            // share inside the gross activity figures is removed again here. This
-            // keeps the floor identical to what it was under the net convention.
-            eaFloor = 30m * ffmKg + (log.TotalActivityCaloriesKcal - activityRestingOffsetKcal);
-        }
-        else
-        {
-            // Body fat or weight unknown — fall back to full BMR so we still protect against
-            // dangerously low suggestions even without body-composition data.
-            eaFloor = log.SnapshotBMRKcal;
-        }
-
-        return Math.Max(sexFloor, Math.Max(eaFloor, bmrFloor));
-    }
+        => IntakeSafeguard.MinimumDailyIntakeKcal(
+            biologicalSex,
+            log.SnapshotBMRKcal,
+            log.SnapshotWeightKg,
+            log.SnapshotBodyFatPercent,
+            exerciseKcalAboveResting: log.TotalActivityCaloriesKcal - activityRestingOffsetKcal);
 
     // ─────────────────────────────────────────────────────
     //  Step 9 — Persist MonthlySummary (shell record only)

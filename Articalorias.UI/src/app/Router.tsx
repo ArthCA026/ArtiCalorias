@@ -1,5 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router';
-import { PublicOnly, RequireAuth, RequireConsented, RequireOnboarded } from './guards';
+import { PublicOnly, RequireAuth, RequireConsented, RequireOnboarded, RequireSubscribed } from './guards';
 import CatalogBoundary from './CatalogBoundary';
 import AuthLayout from '@/layouts/AuthLayout';
 import AppLayout from '@/layouts/AppLayout';
@@ -18,7 +18,8 @@ import BodyPage from '@/pages/BodyPage';
 import ProfilePage from '@/pages/ProfilePage';
 import MacrosPage from '@/pages/MacrosPage';
 import GoalPage from '@/pages/GoalPage';
-import PremiumPage from '@/pages/PremiumPage';
+import SubscribePage from '@/pages/SubscribePage';
+import SubscriptionPage from '@/pages/SubscriptionPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 
 const router = createBrowserRouter([
@@ -58,26 +59,36 @@ const router = createBrowserRouter([
           {
             element: <RequireOnboarded />,
             children: [
-              { path: '/premium', element: <PremiumPage /> },
+              // The paywall comes AFTER onboarding on purpose: the user meets
+              // it with their plan already built, not as a cold first screen.
+              { path: '/subscribe', element: <SubscribePage /> },
               {
-                element: <AppLayout />,
+                // Subscription-only product: the app itself sits behind this.
+                element: <RequireSubscribed />,
                 children: [
-                  { path: '/today', element: <TodayPage /> },
-                  { path: '/day/:date', element: <DayPage /> },
-                  { path: '/templates', element: <TemplatesPage /> },
-                  { path: '/progress', element: <ProgressPage /> },
-                  { path: '/progress/body', element: <BodyPage /> },
-                  { path: '/profile', element: <ProfilePage /> },
-                  { path: '/profile/macros', element: <MacrosPage /> },
-                  { path: '/profile/goal', element: <GoalPage /> },
+                  {
+                    element: <AppLayout />,
+                    children: [
+                      { path: '/today', element: <TodayPage /> },
+                      { path: '/day/:date', element: <DayPage /> },
+                      { path: '/templates', element: <TemplatesPage /> },
+                      { path: '/progress', element: <ProgressPage /> },
+                      { path: '/progress/body', element: <BodyPage /> },
+                      { path: '/profile', element: <ProfilePage /> },
+                      { path: '/profile/macros', element: <MacrosPage /> },
+                      { path: '/profile/goal', element: <GoalPage /> },
+                      { path: '/profile/subscription', element: <SubscriptionPage /> },
+                    ],
+                  },
+                  // Legacy routes from the previous UI
+                  { path: '/favorites', element: <Navigate to="/templates" replace /> },
+                  { path: '/activities', element: <Navigate to="/templates" replace /> },
+                  { path: '/history', element: <Navigate to="/progress" replace /> },
+                  { path: '/history/:date', element: <Navigate to="/progress" replace /> },
+                  { path: '/settings', element: <Navigate to="/profile" replace /> },
+                  { path: '/premium', element: <Navigate to="/profile/subscription" replace /> },
                 ],
               },
-              // Legacy routes from the previous UI
-              { path: '/favorites', element: <Navigate to="/templates" replace /> },
-              { path: '/activities', element: <Navigate to="/templates" replace /> },
-              { path: '/history', element: <Navigate to="/progress" replace /> },
-              { path: '/history/:date', element: <Navigate to="/progress" replace /> },
-              { path: '/settings', element: <Navigate to="/profile" replace /> },
             ],
           },
         ],

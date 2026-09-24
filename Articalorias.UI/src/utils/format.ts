@@ -46,3 +46,23 @@ export function mondayOf(dateStr: string): string {
   d.setDate(d.getDate() - shift);
   return toDateString(d);
 }
+
+/**
+ * Rounds each part to a whole number so the parts add up to the rounded
+ * total (largest-remainder method). A breakdown rounded row by row can miss
+ * its own total by one or two; a ledger that does not add up reads as a bug.
+ * When the parts do not belong to the total in the first place (they differ
+ * by more than rounding can explain), each is simply rounded on its own.
+ */
+export function roundPartsToTotal(parts: number[], total: number): number[] {
+  const floors = parts.map(Math.floor);
+  const missing = Math.round(total) - floors.reduce((a, b) => a + b, 0);
+  if (!Number.isInteger(missing) || missing < 0 || missing > parts.length) return parts.map(Math.round);
+
+  const byRemainder = parts
+    .map((p, i) => ({ i, remainder: p - floors[i] }))
+    .sort((a, b) => b.remainder - a.remainder || a.i - b.i);
+  const out = [...floors];
+  for (let n = 0; n < missing; n += 1) out[byRemainder[n].i] += 1;
+  return out;
+}

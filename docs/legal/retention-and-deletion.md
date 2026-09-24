@@ -1,6 +1,6 @@
 # Retention and deletion — current behavior and gaps
 
-> DRAFT FOR LEGAL REVIEW. As of 2026-09-09.
+> DRAFT FOR LEGAL REVIEW. As of 2026-09-18.
 
 ## What exists (verified in code)
 
@@ -11,6 +11,14 @@
   body measurements, macro preferences, the profile, and the user row.
   Refresh tokens, streaks, and consent rows cascade off the user row. This is
   genuine erasure, not a soft delete.
+- **Account deletion and billing** (added 2026-09-18): before anything is
+  erased, `BillingService.CancelAllForAccountDeletionAsync` cancels every
+  subscription that could still charge, immediately, at ONVO. If ONVO cannot
+  confirm the cancellation of a renewing subscription the deletion is
+  ABORTED with a clear message and nothing is deleted: an erased account
+  whose card keeps being charged must never happen. The local subscription
+  rows and billing events are then deleted with the rest. ONVO, as the
+  payment processor, keeps its own transaction records (Q12).
 - **History clearing** (`DELETE /api/user/history`): wipes all logged days,
   summaries, and body measurements while keeping the account and settings.
 - **Data export** (`GET /api/user/export`): one JSON document with every

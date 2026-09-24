@@ -8,7 +8,13 @@ public interface IDailyLogService
     Task<DailyLog?> GetSummaryByDateAsync(long userId, DateOnly date);
     /// <summary>Returns the DailyLog with FoodEntries, ActivityEntries, and Segments included.</summary>
     Task<DailyLog?> GetByDateAsync(long userId, DateOnly date);
-    Task<DailyLog> GetOrCreateAsync(long userId, DateOnly date);
+    /// <summary>
+    /// Returns the day, creating it on first request. <paramref name="clientToday"/>
+    /// is the device's local calendar date when the caller knows it; it decides
+    /// whether <paramref name="date"/> is the user's today (routine auto-add)
+    /// ahead of the stored profile timezone. See <see cref="Services.LocalDates.Resolve"/>.
+    /// </summary>
+    Task<DailyLog> GetOrCreateAsync(long userId, DateOnly date, DateOnly? clientToday = null);
     Task<IReadOnlyList<DailyLog>> GetRangeAsync(long userId, DateOnly from, DateOnly to);
     Task RecalculateAsync(long dailyLogId);
     Task DeleteByDateAsync(long userId, DateOnly date);

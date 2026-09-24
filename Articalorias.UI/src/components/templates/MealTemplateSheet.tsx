@@ -6,6 +6,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { Field, DecimalField } from '@/components/ui/Field';
 import { MacroFieldsGrid } from '@/components/ui/MacroFieldsGrid';
+import { MacroEnergyHint } from '@/components/ui/MacroEnergyHint';
 import { QuantityField } from '@/components/ui/QuantityField';
 import { Switch } from '@/components/ui/Switch';
 import { InlineError } from '@/components/ui/States';
@@ -216,6 +217,7 @@ export function MealTemplateSheet({ template, onClose, onDelete }: MealTemplateS
               />
             }
           />
+          <MacroEnergyHint calories={kcal} macros={macros} className="mt-2" />
         </div>
         <div className="flex items-center justify-between gap-3 py-1">
           <span className="text-[15px] font-semibold text-ink">

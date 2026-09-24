@@ -9,16 +9,30 @@ namespace Articalorias.Services.Macros;
 ///
 /// Rules: keys are permanent (retire with IsActive = false, never delete);
 /// a parent must sort before its children; wire keys are unique.
-/// Bump <see cref="CatalogVersion"/> whenever a definition changes.
+/// Bump <see cref="CatalogVersion"/> whenever a definition changes, and
+/// <see cref="MacroTef.ModelVersion"/> as well when a TEF rate or an energy
+/// density changes (that re-prices stored days).
 /// </summary>
 public static class MacroCatalog
 {
-    public const string CatalogVersion = "2026-09-11.3";
+    public const string CatalogVersion = "2026-09-18.1";
+
+    /// <summary>
+    /// How many macros one user may track at the same time, protein included.
+    /// Every tracked optional macro adds a field and a rule to each paid AI
+    /// parse, and every tracked macro adds a column under each meal row and a
+    /// bar on the day, so the ceiling bounds both the cost and the layout no
+    /// matter how large the catalog grows. Enforced by MacroPreferenceService
+    /// when a macro is switched ON; accounts already above it keep what they
+    /// track and simply cannot add more until they are back under it.
+    /// </summary>
+    public const int MaxTrackedMacros = 6;
 
     public const string Protein = "protein";
     public const string Fat = "fat";
     public const string Carbs = "carbs";
     public const string Alcohol = "alcohol";
+    public const string Fiber = "fiber";
     public const string Sugar = "sugar";
     public const string Water = "water";
     public const string Caffeine = "caffeine";
@@ -105,7 +119,7 @@ public static class MacroCatalog
             CustomTargetMin = 20m,
             CustomTargetMax = 500m,
             ShowInHeroBars = true,
-            RowStrip = RowStripMode.Always,
+            AlwaysInDayTotals = true,
             IconName = "drumstick",
             Name = new MacroLabels("Protein", "Proteína"),
             ShortName = new MacroLabels("Prot", "Prot"),
@@ -128,7 +142,7 @@ public static class MacroCatalog
             CustomTargetMin = 1m,
             CustomTargetMax = 1000m,
             ShowInHeroBars = true,
-            RowStrip = RowStripMode.Always,
+            AlwaysInDayTotals = true,
             IconName = "droplet",
             Name = new MacroLabels("Fat", "Grasa"),
             ShortName = new MacroLabels("Fat", "Grasa"),
@@ -151,7 +165,7 @@ public static class MacroCatalog
             CustomTargetMin = 1m,
             CustomTargetMax = 2000m,
             ShowInHeroBars = true,
-            RowStrip = RowStripMode.Always,
+            AlwaysInDayTotals = true,
             IconName = "wheat",
             Name = new MacroLabels("Carbs", "Carbohidratos"),
             ShortName = new MacroLabels("Carbs", "Carbs"),
@@ -169,10 +183,12 @@ public static class MacroCatalog
             AiSchemaDescription = "Alcohol grams for ONE unit",
             PreScaleMax = 500m,
             MaxPerEntry = 10000m,
-            // OFF documents "alcohol" as % vol; the legacy mapping treated it as
-            // g/100g and is kept for parity. 0.789 (g ethanol per ml) is the
-            // factor to switch to once verified against live products.
-            OffSources = [new OffSource("alcohol", 1m)],
+            // OFF stores alcohol as % vol, and repeats that same percentage in
+            // the per-serving field instead of scaling it (verified against
+            // live products 2026-09-18: a 500 ml beer lists alcohol_100g 5 and
+            // alcohol_serving 5). So it is read as a concentration: grams =
+            // % vol x 0.789 g of ethanol per ml, per 100 ml of product.
+            OffSources = [new OffSource("alcohol", 0.789m, IsConcentration: true)],
             Formula = new TargetFormula.None(),
             CustomTargetMin = 1m,
             CustomTargetMax = 500m,
@@ -190,10 +206,43 @@ public static class MacroCatalog
                     Macros: new Dictionary<string, decimal> { [Alcohol] = 16m, [Carbs] = 15m, [Sugar] = 14m }),
             ],
             ShowInHeroBars = false,
-            RowStrip = RowStripMode.WhenTracked,
             IconName = "wine",
             Name = new MacroLabels("Alcohol", "Alcohol"),
             ShortName = new MacroLabels("Alc", "Alc"),
+        },
+        new MacroDefinition
+        {
+            Key = Fiber,
+            SortOrder = 45,
+            Unit = MacroUnit.Grams,
+            Direction = MacroDirection.Hit,
+            IsCore = false,
+            // No energy of its own and no parent, on purpose. Where the app is
+            // used most (US and Latin American labels, and the AI estimates)
+            // fibre is already inside total carbs, so its calories and its
+            // TEF are priced there. It is NOT declared a child of carbs
+            // because EU labels list carbs WITHOUT fibre: clamping to the
+            // parent would cut a bag of chia from 34 g of fibre down to its
+            // 8 g of carbs, exactly the food a fibre tracker scans.
+            KcalPerGram = 0m,
+            TefRate = 0m,
+            AiWireKey = "fib",
+            AiSchemaDescription = "Dietary fiber grams for ONE unit, part of carb",
+            AiPromptRule = "grams of dietary fiber in ONE unit, never multiplied by qty. Fiber is part of carb and must never exceed it. Whole grains, legumes, vegetables, fruit with skin, nuts and seeds run high (a cup of cooked lentils ~15, a cup of cooked oatmeal ~4, an apple with skin ~4, a slice of whole wheat bread ~2, a tablespoon of chia ~5); meat, fish, eggs, dairy, oils, sugar and refined drinks are 0.",
+            PreScaleMax = 200m,
+            MaxPerEntry = 2000m,
+            OffSources = [new OffSource("fiber", 1m)],
+            // US National Academies adequate intake: 14 g per 1000 kcal. The
+            // band keeps a deficit from shrinking the need below the WHO
+            // adult minimum (25 g) and a large surplus from asking for more
+            // than the highest adequate intake on record (38 g for men).
+            Formula = new TargetFormula.PerThousandKcal(14m, Min: 25m, Max: 40m),
+            CustomTargetMin = 5m,
+            CustomTargetMax = 150m,
+            ShowInHeroBars = true,
+            IconName = "sprout",
+            Name = new MacroLabels("Fiber", "Fibra"),
+            ShortName = new MacroLabels("Fiber", "Fibra"),
         },
         new MacroDefinition
         {
@@ -215,7 +264,6 @@ public static class MacroCatalog
             CustomTargetMin = 1m,
             CustomTargetMax = 1000m,
             ShowInHeroBars = true,
-            RowStrip = RowStripMode.WhenTracked,
             IconName = "candy",
             Name = new MacroLabels("Sugar", "Azúcar"),
             ShortName = new MacroLabels("Sugar", "Azúcar"),
@@ -249,7 +297,6 @@ public static class MacroCatalog
                     Macros: new Dictionary<string, decimal> { [Water] = 500m }),
             ],
             ShowInHeroBars = false,
-            RowStrip = RowStripMode.WhenTracked,
             IconName = "glassWater",
             Name = new MacroLabels("Water", "Agua"),
             ShortName = new MacroLabels("Water", "Agua"),
@@ -288,7 +335,6 @@ public static class MacroCatalog
                     Macros: new Dictionary<string, decimal> { [Caffeine] = 80m, [Carbs] = 27m, [Sugar] = 27m, [Water] = 250m }),
             ],
             ShowInHeroBars = false,
-            RowStrip = RowStripMode.WhenTracked,
             IconName = "coffee",
             Name = new MacroLabels("Caffeine", "Cafeína"),
             ShortName = new MacroLabels("Caff", "Caf"),
@@ -312,7 +358,6 @@ public static class MacroCatalog
             CustomTargetMin = 1m,
             CustomTargetMax = 20000m,
             ShowInHeroBars = true,
-            RowStrip = RowStripMode.WhenTracked,
             IconName = "salt",
             Name = new MacroLabels("Sodium", "Sodio"),
             ShortName = new MacroLabels("Sodium", "Sodio"),
@@ -346,6 +391,14 @@ public static class MacroCatalog
             if (!def.IsCore && def.AiPromptRule is null)
                 throw new InvalidOperationException($"Optional macro '{def.Key}' needs an AI prompt rule.");
 
+            if (def.TefRate is < 0m or > 1m || def.KcalPerGram < 0m)
+                throw new InvalidOperationException($"Macro '{def.Key}' has an impossible energy density or TEF rate.");
+            if (def.TefRate > 0m && def.EnergyKcalPerGram <= 0m)
+                throw new InvalidOperationException($"Macro '{def.Key}' has a TEF rate but no energy of its own to apply it to.");
+
+            if (def.Formula is TargetFormula.PerThousandKcal { Min: { } min, Max: { } max } && min > max)
+                throw new InvalidOperationException($"Macro '{def.Key}' has a target band with Min above Max.");
+
             foreach (var preset in def.AutoPresets)
             {
                 if (def.AutoParamRange is not { } range)
@@ -367,5 +420,10 @@ public static class MacroCatalog
         var sorted = defs.Select(d => d.SortOrder).ToList();
         if (!sorted.SequenceEqual(sorted.OrderBy(x => x)))
             throw new InvalidOperationException("Macro catalog must be listed in SortOrder.");
+
+        // Whatever is tracked by default must itself fit under the ceiling,
+        // or a brand-new account would start out over the limit.
+        if (defs.Count(d => d.IsActive && d.DefaultTracked) > MaxTrackedMacros)
+            throw new InvalidOperationException("More macros are tracked by default than MaxTrackedMacros allows.");
     }
 }

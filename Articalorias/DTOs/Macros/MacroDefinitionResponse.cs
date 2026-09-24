@@ -13,6 +13,10 @@ public class LocalizedText
 public class MacroCatalogResponse
 {
     public string CatalogVersion { get; set; } = string.Empty;
+
+    /// <summary>How many macros one user may track at a time, protein included (the server enforces it).</summary>
+    public int MaxTrackedMacros { get; set; }
+
     public List<MacroDefinitionResponse> Macros { get; set; } = [];
 }
 
@@ -35,7 +39,24 @@ public class MacroDefinitionResponse
     public decimal CustomTargetMax { get; set; }
     public List<MacroQuickAddResponse> QuickAdds { get; set; } = [];
     public bool ShowInHeroBars { get; set; }
-    /// <summary>"always" | "whenTracked"</summary>
+
+    /// <summary>Listed in the day's macro totals even when untracked (protein, fat, carbs). Rows never use it: their strip is tracked-only.</summary>
+    public bool AlwaysInDayTotals { get; set; }
+
+    /// <summary>
+    /// Calories one unit of this macro adds ON ITS OWN: 0 for a non-energy
+    /// macro and for a subset of another (sugar is already inside carbs). Lets
+    /// the entry forms warn when the typed macros cannot add up to the typed
+    /// calories; the server reconciles TEF against the calories regardless.
+    /// </summary>
+    public decimal EnergyKcalPerGram { get; set; }
+
+    /// <summary>
+    /// Compatibility only: UI bundles cached before 2026-09-18 read this to
+    /// build the row strip. Every macro now answers "whenTracked", which makes
+    /// those bundles show exactly the new tracked-only strip. Remove once no
+    /// such bundle can still be open.
+    /// </summary>
     public string RowStrip { get; set; } = "whenTracked";
     public bool HasOwnCard { get; set; }
     public bool IsActive { get; set; }
@@ -95,6 +116,7 @@ public static class MacroCatalogMapper
     public static MacroCatalogResponse ToResponse() => new()
     {
         CatalogVersion = MacroCatalog.CatalogVersion,
+        MaxTrackedMacros = MacroCatalog.MaxTrackedMacros,
         Macros = MacroCatalog.All.Select(ToResponse).ToList(),
     };
 
@@ -153,7 +175,8 @@ public static class MacroCatalogMapper
             Macros = MacroAmounts.From(q.Macros).EnsureCore().ToDictionary(),
         }).ToList(),
         ShowInHeroBars = def.ShowInHeroBars,
-        RowStrip = def.RowStripCode,
+        AlwaysInDayTotals = def.AlwaysInDayTotals,
+        EnergyKcalPerGram = def.EnergyKcalPerGram,
         HasOwnCard = def.HasOwnCard,
         IsActive = def.IsActive,
     };

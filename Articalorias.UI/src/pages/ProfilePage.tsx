@@ -7,7 +7,7 @@ import { ListRow } from '@/components/ui/ListRow';
 import { Switch } from '@/components/ui/Switch';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { ConfirmSheet } from '@/components/ui/ActionSheet';
-import { Icon, iconOrFallback } from '@/components/ui/Icon';
+import { iconOrFallback } from '@/components/ui/Icon';
 import { ErrorState } from '@/components/ui/States';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
@@ -28,20 +28,21 @@ import { useUnits } from '@/hooks/useUnits';
 import { useCalorieMode } from '@/hooks/useCalorieMode';
 import { useSafeguardToggle } from '@/hooks/useSafeguardToggle';
 import { useGetStreak, useUpdateStreakSettings, useResetStreak } from '@/hooks/useStreak';
-import { usePremium } from '@/hooks/usePremium';
+import { useBillingStatus } from '@/hooks/useBilling';
+import { useGoalLabel } from '@/hooks/useGoalLabel';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import { profileService } from '@/services/profileService';
 import { dailyLogService } from '@/services/dailyLogService';
 import { userService } from '@/services/userService';
 import { queryKeys, invalidateDayData } from '@/lib/queryKeys';
-import { toDateString, qtyStr, parseDate } from '@/utils/format';
+import { toDateString, qtyStr } from '@/utils/format';
 import { profileToRequest } from '@/utils/profile';
 import { extractApiError } from '@/utils/apiError';
 import { formatWeight } from '@/utils/units';
-import { matchPreset, GOAL_PRESETS } from '@/utils/goalUtils';
 import { formatMacroAmount } from '@/utils/macros';
 import { useBodyStaleDays, BODY_VERY_STALE_DAYS } from '@/hooks/useBodyStaleDays';
-import { FEATURES } from '@/config/features';
+import { deleteAccountBody } from '@/components/billing/billingCopy';
+import { formatBillingDate } from '@/utils/billing';
 import type { MacroPreference, UserProfileRequest } from '@/types';
 
 type OpenSheet = 'body' | 'protein' | 'mode' | 'reminders' | 'sleep-neat' | 'consent-status' | 'withdraw-consent' | null;
@@ -50,8 +51,6 @@ type ConfirmKind = 'streak-reset' | 'clear-history' | 'delete-account' | 'bmr-re
 export default function ProfilePage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const shortDate = (d: string) =>
-    new Intl.DateTimeFormat(i18n.language, { day: 'numeric', month: 'short' }).format(parseDate(d));
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, logout } = useAuth();
@@ -63,13 +62,14 @@ export default function ProfilePage() {
   const { data: streak } = useGetStreak();
   const updateStreak = useUpdateStreakSettings();
   const resetStreak = useResetStreak();
-  const { isPremium } = usePremium();
+  const billing = useBillingStatus();
+  const goalLabelOf = useGoalLabel();
 
   const [sheet, setSheet] = useState<OpenSheet>(null);
   const [confirm, setConfirm] = useState<ConfirmKind>(null);
   // The review nudge reopens the body sheet with the advanced section shown.
   const [bodyAdvanced, setBodyAdvanced] = useState(false);
-  const { get } = useMacros();
+  const { get, maxTracked: maxTrackedMacros } = useMacros();
   const { data: macroPrefs } = useMacroPreferences();
   const updatePref = useUpdateMacroPreference();
   // Protein is one preference among the others now, so it is inside the count.
@@ -189,28 +189,7 @@ export default function ProfilePage() {
       toast('error', extractApiError(err, t('legal.export_error', 'Could not prepare your data. Check your connection and try again.'))),
   });
 
-  const goalLabel = (() => {
-    if (!profile) return '';
-    // A dated target is the most meaningful summary when one is set.
-    if (profile.goalTargetDate) {
-      if (profile.goalTargetBodyFatPercent !== null)
-        return t('profile.goal_target_bf_value', '{{bf}}% by {{date}}', {
-          bf: profile.goalTargetBodyFatPercent,
-          date: shortDate(profile.goalTargetDate),
-        });
-      if (profile.goalTargetWeightKg !== null)
-        return t('profile.goal_target_weight_value', '{{weight}} by {{date}}', {
-          weight: formatWeight(profile.goalTargetWeightKg, weightUnit, 0),
-          date: shortDate(profile.goalTargetDate),
-        });
-    }
-    const m = matchPreset(String(Math.round(profile.dailyBaseGoalKcal)));
-    if (!m.isCustom) {
-      const preset = GOAL_PRESETS.find((p) => p.key === m.preset);
-      if (preset) return t(`goal.${preset.key}`, preset.label);
-    }
-    return t('profile.goal_custom_value', 'Custom');
-  })();
+  const goalLabel = goalLabelOf(profile);
 
   const proteinLabel = (() => {
     if (!proteinPref.isTracked) return t('profile.protein_off', 'Off');
@@ -248,6 +227,42 @@ export default function ProfilePage() {
     if (manualBmrKept || manualBfKept) setConfirm('bmr-review');
   };
 
+  // Subscription entry. Hidden only when the server has subscriptions switched
+  // off AND this account has none to manage.
+  const billingStatus = billing.data;
+  const sub = billingStatus?.subscription ?? null;
+  const subscriptionRow = billingStatus && (billingStatus.billingEnabled || sub) ? (
+    <ListRow
+      icon="creditCard"
+      iconClassName={sub?.state === 'past_due' ? 'bg-warning-soft text-warning' : undefined}
+      title={t('billing.manage_title', 'Subscription')}
+      subtitle={
+        sub?.state === 'active' ? (
+          t('billing.profile_renews', 'Renews on {{date}}', { date: formatBillingDate(sub.paidThroughUtc, i18n.language) })
+        ) : sub?.state === 'canceling' ? (
+          <span className="text-warning font-semibold">
+            {t('billing.profile_ends', 'Ends on {{date}}', { date: formatBillingDate(sub.accessUntilUtc, i18n.language) })}
+          </span>
+        ) : sub?.state === 'past_due' ? (
+          <span className="text-warning font-semibold">
+            {t('billing.profile_past_due', 'Payment failed. Tap to fix it')}
+          </span>
+        ) : undefined
+      }
+      right={
+        sub && sub.state !== 'ended'
+          ? sub.plan === 'yearly'
+            ? t('billing.plan_yearly', 'Yearly')
+            : t('billing.plan_monthly', 'Monthly')
+          : billingStatus.accessReason === 'whitelist'
+            ? t('billing.profile_complimentary', 'Complimentary')
+            : undefined
+      }
+      chevron
+      onClick={() => navigate('/profile/subscription')}
+    />
+  ) : null;
+
   return (
     <div className="space-y-4">
       <header>
@@ -275,34 +290,6 @@ export default function ProfilePage() {
 
       {profile && (
         <>
-          {/* Premium entry (hidden while the subscription is disabled in development) */}
-          {FEATURES.premium && (
-            <Card variant="premium" padded={false}>
-              <button
-                type="button"
-                onClick={() => navigate('/premium')}
-                className="pressable w-full flex items-center gap-3 p-4 text-left"
-              >
-                <span className="w-10 h-10 rounded-2xl bg-premium text-white flex items-center justify-center shrink-0">
-                  <Icon name="crown" size={20} />
-                </span>
-                <span className="flex-1">
-                  <span className="block text-[15px] font-bold text-ink">
-                    {isPremium
-                      ? t('profile.premium_member', 'ArtiCalorias Plus member')
-                      : t('profile.premium_cta', 'Try Plus free for 14 days')}
-                  </span>
-                  <span className="block text-[13px] text-ink-2 mt-0.5">
-                    {isPremium
-                      ? t('profile.premium_manage', 'Manage your subscription')
-                      : t('profile.premium_pitch', 'Weekly insights and deeper analytics')}
-                  </span>
-                </span>
-                <Icon name="chevronRight" size={18} className="text-ink-3" />
-              </button>
-            </Card>
-          )}
-
           {/* Plan */}
           <section>
             <h2 className="text-[13px] font-bold text-ink-2 uppercase tracking-wide mb-2 px-1">
@@ -328,7 +315,12 @@ export default function ProfilePage() {
                 title={t('profile.row_macros', 'Macro tracking')}
                 right={
                   trackedMacroCount > 0
-                    ? t('profile.macros_tracked_n', '{{n}} tracked', { n: trackedMacroCount })
+                    ? Number.isFinite(maxTrackedMacros)
+                      ? t('profile.macros_tracked_of', '{{n}} of {{max}} tracked', {
+                          n: trackedMacroCount,
+                          max: maxTrackedMacros,
+                        })
+                      : t('profile.macros_tracked_n', '{{n}} tracked', { n: trackedMacroCount })
                     : t('profile.macros_none', 'None')
                 }
                 chevron
@@ -520,6 +512,7 @@ export default function ProfilePage() {
               {t('profile.section_account', 'Account')}
             </h2>
             <Card padded={false} className="overflow-hidden divide-y divide-hairline/50">
+              {subscriptionRow}
               <ListRow
                 icon="logout"
                 title={t('profile.row_logout', 'Sign out')}
@@ -648,7 +641,7 @@ export default function ProfilePage() {
             open={confirm === 'delete-account'}
             onClose={() => setConfirm(null)}
             title={t('profile.delete_account_title', 'Delete your account?')}
-            body={t('profile.delete_account_body', 'Your account and all your data are permanently deleted. There is no way back. If you only want a fresh start, clear your history instead.')}
+            body={deleteAccountBody(t, billing.data)}
             confirmLabel={t('profile.delete_account_confirm', 'Delete my account forever')}
             cancelLabel={t('common.cancel', 'Cancel')}
             loading={deleteAccount.isPending}

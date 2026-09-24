@@ -1,19 +1,15 @@
-import { useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
-import { usePremium } from '@/hooks/usePremium';
 import { parseDate } from '@/utils/format';
 import { deltaFor, hasComparablePlan } from '@/utils/calorieMath';
 import { dayTargetFor } from '@/utils/macros';
 import { isLoggedDay, longestLoggedRun } from './weekMath';
-import { FEATURES } from '@/config/features';
 import type { CalorieMode } from '@/hooks/useCalorieMode';
 import type { DailyLogResponse } from '@/types';
 
-interface PremiumInsightCardProps {
+interface WeeklyInsightCardProps {
   /** Monday of the shown week, yyyy-MM-dd */
   monday: string;
   days: DailyLogResponse[];
@@ -22,19 +18,12 @@ interface PremiumInsightCardProps {
 }
 
 /**
- * Weekly insight card. For free users it is a reciprocity gift: one real
- * insight computed from their own week, plus a gentle loss-aversion nudge
- * to keep the feature. Premium users get the full pair of insights.
+ * Weekly insight card: up to two observations computed from the user's own
+ * logged week (weekly thinking over daily perfection). ArtiCalorias has no
+ * free and paid tiers, so every subscriber gets the same card.
  */
-export function PremiumInsightCard({ monday, days, mode }: PremiumInsightCardProps) {
+export function WeeklyInsightCard({ monday, days, mode }: WeeklyInsightCardProps) {
   const { t, i18n } = useTranslation();
-  const navigate = useNavigate();
-  const { isPremium, claimGift } = usePremium();
-
-  // Reciprocity: the free preview counts as the one-time gift.
-  useEffect(() => {
-    if (FEATURES.premium && !isPremium) claimGift();
-  }, [isPremium, claimGift]);
 
   const insights = useMemo(() => {
     const weekdayName = new Intl.DateTimeFormat(i18n.language, { weekday: 'long' });
@@ -75,8 +64,10 @@ export function PremiumInsightCard({ monday, days, mode }: PremiumInsightCardPro
       );
     }
 
-    // Biggest burn day.
-    const withBurn = days.filter((d) => d.totalDailyExpenditureKcal > 0);
+    // Biggest burn day. Only days with body metrics have a burn figure at
+    // all: without them the stored expenditure is little more than the
+    // digestion of the food, and "biggest burn: 140 kcal" would be nonsense.
+    const withBurn = days.filter((d) => d.hasCalorieBudgetEstimate && d.totalDailyExpenditureKcal > 0);
     if (withBurn.length > 0) {
       const top = withBurn.reduce((a, b) =>
         b.totalDailyExpenditureKcal > a.totalDailyExpenditureKcal ? b : a,
@@ -105,44 +96,11 @@ export function PremiumInsightCard({ monday, days, mode }: PremiumInsightCardPro
     return list;
   }, [days, monday, i18n.language, mode, t]);
 
-  // Hidden entirely while the subscription is disabled in development
-  if (!FEATURES.premium) return null;
-
-  if (!isPremium) {
-    return (
-      <Card variant="premium">
-        <div className="flex items-start gap-3">
-          <span className="w-9 h-9 rounded-xl bg-card text-premium flex items-center justify-center shrink-0">
-            <Icon name="gift" size={18} />
-          </span>
-          <div className="flex-1">
-            <p className="text-[14px] font-bold text-ink">
-              {t('progress.gift_title', "A gift for you: this week's insight")}
-            </p>
-            <p className="mt-1 text-[13px] text-ink-2 leading-relaxed">{insights[0]}</p>
-            <p className="mt-1.5 text-[12px] font-semibold text-premium">
-              {t('progress.gift_note', 'Free preview this week')}
-            </p>
-          </div>
-        </div>
-        <Button
-          variant="premium"
-          size="md"
-          fullWidth
-          className="mt-3.5"
-          onClick={() => navigate('/premium')}
-        >
-          {t('progress.gift_cta', 'Keep weekly insights')}
-        </Button>
-      </Card>
-    );
-  }
-
   return (
-    <Card variant="premium">
+    <Card variant="soft">
       <div className="flex items-center gap-2.5">
-        <span className="text-premium">
-          <Icon name="crown" size={19} />
+        <span className="text-primary-soft-ink">
+          <Icon name="sparkles" size={19} />
         </span>
         <p className="text-[14px] font-bold text-ink">
           {t('progress.insight_title', 'Your weekly insight')}
@@ -151,7 +109,7 @@ export function PremiumInsightCard({ monday, days, mode }: PremiumInsightCardPro
       <ul className="mt-2.5 space-y-2">
         {insights.slice(0, 2).map((line, i) => (
           <li key={i} className="flex items-start gap-2 text-[13px] text-ink-2 leading-relaxed">
-            <Icon name="sparkles" size={15} className="mt-0.5 shrink-0 text-premium" />
+            <Icon name="check" size={15} className="mt-0.5 shrink-0 text-primary-soft-ink" />
             <span>{line}</span>
           </li>
         ))}

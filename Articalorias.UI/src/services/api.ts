@@ -62,6 +62,18 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // The subscription middleware answers 402 once the paid period (and any
+    // grace) is over, which can happen mid-session. Send the user to the
+    // paywall; the full reload drops every cached screen of the locked app.
+    if (
+      error.response?.status === 402 &&
+      error.response.data?.ErrorCode === 'SUBSCRIPTION_REQUIRED' &&
+      !window.location.pathname.startsWith('/subscribe')
+    ) {
+      window.location.assign('/subscribe');
+      return Promise.reject(error);
+    }
+
     if (error.response?.status !== 401 || originalRequest._retry) {
       return Promise.reject(error);
     }

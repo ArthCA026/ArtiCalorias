@@ -14,6 +14,12 @@ export interface MacrosContextValue {
   /** Localized name in the current language. */
   label: (keyOrDef: string | MacroDefinition, kind?: 'name' | 'shortName') => string;
   coreKeys: string[];
+  /**
+   * How many macros can be tracked at a time, protein included. Infinity
+   * until the catalog arrives (or from an API that predates the limit), so
+   * nothing locks up on a guess: the server is the one that enforces it.
+   */
+  maxTracked: number;
   isLoading: boolean;
   isError: boolean;
   refetch: () => void;
@@ -40,6 +46,10 @@ export function MacroCatalogProvider({ children }: { children: ReactNode }) {
       label: (keyOrDef, kind = 'name') =>
         macroLabel(typeof keyOrDef === 'string' ? get(keyOrDef) : keyOrDef, kind, lang),
       coreKeys: defs.filter((d) => d.isCore).map((d) => d.key),
+      maxTracked:
+        typeof query.data?.maxTrackedMacros === 'number' && query.data.maxTrackedMacros > 0
+          ? query.data.maxTrackedMacros
+          : Number.POSITIVE_INFINITY,
       isLoading: query.isLoading,
       isError: query.isError,
       refetch: () => {

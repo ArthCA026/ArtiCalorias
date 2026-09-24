@@ -10,7 +10,7 @@ import { CalorieModeTag } from '@/components/ui/CalorieModeTag';
 import { WeekDeltaChart } from '@/components/progress/WeekDeltaChart';
 import { WeekPickerSheet } from '@/components/progress/WeekPickerSheet';
 import { WeekDetailsSheet } from '@/components/progress/WeekDetailsSheet';
-import { PremiumInsightCard } from '@/components/progress/PremiumInsightCard';
+import { WeeklyInsightCard } from '@/components/progress/WeeklyInsightCard';
 import { BodyCard } from '@/components/progress/BodyCard';
 import { MacrosWeekCard } from '@/components/progress/MacrosWeekCard';
 import { StreakCard } from '@/components/progress/StreakCard';
@@ -27,6 +27,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { addDays, mondayOf, parseDate, toDateString } from '@/utils/format';
 import { useCalorieMode } from '@/hooks/useCalorieMode';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
+import { useLocalToday } from '@/hooks/useLocalToday';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { cn } from '@/utils/cn';
 
@@ -51,7 +52,9 @@ export default function ProgressPage() {
   // each single day against its own budget is a real, meaningful question.
   const { mode } = useCalorieMode();
 
-  const today = toDateString();
+  // Live local date, so the "Today" row and the week pager follow midnight
+  // instead of freezing on the date the page was first rendered.
+  const today = useLocalToday();
   const currentMonday = mondayOf(today);
   // Remembered across navigation: drilling into a day and coming back, or
   // reloading, keeps the week you were reviewing.
@@ -281,7 +284,7 @@ export default function ProgressPage() {
             isCurrentWeek={isCurrentWeek}
           />
 
-          <PremiumInsightCard monday={monday} days={days} mode={mode} />
+          <WeeklyInsightCard monday={monday} days={days} mode={mode} />
 
           <WeekDeltaChart monday={monday} days={days} mode={mode} />
 
@@ -314,7 +317,11 @@ export default function ProgressPage() {
             // Logged day: drills into the editable day view. Each row carries
             // its own words ("kcal eaten", the signed pill), so the old
             // floating column-header row is gone for good.
-            if (log) {
+            // A row that exists with nothing on it (a day opened once, never
+            // logged) is the same state as a missing row to the user, and the
+            // same state the "Days logged" counter and the streak use: it
+            // falls through to the ghost row instead of claiming "0 kcal eaten".
+            if (log && isLoggedDay(log)) {
               const comparable = hasComparablePlan(log);
               // A fasting day's subline names the fast; "0 kcal eaten" would
               // read as a forgotten day instead of a deliberate one.
@@ -395,6 +402,9 @@ export default function ProgressPage() {
             }
 
             // Ghost row: today goes to the Today screen, missed days to the day view.
+            // Today is never a "missed" day, so its ghost describes state
+            // ("nothing logged yet") rather than asking to add a day that is
+            // already in progress.
             const isToday = date === today;
             return (
               <button
@@ -410,7 +420,9 @@ export default function ProgressPage() {
                   {isToday ? t('progress.today_row', 'Today') : weekdayLong.format(parseDate(date))}
                 </span>
                 <span className="text-[13px] text-ink-3">
-                  {t('progress.add_missed_day', 'Add this day')}
+                  {isToday
+                    ? t('progress.today_empty', 'Nothing logged yet')
+                    : t('progress.add_missed_day', 'Add this day')}
                 </span>
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-inset">
                   <Icon name="plus" size={14} className="text-ink-2" />

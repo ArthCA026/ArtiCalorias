@@ -79,7 +79,7 @@ export default function OnboardingPage() {
   const { logout } = useAuth();
   const { system, setSystem, weightUnit } = useUnits();
   const imperial = system === 'imperial';
-  const { defs, get, label, isLoading: catalogLoading } = useMacros();
+  const { defs, get, label, isLoading: catalogLoading, maxTracked } = useMacros();
   const proteinDef = get('protein');
   // Every other active macro is an opt-in card on the macros step.
   const optionalDefs = defs.filter((d) => d.key !== 'protein');
@@ -104,6 +104,8 @@ export default function OnboardingPage() {
   const [proteinChoice, setProteinChoice] = useState<number | 'none' | null>(null);
   const [trackedMacros, setTrackedMacros] = useState<Set<string>>(new Set());
   const [showMoreMacros, setShowMoreMacros] = useState(false);
+  // Set by tapping a macro card while every tracking slot is taken.
+  const [macroLimitNudge, setMacroLimitNudge] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [policyDoc, setPolicyDoc] = useState<PolicyDocKey | null>(null);
 
@@ -152,6 +154,16 @@ export default function OnboardingPage() {
   const bfOverride = num(manualBf);
 
   const proteinParam: number | 'none' = proteinChoice ?? defaultProteinParam(proteinDef);
+
+  // The tracking limit counts protein too, so the slots left for this step
+  // depend on the previous one. Coming back here after switching protein on
+  // can leave one pick too many: the step then asks for one to be removed
+  // instead of silently dropping a choice (or letting the server refuse the
+  // whole set later).
+  const hasMacroLimit = Number.isFinite(maxTracked);
+  const macroSlots = hasMacroLimit ? Math.max(maxTracked - (proteinParam === 'none' ? 0 : 1), 0) : Infinity;
+  const macrosFull = trackedMacros.size >= macroSlots;
+  const macrosOver = trackedMacros.size > macroSlots;
   // Same formula the server applies (g/kg with the age floor), previewed from
   // what was typed so far; null until there is a weight to multiply.
   const proteinPreview = (param: number) =>
@@ -166,20 +178,6 @@ export default function OnboardingPage() {
     const offset = sex === 'M' ? 5 : sex === 'F' ? -161 : -78;
     return Math.round(10 * weightKg + 6.25 * h - 5 * (a ?? 30) + offset);
   })();
-  // Same model the server prices the day with (see utils/expenditure.ts):
-  // BMR plus the sleep, everyday-movement and idle deltas for the default
-  // hours, the signed goal, grossed up for a typical diet's TEF. It is the
-  // number the Today "goal" budget settles on once the day has been eaten.
-  const budgetPreview =
-    bmrPreview !== null && weightKg !== null && goalSelection !== null
-      ? Math.round(
-          estimateDailyBudgetKcal(
-            { bmrKcal: bmrPreview, weightKg, sleepHours: DEFAULT_SLEEP_HOURS, neatHours: DEFAULT_NEAT_HOURS },
-            goalSelection.dailyBaseGoalKcal,
-          ),
-        )
-      : null;
-
   // Deurenberg estimate (same formula the server auto-calculates with) so the
   // planner can offer a body-fat target even before the profile exists. A
   // manually typed body fat always wins over the estimate.
@@ -190,6 +188,22 @@ export default function OnboardingPage() {
     const est = Math.round((1.2 * bmi + 0.23 * a - 10.8 * (sex === 'M' ? 1 : 0) - 5.4) * 10) / 10;
     return est >= 0 && est <= 100 ? est : null;
   })();
+
+  // Same model the server prices the day with (see utils/expenditure.ts):
+  // BMR plus the sleep, everyday-movement and idle deltas for the default
+  // hours, the signed goal, grossed up for a typical diet's TEF, and never
+  // under the minimum-intake safeguard every new account starts with. It is
+  // the number the Today "goal" budget settles on once the day has been eaten.
+  const budgetPreview =
+    bmrPreview !== null && weightKg !== null && goalSelection !== null
+      ? Math.round(
+          estimateDailyBudgetKcal(
+            { bmrKcal: bmrPreview, weightKg, sleepHours: DEFAULT_SLEEP_HOURS, neatHours: DEFAULT_NEAT_HOURS },
+            goalSelection.dailyBaseGoalKcal,
+            { sex, bmrKcal: bmrPreview, weightKg, bodyFatPercent: bfPreview },
+          ),
+        )
+      : null;
 
   const goalSummaryLabel = (() => {
     if (goalSelection === null) return '';
@@ -295,7 +309,9 @@ export default function OnboardingPage() {
         (bfOverride === null || (bfOverride >= 1 && bfOverride <= 75))
       : step === 1
         ? goalSelection !== null
-        : true;
+        : step === 3
+          ? !macrosOver
+          : true;
 
   const progress = (step + 1) / (TOTAL_STEPS + 1);
 
@@ -304,23 +320,33 @@ export default function OnboardingPage() {
   // server shows up here with no UI change.
   const macroCard = (def: MacroDefinition) => {
     const active = trackedMacros.has(def.key);
+    // Out of slots: the card dims but still answers a tap (with the reason),
+    // because a control that does nothing teaches nothing.
+    const locked = !active && macrosFull;
     return (
       <button
         key={def.key}
         type="button"
         role="checkbox"
         aria-checked={active}
-        onClick={() =>
+        aria-disabled={locked}
+        onClick={() => {
+          if (locked) {
+            setMacroLimitNudge(true);
+            return;
+          }
+          setMacroLimitNudge(false);
           setTrackedMacros((prev) => {
             const next = new Set(prev);
             if (next.has(def.key)) next.delete(def.key);
             else next.add(def.key);
             return next;
-          })
-        }
+          });
+        }}
         className={cn(
           'pressable w-full rounded-card px-4 py-3 text-left flex items-center gap-3',
           active ? 'bg-primary-soft ring-2 ring-primary/60' : 'bg-card',
+          locked && 'opacity-50',
         )}
       >
         <span
@@ -644,6 +670,28 @@ export default function OnboardingPage() {
                 </>
               )}
             </div>
+            {hasMacroLimit && (macrosOver || macroLimitNudge || trackedMacros.size > 0) && (
+              <p
+                role="status"
+                className={cn(
+                  'text-[13px] leading-relaxed',
+                  macrosOver || (macroLimitNudge && macrosFull) ? 'font-semibold text-warning' : 'text-ink-2',
+                )}
+              >
+                {macrosOver
+                  ? t('onboarding.macros_over', 'That is one too many: up to {{max}} at a time, protein included. Remove one to continue.', {
+                      max: maxTracked,
+                    })
+                  : macrosFull
+                    ? t('onboarding.macros_full', 'That is the limit: up to {{max}} at a time, protein included. Remove one to pick another.', {
+                        max: maxTracked,
+                      })
+                    : t('onboarding.macros_count', '{{n}} of {{max}} picked, protein included.', {
+                        n: trackedMacros.size + (proteinParam === 'none' ? 0 : 1),
+                        max: maxTracked,
+                      })}
+              </p>
+            )}
             <p className="text-[13px] text-ink-3 leading-relaxed">
               {t('onboarding.macros_hint', 'Nothing is mandatory. Every choice here can be changed in Profile, under Macro tracking.')}
             </p>

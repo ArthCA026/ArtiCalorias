@@ -15,12 +15,22 @@ import type {
 } from '@/types';
 
 export const dailyLogService = {
+  /**
+   * Both reads create the day on first request. The device's local date
+   * travels along so the server decides "is this the user's today" (which
+   * gates routine auto-add) on the same calendar the screen shows, even when
+   * the stored profile timezone is stale after a trip.
+   */
   getByDate(date: string) {
-    return api.get<DailyLogResponse>(`/dailylog/${date}`);
+    return api.get<DailyLogResponse>(`/dailylog/${date}`, {
+      params: { today: toDateString() },
+    });
   },
 
   getDashboard(date: string) {
-    return api.get<DailyDashboardResponse>(`/dailylog/${date}/dashboard`);
+    return api.get<DailyDashboardResponse>(`/dailylog/${date}/dashboard`, {
+      params: { today: toDateString() },
+    });
   },
 
   recalculate(date: string) {

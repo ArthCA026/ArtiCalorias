@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { CalorieHero } from '@/components/today/CalorieHero';
 import { DayDetailsSheet } from '@/components/today/DayDetailsSheet';
@@ -16,9 +16,9 @@ import { Icon } from '@/components/ui/Icon';
 import { IconButton } from '@/components/ui/Button';
 import { Fab } from '@/components/ui/Fab';
 import { useLogSheet } from '@/components/log/LogSheetContext';
-import { dailyLogService } from '@/services/dailyLogService';
-import { queryKeys, invalidateDayData } from '@/lib/queryKeys';
+import { invalidateDayData } from '@/lib/queryKeys';
 import { useCalorieMode } from '@/hooks/useCalorieMode';
+import { useDayDashboard } from '@/hooks/useDayDashboard';
 import { useDelayedBoolean } from '@/hooks/useDelayedBoolean';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { trackedKeysFromTargets } from '@/utils/macros';
@@ -74,11 +74,7 @@ export function DayView({ date, isToday }: DayViewProps) {
     setSortSheetOpen(false);
   };
 
-  const query = useQuery({
-    queryKey: queryKeys.dashboard(date),
-    queryFn: () => dailyLogService.getDashboard(date).then((r) => r.data),
-    staleTime: 5 * 60 * 1000,
-  });
+  const query = useDayDashboard(date);
   const showSkeleton = useDelayedBoolean(query.isLoading, 300);
   const dash = query.data;
 

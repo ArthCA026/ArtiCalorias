@@ -1,6 +1,6 @@
 # Privacy Notice
 
-> **DRAFT FOR LEGAL REVIEW.** Version 2026-09-09, effective 2026-09-09.
+> **DRAFT FOR LEGAL REVIEW.** Version 2026-09-18, effective 2026-09-18.
 > Canonical copy of the in-app text (`Articalorias.UI/src/legal/content/privacy.en.ts`).
 > The Spanish document (`privacy-notice.es.md`) is the primary text for review;
 > this English version must stay an accurate translation of it.
@@ -44,6 +44,13 @@ You provide this data voluntarily because it is the raw material of the service.
 - Browser push notification subscription and reminder times, if you enable meal reminders.
 - Meal photos you submit for analysis. Photos are processed on the spot and are not stored in our database.
 
+## Subscription and payment data
+
+- Your plan, its price, its status and its dates: start, renewal, cancellation.
+- The identifiers that ONVO Pay, our payment processor, assigns to you as a customer and to your subscription.
+- A record of your billing events: when you started a payment and at which price and terms version, when a payment was confirmed, when you cancelled.
+- We do not receive or store your card number, its expiry date or its security code. You type them into ONVO Pay’s payment form and they go directly to ONVO Pay.
+
 ## What we use your data for
 
 - Computing your calorie and macronutrient budget and showing your progress.
@@ -51,6 +58,7 @@ You provide this data voluntarily because it is the raw material of the service.
 - Sending you meal reminders, only if you enable them.
 - Sending password recovery emails.
 - Keeping your account secure.
+- Charging your subscription, recognizing that you have paid, and handling cancellations, failed payments and refunds.
 
 We do not use your data for advertising, we do not sell it, and the app includes no third-party analytics trackers.
 
@@ -62,6 +70,7 @@ To work, ArtiCalorias sends certain data to these providers:
 - Open Food Facts (France): receives only the barcode you scan, to look up the product.
 - Browser push services (Google, Mozilla, or Apple, depending on your browser): receive the technical identifier needed to deliver reminders.
 - Email provider: receives your address to send you password recovery codes.
+- ONVO Pay (Costa Rica): our payment processor. Receives your username and email address to create your customer record, and the card details you type into its payment form, in order to charge your subscription.
 - Microsoft Azure (United States): hosts the application and the database.
 
 ## International transfers
@@ -72,6 +81,7 @@ The transfers above move data outside Costa Rica, mainly to the United States. B
 
 - Required: username, email, and password. Without them the account cannot be created.
 - Optional but central: weight, height, age, sex, and the rest of your body data. You can skip some, but calculations become less precise or some features stop being available. For example, automatic protein goals need your weight.
+- Payment: a valid payment method is needed to subscribe, and without a subscription the app cannot be used. You can still download your data and delete your account without paying.
 - If you do not consent to the processing of your health data, the app cannot provide the service, because the service consists precisely of logging and computing with that data. You are free to decline, but in that case ArtiCalorias cannot be used.
 
 ## Record of your consent
@@ -80,7 +90,7 @@ We keep a record of every consent you grant or revoke: which document, at which 
 
 ## Your rights and how to exercise them
 
-- Access: you can see your data inside the app and download all of it from Profile, Legal section, Download my data.
+- Access: you can see your data inside the app and download all of it from Profile, Legal section, Download my data. Subscription records are included, and the download is also offered on the subscription screen when you have no active subscription.
 - Rectification: you can correct your profile and your entries directly in the app.
 - Deletion: you can erase your history or your whole account from Profile. Account deletion is immediate and permanent.
 - Revocation of consent: from Profile, Legal section. If you revoke the health data consent, the app stops saving new data and offers to delete your account.
@@ -89,7 +99,7 @@ You can also exercise any of these rights by writing to r2chaves026@gmail.com.
 
 ## How long we keep your data
 
-We keep your data while your account exists. If you delete your history or your account, the data is removed from the database immediately and permanently. The hosting provider backups may take a limited additional time to purge.
+We keep your data while your account exists. If you delete your history or your account, the data is removed from the database immediately and permanently. The hosting provider backups may take a limited additional time to purge. Your subscription records are deleted together with your account. ONVO Pay keeps the records of the payments it processed for as long as the law requires of a payment processor.
 
 ## Security
 

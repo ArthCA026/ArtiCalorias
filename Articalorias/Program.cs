@@ -51,6 +51,11 @@ app.UseAuthorization();
 // a current health-data consent. The frontend gate is the primary UX.
 app.UseMiddleware<ConsentEnforcementMiddleware>();
 
+// Subscription-only product: everything except sign-in, billing, onboarding
+// and the data rights endpoints answers 402 without a paid (or whitelisted)
+// account. No-op while Billing:Enabled is false.
+app.UseMiddleware<SubscriptionEnforcementMiddleware>();
+
 app.MapControllers();
 
 app.Run();

@@ -25,6 +25,9 @@ public class AppDbContext : DbContext
     public DbSet<BodyMeasurement> BodyMeasurements => Set<BodyMeasurement>();
     public DbSet<UserConsent> UserConsents => Set<UserConsent>();
     public DbSet<AiResponseCacheEntry> AiResponseCache => Set<AiResponseCacheEntry>();
+    public DbSet<UserSubscription> UserSubscriptions => Set<UserSubscription>();
+    public DbSet<BillingPrice> BillingPrices => Set<BillingPrice>();
+    public DbSet<BillingEvent> BillingEvents => Set<BillingEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

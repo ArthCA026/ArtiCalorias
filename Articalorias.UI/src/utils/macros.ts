@@ -50,7 +50,8 @@ export function fallbackDef(key: string): MacroDefinition {
     customTargetMax: 20000,
     quickAdds: [],
     showInHeroBars: true,
-    rowStrip: 'whenTracked',
+    alwaysInDayTotals: false,
+    energyKcalPerGram: 0,
     hasOwnCard: false,
     isActive: false,
   };
@@ -175,18 +176,53 @@ export interface MacroStripItem {
   value: number | null;
 }
 
+const toStripItems = (map: MacroAmounts, defs: MacroDefinition[]): MacroStripItem[] =>
+  defs.map((d) => ({ key: d.key, value: typeof map[d.key] === 'number' ? map[d.key] : null }));
+
 /**
- * Which macros a meal/template row strip shows, in catalog order: every
- * "always" macro plus the "whenTracked" ones the day or user tracks.
+ * The strip under a meal or template row, in catalog order: ONLY the macros
+ * the day (or the user) tracks. Whoever tracks just protein sees just
+ * protein; whoever tracks nothing gets no strip at all (an empty list: the
+ * caller leaves the row footer out).
  */
 export function rowStripItems(
   map: MacroAmounts,
   tracked: Set<string>,
   defs: MacroDefinition[],
 ): MacroStripItem[] {
-  return defs
-    .filter((d) => d.rowStrip === 'always' || (d.rowStrip === 'whenTracked' && tracked.has(d.key)))
-    .map((d) => ({ key: d.key, value: typeof map[d.key] === 'number' ? map[d.key] : null }));
+  return toStripItems(map, defs.filter((d) => tracked.has(d.key)));
+}
+
+/**
+ * The day's macro totals: the tracked macros plus the ones the catalog always
+ * lists there (protein, fat and carbs, where the calories came from), since
+ * the details sheet is the one place that shows the whole split.
+ */
+export function dayTotalsItems(
+  map: MacroAmounts,
+  tracked: Set<string>,
+  defs: MacroDefinition[],
+): MacroStripItem[] {
+  return toStripItems(map, defs.filter((d) => d.alwaysInDayTotals || tracked.has(d.key)));
+}
+
+/** Calories the given macro amounts add up to (Atwater factors from the catalog). */
+export function macroEnergyKcal(map: MacroAmounts, get: (key: string) => MacroDefinition): number {
+  let kcal = 0;
+  // `?? 0`: a catalog served by an API that predates the field adds no energy.
+  for (const [k, v] of Object.entries(map)) kcal += v * (get(k).energyKcalPerGram ?? 0);
+  return kcal;
+}
+
+/**
+ * True when typed macros cannot belong to the typed calories: they add up to
+ * clearly MORE energy than the entry claims, the signature of a slipped digit
+ * (300 g of protein on a 200 kcal snack). Deliberately one-sided and lenient:
+ * macros below the calories are normal (not everything gets typed in), and
+ * labels legitimately run a little over through rounding and fibre.
+ */
+export function macrosExceedCalories(macroKcal: number, caloriesKcal: number): boolean {
+  return macroKcal > caloriesKcal * 1.25 + 25;
 }
 
 /** Form state from a map: absent -> '' (an honest blank), present -> its string. */

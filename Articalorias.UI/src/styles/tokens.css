@@ -59,14 +59,17 @@
   --t-protein-soft: #e3e5fb;
   --t-streak: #ea8c00;
   --t-streak-soft: #fdeed2;
-  --t-premium: #b8860b;
-  --t-premium-soft: #f6ecd2;
+  /* Surface behind a third-party payment form (ONVO). Light in BOTH themes on
+     purpose: the form brings its own dark-on-light styling. */
+  --t-payment-surface: #ffffff;
 
   /* Macro accents (optional tracking) */
   --t-carbs: #c17a10;
   --t-carbs-soft: #f8ecd6;
   --t-fat: #b98207;
   --t-fat-soft: #f9efd2;
+  --t-fiber: #6d8a1f;
+  --t-fiber-soft: #e9f0d3;
   --t-sugar: #d4497f;
   --t-sugar-soft: #fae2ec;
   --t-alcohol: #8e4ec6;
@@ -133,14 +136,17 @@
   --t-protein-soft: #23264a;
   --t-streak: #f5a623;
   --t-streak-soft: #362a12;
-  --t-premium: #e3b341;
-  --t-premium-soft: #33290f;
+  /* Surface behind a third-party payment form (ONVO). Light in BOTH themes on
+     purpose: the form brings its own dark-on-light styling. */
+  --t-payment-surface: #ffffff;
 
   /* Macro accents (optional tracking) */
   --t-carbs: #e0a145;
   --t-carbs-soft: #362a14;
   --t-fat: #ddb84a;
   --t-fat-soft: #34290e;
+  --t-fiber: #a8c957;
+  --t-fiber-soft: #27300f;
   --t-sugar: #ef7fae;
   --t-sugar-soft: #3b1a29;
   --t-alcohol: #b585e8;

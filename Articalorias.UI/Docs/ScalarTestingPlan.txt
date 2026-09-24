@@ -251,8 +251,11 @@ STEP 8 — Recalculate the daily log
   Verify these fields are now populated:
     - totalFoodCaloriesKcal       — should match the remaining food (~412)
     - totalProteinGrams           — ~77
-    - tefKcal                     — per-macro TEF (protein×4×0.25 + fat×9×0.02 + carbs×4×0.08 + alcohol×7×0.15)
-    - totalDailyExpenditureKcal   — BMR + TEF + activity
+    - tefKcal                     — TEF priced PER ENTRY and anchored on the entry's calories (MacroTef.cs):
+                                    macro rates protein 25 %, fat 2 %, carbs 8 %, alcohol 15 %;
+                                    calories no macro explains count at 6 % (10 % when the entry has no macros at all);
+                                    macros that add up to more than the entry's calories are scaled down to them
+    - totalDailyExpenditureKcal   — BMR + sleep + everyday movement + idle + activities above resting + TEF
     - netBalanceKcal              — food calories minus expenditure
     - dailyGoalDeltaKcal          — net balance compared to your -500 goal
     - caloriesRemainingToDailyTargetKcal — how much you can still eat
@@ -438,7 +441,7 @@ Now with both food and activities logged, recalculate again:
   Expected: 200 OK — all fields fully populated.
   Verify:
     - totalActivityCaloriesKcal > 0 (sum of all activities)
-    - totalDailyExpenditureKcal = BMR + TEF + activity calories
+    - totalDailyExpenditureKcal = BMR + sleep + everyday movement + idle + activities above resting + TEF
     - netBalanceKcal = food - expenditure
     - Weekly projections updated
 

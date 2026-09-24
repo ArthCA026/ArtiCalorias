@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
+import { useBillingFreshness, useBillingStatus } from '@/hooks/useBilling';
 import { profileService } from '@/services/profileService';
 import { consentService } from '@/services/consentService';
 import { queryKeys } from '@/lib/queryKeys';
@@ -88,6 +89,32 @@ export function RequireConsented() {
   }
   if ((consentQuery.data?.requiresConsent.length ?? 0) > 0) {
     return <Navigate to="/consent" replace state={{ from: location.pathname }} />;
+  }
+  return <Outlet />;
+}
+
+/**
+ * Requires access to the product: a paid subscription (or its grace window),
+ * a server-side whitelist entry, or a server with subscriptions switched off.
+ * The server decides all of it; this guard only routes. Everyone else is sent
+ * to the paywall, AFTER onboarding, so they arrive with their plan already
+ * built. The API answers 402 on its own, so a network error here fails open
+ * for UX without weakening anything.
+ */
+export function RequireSubscribed() {
+  const { isAuthenticated } = useAuth();
+  const location = useLocation();
+  const billing = useBillingStatus();
+  useBillingFreshness();
+
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (billing.isLoading) return <GuardSplash />;
+  if (billing.isError) {
+    // Network trouble: let the app render; pages show their own error states.
+    return <Outlet />;
+  }
+  if (!billing.data?.hasAccess) {
+    return <Navigate to="/subscribe" replace state={{ from: location.pathname }} />;
   }
   return <Outlet />;
 }

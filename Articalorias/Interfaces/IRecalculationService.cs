@@ -55,4 +55,16 @@ public interface IRecalculationService
     /// the WeeklySummary and MonthlySummary aggregates.
     /// </summary>
     Task RecalculateAfterDayDeletionAsync(long userId, DateOnly deletedDate, DateOnly weekStart, DateOnly weekEnd, decimal baseDailyGoal);
+
+    /// <summary>
+    /// Re-prices EVERY stored day with the current calculation rules, week by
+    /// week. Used once per change of the rules themselves (a TEF rate, the
+    /// TEF reconciliation): those are code, not per-day snapshots, so without
+    /// this a day would only pick them up the next time it happened to be
+    /// touched and history would sit half old, half new. Inputs are never
+    /// changed: snapshots, entries and frozen past-day adjusted budgets stay
+    /// exactly as they are.
+    /// </summary>
+    /// <returns>Days re-priced, and days that failed and still carry the old figures.</returns>
+    Task<(int Repriced, int Failed)> RepriceAllDaysAsync(CancellationToken ct = default);
 }

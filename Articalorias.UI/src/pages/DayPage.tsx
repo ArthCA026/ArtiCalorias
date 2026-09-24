@@ -10,7 +10,8 @@ import { ConfirmSheet } from '@/components/ui/ActionSheet';
 import { useToast } from '@/components/ui/Toast';
 import { dailyLogService } from '@/services/dailyLogService';
 import { invalidateDayData } from '@/lib/queryKeys';
-import { toDateString, parseDate, addDays } from '@/utils/format';
+import { useLocalToday } from '@/hooks/useLocalToday';
+import { parseDate, addDays } from '@/utils/format';
 import { extractApiError } from '@/utils/apiError';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -28,7 +29,9 @@ export default function DayPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  const today = toDateString();
+  // Live local date: a past day open across midnight must not become
+  // deletable "today", and yesterday's URL must keep pointing at the diary.
+  const today = useLocalToday();
   const valid =
     !!date && DATE_RE.test(date) && !Number.isNaN(parseDate(date).getTime());
 

@@ -8,10 +8,12 @@ namespace Articalorias.Services;
 public class UserService : IUserService
 {
     private readonly AppDbContext _db;
+    private readonly IBillingService _billing;
 
-    public UserService(AppDbContext db)
+    public UserService(AppDbContext db, IBillingService billing)
     {
         _db = db;
+        _billing = billing;
     }
 
     public async Task<User?> GetByIdAsync(long userId)
@@ -50,6 +52,12 @@ public class UserService : IUserService
 
     public async Task DeleteAccountAsync(long userId)
     {
+        // Billing first, and OUTSIDE the transaction (it is an HTTP call to
+        // ONVO, not a row). If the subscription cannot be confirmed cancelled
+        // this throws and nothing is deleted: an erased account whose card
+        // keeps being charged is the one outcome that must never happen.
+        await _billing.CancelAllForAccountDeletionAsync(userId);
+
         // One transaction: account deletion is all-or-nothing. Each
         // ExecuteDelete otherwise commits on its own, and a failure halfway
         // used to leave a half-deleted account - reminders and templates
@@ -90,6 +98,16 @@ public class UserService : IUserService
 
         await _db.UserProfiles
             .Where(p => p.UserId == userId)
+            .ExecuteDeleteAsync();
+
+        // Local billing mirror and audit trail. The transaction records
+        // themselves stay with ONVO, the payment processor.
+        await _db.BillingEvents
+            .Where(e => e.UserId == userId)
+            .ExecuteDeleteAsync();
+
+        await _db.UserSubscriptions
+            .Where(s => s.UserId == userId)
             .ExecuteDeleteAsync();
 
         // RefreshTokens and UserStreaks cascade off the user row itself.
@@ -162,6 +180,25 @@ public class UserService : IUserService
             .Select(c => new { c.ConsentType, c.PolicyVersion, c.Action, c.Locale, c.Source, c.CreatedAtUtc })
             .ToListAsync();
 
+        // Billing: what we hold is the plan, its dates and the ONVO references.
+        // Card details never reach this system, so there are none to export.
+        var subscriptions = await _db.UserSubscriptions.AsNoTracking()
+            .Where(s => s.UserId == userId)
+            .OrderBy(s => s.CreatedAtUtc)
+            .Select(s => new
+            {
+                s.PlanCode, s.PriceCents, s.Currency, s.Status, s.CancelAtPeriodEnd,
+                s.PaidThroughUtc, s.CanceledAtUtc, s.CreatedAtUtc,
+                s.OnvoMode, s.OnvoCustomerId, s.OnvoSubscriptionId
+            })
+            .ToListAsync();
+
+        var billingEvents = await _db.BillingEvents.AsNoTracking()
+            .Where(e => e.UserId == userId)
+            .OrderBy(e => e.CreatedAtUtc)
+            .Select(e => new { e.EventType, e.Detail, e.CreatedAtUtc })
+            .ToListAsync();
+
         return new
         {
             ExportedAtUtc = DateTime.UtcNow,
@@ -180,7 +217,9 @@ public class UserService : IUserService
             Streak = streak,
             NotificationSchedules = notificationSchedules,
             PushSubscriptions = pushSubscriptions,
-            Consents = consents
+            Consents = consents,
+            Subscriptions = subscriptions,
+            BillingEvents = billingEvents
         };
     }
 }

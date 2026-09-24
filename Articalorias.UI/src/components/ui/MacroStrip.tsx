@@ -6,9 +6,10 @@ import { g } from '@/utils/format';
 interface MacroStripProps {
   /**
    * Which macros to show, in order, with per-item values. Build it with
-   * rowStripItems(): the "always" macros plus whatever the day or the user
-   * tracks. A null value renders as a dash so an old entry from before
-   * tracking never fakes a zero.
+   * rowStripItems() (rows: tracked macros only) or dayTotalsItems() (the
+   * day's totals). A null value renders as a dash so an old entry from
+   * before tracking never fakes a zero. Callers skip the strip entirely when
+   * the list is empty.
    */
   items: MacroStripItem[];
   /** Append the unit to each value (day totals); rows leave it off to stay compact */
@@ -17,9 +18,10 @@ interface MacroStripProps {
 }
 
 /**
- * PROT | FAT | CARBS (+ the user's other tracked macros) under a row. Labels
- * and units come from the catalog, so Today and Templates can never drift
- * apart and a new macro needs no change here.
+ * The tracked macros under a row (PROT | FIBER | SODIUM ...). Labels and
+ * units come from the catalog, so Today and Templates can never drift apart
+ * and a new macro needs no change here. However many there are, the strip
+ * wraps inside its row instead of overflowing it (see MiniTable).
  */
 export function MacroStrip({ items, unit = false, className }: MacroStripProps) {
   const { get, label } = useMacros();

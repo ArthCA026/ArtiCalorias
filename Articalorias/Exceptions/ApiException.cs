@@ -37,4 +37,15 @@ public static class ErrorCodes
     public const string ConsentRequired = "CONSENT_REQUIRED";
     public const string ConsentVersionStale = "CONSENT_VERSION_STALE";
     public const string AiRateLimited = "AI_RATE_LIMITED";
+    public const string MacroTrackLimit = "MACRO_TRACK_LIMIT";
+
+    // Billing
+    public const string SubscriptionRequired = "SUBSCRIPTION_REQUIRED";
+    public const string SubscriptionNotRequired = "SUBSCRIPTION_NOT_REQUIRED";
+    public const string AlreadySubscribed = "ALREADY_SUBSCRIBED";
+    public const string NoSubscription = "NO_SUBSCRIPTION";
+    public const string BillingUnavailable = "BILLING_UNAVAILABLE";
+    public const string BillingProviderError = "BILLING_PROVIDER_ERROR";
+    public const string BillingRateLimited = "BILLING_RATE_LIMITED";
+    public const string SubscriptionCancelFailed = "SUBSCRIPTION_CANCEL_FAILED";
 }
