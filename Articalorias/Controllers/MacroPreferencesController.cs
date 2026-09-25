@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using Articalorias.DTOs.Macros;
 using Articalorias.Interfaces;
+using Articalorias.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -21,7 +21,7 @@ public class MacroPreferencesController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var prefs = await _macroPreferences.GetForUserAsync(userId, ct);
         return Ok(prefs);
     }
@@ -34,15 +34,9 @@ public class MacroPreferencesController : ControllerBase
     [HttpPut]
     public async Task<IActionResult> Update([FromBody] UpdateMacroPreferencesRequest request, CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var prefs = await _macroPreferences.UpdateAsync(userId, request, ct);
         return Ok(prefs);
     }
 
-    private long GetUserId()
-    {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier)
-            ?? throw new UnauthorizedAccessException();
-        return long.Parse(claim.Value);
-    }
 }

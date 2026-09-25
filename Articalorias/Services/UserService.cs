@@ -171,8 +171,19 @@ public class UserService : IUserService
         var notificationSchedules = await _db.NotificationSchedules.AsNoTracking()
             .Where(n => n.UserId == userId).ToListAsync();
 
-        var pushSubscriptions = await _db.PushSubscriptions.AsNoTracking()
-            .Where(p => p.UserId == userId).ToListAsync();
+        // A push subscription is a capability (endpoint URL + encryption keys),
+        // not personal data worth handing back: the export names the device's
+        // push service and when it was registered, nothing usable to send.
+        var pushSubscriptions = (await _db.PushSubscriptions.AsNoTracking()
+            .Where(p => p.UserId == userId)
+            .Select(p => new { p.Endpoint, p.CreatedAtUtc })
+            .ToListAsync())
+            .Select(p => new
+            {
+                PushService = Uri.TryCreate(p.Endpoint, UriKind.Absolute, out var uri) ? uri.Host : "unknown",
+                p.CreatedAtUtc
+            })
+            .ToList();
 
         var consents = await _db.UserConsents.AsNoTracking()
             .Where(c => c.UserId == userId)

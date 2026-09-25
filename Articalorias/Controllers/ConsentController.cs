@@ -1,7 +1,7 @@
-using System.Security.Claims;
 using Articalorias.Configuration;
 using Articalorias.DTOs.Consent;
 using Articalorias.Interfaces;
+using Articalorias.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -38,20 +38,14 @@ public class ConsentController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<ConsentStateResponse>> GetState()
     {
-        return Ok(await _consentService.GetStateAsync(GetUserId()));
+        return Ok(await _consentService.GetStateAsync(User.GetUserId()));
     }
 
     /// <summary>Records grants (re-consent gate) or revocations (profile).</summary>
     [HttpPost]
     public async Task<ActionResult<ConsentStateResponse>> Record([FromBody] RecordConsentRequest request)
     {
-        return Ok(await _consentService.RecordAsync(GetUserId(), request));
+        return Ok(await _consentService.RecordAsync(User.GetUserId(), request));
     }
 
-    private long GetUserId()
-    {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier)
-            ?? throw new UnauthorizedAccessException();
-        return long.Parse(claim.Value);
-    }
 }

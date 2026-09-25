@@ -2,6 +2,7 @@ using System.Text.Json;
 using Articalorias.Configuration;
 using Articalorias.Data;
 using Articalorias.DTOs.Push;
+using Articalorias.Exceptions;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -33,16 +34,25 @@ public class PushNotificationService : IPushNotificationService
 
     public async Task SubscribeAsync(long userId, string endpoint, string p256dh, string auth)
     {
+        if (!IsAllowedPushEndpoint(endpoint))
+            throw new ApiException(ErrorCodes.InvalidInput, "Push endpoint is not a recognised push service.");
+
         var existing = await _db.PushSubscriptions.FirstOrDefaultAsync(s => s.Endpoint == endpoint);
 
-        if (existing is not null)
+        if (existing is not null && existing.UserId == userId)
         {
-            existing.UserId = userId;
             existing.P256DH = p256dh;
             existing.Auth = auth;
         }
         else
         {
+            // The endpoint is unique per browser profile. Seeing it under
+            // another account means a shared device signed in as someone
+            // else: the old owner's row is dropped (their device is no
+            // longer theirs), never re-pointed in place by the caller.
+            if (existing is not null)
+                _db.PushSubscriptions.Remove(existing);
+
             _db.PushSubscriptions.Add(new PushSubscriptionEntity
             {
                 UserId = userId,
@@ -54,6 +64,25 @@ public class PushNotificationService : IPushNotificationService
         }
 
         await _db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Absolute HTTPS URL whose host is (a subdomain of) a known push service.
+    /// Everything the server will later POST to must pass through here.
+    /// </summary>
+    private bool IsAllowedPushEndpoint(string endpoint)
+    {
+        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri))
+            return false;
+        if (uri.Scheme != Uri.UriSchemeHttps || uri.HostNameType != UriHostNameType.Dns)
+            return false;
+
+        var host = uri.Host.ToLowerInvariant();
+        return _vapid.AllowedEndpointHostSuffixes.Any(suffix =>
+        {
+            var s = suffix.Trim().ToLowerInvariant();
+            return s.Length > 0 && (host == s || host.EndsWith("." + s, StringComparison.Ordinal));
+        });
     }
 
     public async Task UnsubscribeAsync(long userId, string endpoint)

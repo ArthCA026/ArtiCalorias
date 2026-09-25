@@ -1,5 +1,6 @@
-using System.Security.Claims;
 using Articalorias.Data;
+using Articalorias.DTOs.Auth;
+using Articalorias.Extensions;
 using Articalorias.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,11 +14,13 @@ namespace Articalorias.Controllers;
 public class UserController : ControllerBase
 {
     private readonly IUserService _userService;
+    private readonly IAuthService _authService;
     private readonly AppDbContext _db;
 
-    public UserController(IUserService userService, AppDbContext db)
+    public UserController(IUserService userService, IAuthService authService, AppDbContext db)
     {
         _userService = userService;
+        _authService = authService;
         _db = db;
     }
 
@@ -31,7 +34,7 @@ public class UserController : ControllerBase
     [HttpPost("heartbeat")]
     public async Task<IActionResult> Heartbeat()
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
 
         // Direct set-based update: no row round-trip, no RowVersion conflicts
         // with whatever else the session is doing at open.
@@ -42,21 +45,37 @@ public class UserController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Deletes all daily logs, food entries, activity entries, and monthly
-    /// summaries for the authenticated user. Account and profile settings are kept.</summary>
-    [HttpDelete("history")]
-    public async Task<IActionResult> ClearHistory()
+    /// <summary>
+    /// Signed-in password change. Answers with fresh tokens for this session;
+    /// every other session is signed out.
+    /// </summary>
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request, CancellationToken ct)
     {
-        var userId = GetUserId();
+        var result = await _authService.ChangePasswordAsync(User.GetUserId(), request, ct);
+        return Ok(result);
+    }
+
+    /// <summary>Deletes all daily logs, food entries, activity entries, and monthly
+    /// summaries for the authenticated user. Account and profile settings are kept.
+    /// Irreversible, so the current password is required: a bearer token alone
+    /// (one XSS away in a browser) must not be enough to erase a history.</summary>
+    [HttpDelete("history")]
+    public async Task<IActionResult> ClearHistory([FromBody] ConfirmPasswordRequest request, CancellationToken ct)
+    {
+        var userId = User.GetUserId();
+        await _authService.VerifyPasswordAsync(userId, request.Password, ct);
         await _userService.ClearHistoryAsync(userId);
         return NoContent();
     }
 
-    /// <summary>Permanently deletes the authenticated user's account and all associated data.</summary>
+    /// <summary>Permanently deletes the authenticated user's account and all associated
+    /// data. Requires the current password for the same reason as history deletion.</summary>
     [HttpDelete("account")]
-    public async Task<IActionResult> DeleteAccount()
+    public async Task<IActionResult> DeleteAccount([FromBody] ConfirmPasswordRequest request, CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
+        await _authService.VerifyPasswordAsync(userId, request.Password, ct);
         await _userService.DeleteAccountAsync(userId);
         return NoContent();
     }
@@ -66,16 +85,9 @@ public class UserController : ControllerBase
     [HttpGet("export")]
     public async Task<IActionResult> ExportData()
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var export = await _userService.ExportAsync(userId);
         if (export is null) return NotFound();
         return Ok(export);
-    }
-
-    private long GetUserId()
-    {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier)
-            ?? throw new UnauthorizedAccessException();
-        return long.Parse(claim.Value);
     }
 }

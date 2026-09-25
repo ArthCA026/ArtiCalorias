@@ -42,8 +42,14 @@ public class ErrorHandlingMiddleware
 
         var (statusCode, message) = exception switch
         {
-            UnauthorizedAccessException => ((int)HttpStatusCode.Unauthorized, exception.Message),
-            InvalidOperationException => ((int)HttpStatusCode.BadRequest, exception.Message),
+            UnauthorizedAccessException => ((int)HttpStatusCode.Unauthorized, "Unauthorized."),
+            // Our own services throw InvalidOperationException with copy meant
+            // for the user. The same type thrown by EF Core / the framework
+            // carries internal detail (entity names, query shape) and is
+            // never echoed: callers get a neutral 400 and the log has the rest.
+            InvalidOperationException when IsThrownByApp(exception)
+                => ((int)HttpStatusCode.BadRequest, exception.Message),
+            InvalidOperationException => ((int)HttpStatusCode.BadRequest, "The request could not be processed."),
             _ => ((int)HttpStatusCode.InternalServerError, "An unexpected error occurred.")
         };
 
@@ -51,5 +57,16 @@ public class ErrorHandlingMiddleware
 
         var fallbackResponse = new { StatusCode = statusCode, Message = message };
         await context.Response.WriteAsync(JsonSerializer.Serialize(fallbackResponse));
+    }
+
+    /// <summary>
+    /// True when the throwing method lives in this assembly. Async state
+    /// machines are nested in their declaring type, so the namespace check
+    /// still holds for awaited code.
+    /// </summary>
+    private static bool IsThrownByApp(Exception exception)
+    {
+        var ns = exception.TargetSite?.DeclaringType?.Namespace;
+        return ns is not null && ns.StartsWith("Articalorias", StringComparison.Ordinal);
     }
 }

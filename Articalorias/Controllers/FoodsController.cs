@@ -1,7 +1,7 @@
-using System.Security.Claims;
 using Articalorias.Configuration;
 using Articalorias.DTOs.FoodParsing;
 using Articalorias.Interfaces;
+using Articalorias.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
@@ -37,8 +37,7 @@ public class FoodsController : ControllerBase
         [FromBody] BarcodeRequest request,
         CancellationToken ct)
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (userId is null) return Unauthorized();
+        var userId = User.GetUserId();
 
         var cooldownKey = $"barcode-cooldown:{userId}";
         if (_cache.TryGetValue(cooldownKey, out _))

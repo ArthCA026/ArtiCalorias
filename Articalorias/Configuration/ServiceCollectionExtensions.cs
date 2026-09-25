@@ -4,6 +4,7 @@ using Articalorias.Interfaces;
 using Articalorias.Services;
 using Articalorias.Services.Billing;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -24,6 +25,7 @@ public static class ServiceCollectionExtensions
     {
         // In-memory cache for rate limiting (resend cooldown, verification attempts)
         services.AddMemoryCache();
+        services.AddSingleton<MemoryRateCounter>();
 
         // OpenAI configuration
         services.Configure<OpenAiSettings>(configuration.GetSection(OpenAiSettings.SectionName));
@@ -164,6 +166,17 @@ public static class ServiceCollectionExtensions
         var jwtSettings = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
             ?? throw new InvalidOperationException("JWT settings are not configured.");
 
+        // The committed placeholder is long enough for HS256, so without this
+        // guard a missing override would let the API sign tokens with a key
+        // that is public in the repository.
+        if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey)
+            || jwtSettings.SecretKey.StartsWith("OVERRIDE", StringComparison.OrdinalIgnoreCase)
+            || Encoding.UTF8.GetByteCount(jwtSettings.SecretKey) < 32)
+        {
+            throw new InvalidOperationException(
+                "Jwt:SecretKey must be a real secret of at least 32 bytes (user secrets locally, App Service settings in Azure). Refusing to start.");
+        }
+
         services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
 
         services.AddAuthentication(options =>
@@ -178,15 +191,28 @@ public static class ServiceCollectionExtensions
                 ValidateIssuer = true,
                 ValidateAudience = true,
                 ValidateLifetime = true,
+                RequireExpirationTime = true,
                 ValidateIssuerSigningKey = true,
                 ValidIssuer = jwtSettings.Issuer,
                 ValidAudience = jwtSettings.Audience,
                 IssuerSigningKey = new SymmetricSecurityKey(
-                    Encoding.UTF8.GetBytes(jwtSettings.SecretKey))
+                    Encoding.UTF8.GetBytes(jwtSettings.SecretKey)),
+                // Only the algorithm we sign with; nothing else is ever valid.
+                ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+                // Default is 5 minutes of grace on expiry; servers share a clock.
+                ClockSkew = TimeSpan.FromSeconds(30)
             };
         });
 
-        services.AddAuthorization();
+        // Deny by default: an action is anonymous only when it says so with
+        // [AllowAnonymous]. A new controller that forgets [Authorize] is then
+        // locked, not open.
+        services.AddAuthorization(options =>
+        {
+            options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .Build();
+        });
 
         return services;
     }

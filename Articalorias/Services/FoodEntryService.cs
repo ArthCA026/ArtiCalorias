@@ -89,10 +89,14 @@ public class FoodEntryService : IFoodEntryService
         await _db.SaveChangesAsync();
     }
 
-    public async Task<FoodEntry> UpdateAsync(FoodEntry entry, bool scaleByQuantity = false)
+    public async Task<FoodEntry?> UpdateAsync(long userId, FoodEntry entry, bool scaleByQuantity = false)
     {
-        var existing = await _db.FoodEntries.FindAsync(entry.FoodEntryId)
-            ?? throw new InvalidOperationException("FoodEntry not found.");
+        // Ownership lives in the query itself: a foreign id looks exactly like
+        // a missing one, so nothing can be edited or even confirmed to exist.
+        var existing = await _db.FoodEntries
+            .FirstOrDefaultAsync(f => f.FoodEntryId == entry.FoodEntryId && f.DailyLog.UserId == userId);
+        if (existing is null)
+            return null;
 
         var oldDailyLogId = existing.DailyLogId;
         var oldQuantity = existing.Quantity;
@@ -127,27 +131,25 @@ public class FoodEntryService : IFoodEntryService
         // Recalculate streak when the entry was moved to a different date (DailyLogId changed).
         var dateChanged = existing.DailyLogId != oldDailyLogId;
         if (dateChanged)
-        {
-            var userId = await GetUserIdForLogAsync(existing.DailyLogId);
             await _streak.RecalculateForUserAsync(userId);
-        }
 
         return existing;
     }
 
-    public async Task DeleteAsync(long foodEntryId)
+    public async Task<bool> DeleteAsync(long userId, long foodEntryId)
     {
-        var entry = await _db.FoodEntries.FindAsync(foodEntryId)
-            ?? throw new InvalidOperationException("FoodEntry not found.");
+        var entry = await _db.FoodEntries
+            .FirstOrDefaultAsync(f => f.FoodEntryId == foodEntryId && f.DailyLog.UserId == userId);
+        if (entry is null)
+            return false;
 
         var dailyLogId = entry.DailyLogId;
         _db.FoodEntries.Remove(entry);
         await _db.SaveChangesAsync();
 
         await _recalculation.RecalculateFullPipelineAsync(dailyLogId);
-
-        var userId = await GetUserIdForLogAsync(dailyLogId);
         await _streak.RecalculateForUserAsync(userId);
+        return true;
     }
 
     public async Task<int> DeleteBatchAsync(long userId, long dailyLogId, IReadOnlyList<long> foodEntryIds)

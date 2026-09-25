@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Articalorias.DTOs.ActivityParsing;
 using Articalorias.DTOs.Favorites;
 using Articalorias.DTOs.FoodParsing;
@@ -8,6 +7,7 @@ using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
 using Articalorias.Services;
 using Articalorias.Services.Macros;
+using Articalorias.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -55,7 +55,7 @@ public class FavoritesController : ControllerBase
     [HttpGet("food-templates")]
     public async Task<IActionResult> GetFoodTemplates(CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var templates = await _foodTemplateService.GetByUserAsync(userId, ct);
         return Ok(templates.Select(MapToResponse));
     }
@@ -63,7 +63,7 @@ public class FavoritesController : ControllerBase
     [HttpPost("food-templates")]
     public async Task<IActionResult> CreateFoodTemplate([FromBody] CreateFoodTemplateRequest request, CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var template = new FoodTemplate
         {
             UserId = userId,
@@ -81,7 +81,7 @@ public class FavoritesController : ControllerBase
     [HttpPut("food-templates/{id:long}")]
     public async Task<IActionResult> UpdateFoodTemplate(long id, [FromBody] UpdateFoodTemplateRequest request, CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var template = new FoodTemplate
         {
             FoodTemplateId = id,
@@ -102,7 +102,7 @@ public class FavoritesController : ControllerBase
     [HttpDelete("food-templates/{id:long}")]
     public async Task<IActionResult> DeleteFoodTemplate(long id, CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         await _routineService.RemoveItemsByFoodTemplateAsync(id, userId, ct);
         var deleted = await _foodTemplateService.DeleteAsync(id, userId, ct);
         if (!deleted)
@@ -113,7 +113,7 @@ public class FavoritesController : ControllerBase
     [HttpGet("food-templates/{id:long}/routines")]
     public async Task<IActionResult> GetFoodTemplateRoutines(long id, CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var names = await _routineService.GetRoutineNamesByFoodTemplateAsync(id, userId, ct);
         return Ok(names);
     }
@@ -121,7 +121,7 @@ public class FavoritesController : ControllerBase
     [HttpGet("activity-templates/{id:long}/routines")]
     public async Task<IActionResult> GetActivityTemplateRoutines(long id, CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var names = await _routineService.GetRoutineNamesByActivityTemplateAsync(id, userId, ct);
         return Ok(names);
     }
@@ -134,8 +134,7 @@ public class FavoritesController : ControllerBase
     {
         if (PromptInjectionScanner.ContainsInjection(request.Text))
         {
-            _logger.LogWarning("Prompt injection detected in favorites parse-activity: {Input}",
-                PromptInjectionScanner.SanitizeForLog(request.Text));
+            _logger.LogWarning("Prompt injection detected in favorites parse-activity (input length {Length})", request.Text?.Length ?? 0);
             return BadRequest(new { message = "Invalid input." });
         }
 
@@ -160,15 +159,14 @@ public class FavoritesController : ControllerBase
     {
         if (PromptInjectionScanner.ContainsInjection(request.Text))
         {
-            _logger.LogWarning("Prompt injection detected in favorites parse-food: {Input}",
-                PromptInjectionScanner.SanitizeForLog(request.Text));
+            _logger.LogWarning("Prompt injection detected in favorites parse-food (input length {Length})", request.Text?.Length ?? 0);
             return BadRequest(new { message = "Invalid input." });
         }
 
         // Same contract as the day parse: the user's country and tracked
         // macros shape the answer, and the sanitizer already enforces the
         // catalog ceilings, so no second range ladder here.
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var profile = await _userProfileService.GetByUserIdAsync(userId);
         var options = await _macroPreferences.GetParsingOptionsAsync(userId, ct);
         var foods = await _foodParsing.ParseFreeTextAsync(request.Text, profile?.Country, options);
@@ -192,15 +190,14 @@ public class FavoritesController : ControllerBase
     {
         if (PromptInjectionScanner.ContainsInjection(request.Text))
         {
-            _logger.LogWarning("Prompt injection detected in favorites parse: {Input}",
-                PromptInjectionScanner.SanitizeForLog(request.Text));
+            _logger.LogWarning("Prompt injection detected in favorites parse (input length {Length})", request.Text?.Length ?? 0);
             return BadRequest(new { message = "Invalid input." });
         }
 
         IReadOnlyList<ParsedActivityItem> activities;
         IReadOnlyList<ParsedFoodItem> foods;
 
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var profile = await _userProfileService.GetByUserIdAsync(userId);
         var options = await _macroPreferences.GetParsingOptionsAsync(userId, ct);
 
@@ -252,7 +249,7 @@ public class FavoritesController : ControllerBase
     [HttpGet("routines")]
     public async Task<IActionResult> GetRoutines(CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var routines = await _routineService.GetByUserAsync(userId, ct);
         return Ok(routines.Select(MapRoutineToResponse));
     }
@@ -263,7 +260,7 @@ public class FavoritesController : ControllerBase
         if (!ValidateRoutineItems(request.Items))
             return BadRequest("Invalid ItemType — must be 'activity' or 'food'.");
 
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var routine = new FavoriteRoutine
         {
             UserId = userId,
@@ -287,7 +284,7 @@ public class FavoritesController : ControllerBase
         if (!ValidateRoutineItems(request.Items))
             return BadRequest("Invalid ItemType — must be 'activity' or 'food'.");
 
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var routine = new FavoriteRoutine
         {
             FavoriteRoutineId = id,
@@ -311,7 +308,7 @@ public class FavoritesController : ControllerBase
     [HttpDelete("routines/{id:long}")]
     public async Task<IActionResult> DeleteRoutine(long id, CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var deleted = await _routineService.DeleteAsync(id, userId, ct);
         if (!deleted)
             return NotFound();
@@ -321,7 +318,7 @@ public class FavoritesController : ControllerBase
     [HttpPost("routines/{id:long}/add-to-today")]
     public async Task<IActionResult> AddRoutineToToday(long id, [FromQuery] DateOnly? date, CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
 
         // The client's own calendar date is the source of truth for "today": the
         // device knows its local date with no server-side timezone guesswork.
@@ -358,13 +355,6 @@ public class FavoritesController : ControllerBase
     }
 
     // ── Helpers ──
-
-    private long GetUserId()
-    {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-            ?? throw new UnauthorizedAccessException("User ID claim missing.");
-        return long.Parse(claim);
-    }
 
     private static FoodTemplateResponse MapToResponse(FoodTemplate t) => new()
     {

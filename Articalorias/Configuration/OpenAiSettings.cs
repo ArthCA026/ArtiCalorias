@@ -7,6 +7,20 @@ public class OpenAiSettings
     public string ApiKey { get; set; } = string.Empty;
 
     /// <summary>
+    /// Kill switch. False makes every AI endpoint answer 503 AI_UNAVAILABLE
+    /// without touching OpenAI: the fastest way to stop spend from an App
+    /// Service setting (changing it restarts the app).
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// Ceiling on OpenAI calls per UTC day across ALL users. MaxOutputTokens
+    /// bounds one call; this bounds the day. Sized from the per-user quota
+    /// (150/day) times the handful of real users, with headroom.
+    /// </summary>
+    public int DailyCallCeiling { get; set; } = 1000;
+
+    /// <summary>
     /// Default model for every AI task without an explicit override below.
     /// gpt-5.6-luna is OpenAI's cost-sensitive high-volume tier — the parsing
     /// tasks here are simple JSON extraction and do not need a flagship model.

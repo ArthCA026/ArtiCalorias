@@ -1,6 +1,6 @@
 using Articalorias.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace Articalorias.Controllers;
 
@@ -9,42 +9,39 @@ namespace Articalorias.Controllers;
 public class HealthController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly ILogger<HealthController> _logger;
 
-    public HealthController(AppDbContext db)
+    public HealthController(AppDbContext db, ILogger<HealthController> logger)
     {
         _db = db;
+        _logger = logger;
     }
 
+    /// <summary>Liveness ping: static body, no data, safe to expose.</summary>
     [HttpGet]
+    [AllowAnonymous]
     public IActionResult Get() => Ok(new { Status = "Healthy", Timestamp = DateTime.UtcNow });
 
+    /// <summary>
+    /// Database reachability for a signed-in caller. Row counts and exception
+    /// text used to be returned here; both are business/infrastructure detail
+    /// that an anonymous caller has no business reading.
+    /// </summary>
     [HttpGet("db")]
-    public async Task<IActionResult> GetDbStatus()
+    [Authorize]
+    public async Task<IActionResult> GetDbStatus(CancellationToken ct)
     {
         try
         {
-            // 1. Can we connect at all?
-            bool canConnect = await _db.Database.CanConnectAsync();
-            if (!canConnect)
-                return StatusCode(503, new { Status = "Database unreachable" });
-
-            // 2. Do the mapped tables exist? Run a lightweight query per entity.
-            var counts = new
-            {
-                Users = await _db.Users.CountAsync(),
-                UserProfiles = await _db.UserProfiles.CountAsync(),
-                DailyLogs = await _db.DailyLogs.CountAsync(),
-                FoodEntries = await _db.FoodEntries.CountAsync(),
-                ActivityTemplates = await _db.ActivityTemplates.CountAsync(),
-                ActivityEntries = await _db.ActivityEntries.CountAsync(),
-                MonthlySummaries = await _db.MonthlySummaries.CountAsync()
-            };
-
-            return Ok(new { Status = "Connected", TableRowCounts = counts });
+            var canConnect = await _db.Database.CanConnectAsync(ct);
+            return canConnect
+                ? Ok(new { Status = "Connected" })
+                : StatusCode(503, new { Status = "Database unreachable" });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return StatusCode(500, new { Status = "Error", Message = ex.Message });
+            _logger.LogError(ex, "Database health check failed");
+            return StatusCode(503, new { Status = "Database unreachable" });
         }
     }
 }

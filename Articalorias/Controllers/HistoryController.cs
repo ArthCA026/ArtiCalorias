@@ -1,8 +1,8 @@
-using System.Security.Claims;
 using Articalorias.DTOs.DailyLogs;
 using Articalorias.DTOs.Summaries;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
+using Articalorias.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -26,10 +26,18 @@ public class HistoryController : ControllerBase
 
     // ── Daily history ──
 
+    /// <summary>Longest span one call may ask for; the app pages by week or month.</summary>
+    public const int MaxRangeDays = 366;
+
     [HttpGet("daily")]
     public async Task<IActionResult> GetDailyRange([FromQuery] DateOnly from, [FromQuery] DateOnly to)
     {
-        var userId = GetUserId();
+        if (to < from)
+            return BadRequest(new { Message = "'to' must not be before 'from'." });
+        if (to.DayNumber - from.DayNumber >= MaxRangeDays)
+            return BadRequest(new { Message = $"Ranges are limited to {MaxRangeDays} days per request." });
+
+        var userId = User.GetUserId();
         var logs = await _dailyLogService.GetRangeAsync(userId, from, to);
         return Ok(logs.Select(MapDailyLogToResponse));
     }
@@ -39,7 +47,7 @@ public class HistoryController : ControllerBase
     [HttpGet("monthly/{year}")]
     public async Task<IActionResult> GetMonthlyByYear(int year)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var summaries = await _monthlySummaryService.GetByYearAsync(userId, year);
         return Ok(summaries.Select(MapMonthlyToResponse));
     }
@@ -47,7 +55,7 @@ public class HistoryController : ControllerBase
     [HttpGet("monthly/{year}/{month}")]
     public async Task<IActionResult> GetMonthly(int year, int month)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var summary = await _monthlySummaryService.GetByMonthAsync(userId, year, month);
         if (summary is null)
             return NotFound();
@@ -56,13 +64,6 @@ public class HistoryController : ControllerBase
     }
 
     // ── Helpers ──
-
-    private long GetUserId()
-    {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier)
-            ?? throw new UnauthorizedAccessException();
-        return long.Parse(claim.Value);
-    }
 
     /// <summary>One mapper for every daily payload (see DailyLogController.MapToResponse).</summary>
     private static DailyLogResponse MapDailyLogToResponse(DailyLog d) => DailyLogController.MapToResponse(d);

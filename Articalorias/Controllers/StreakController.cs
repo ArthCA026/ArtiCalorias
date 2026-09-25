@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using Articalorias.DTOs.Streaks;
 using Articalorias.Interfaces;
+using Articalorias.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -22,7 +22,7 @@ public class StreakController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var dto = await _streakService.GetOrCreateAsync(userId, ct);
         return Ok(dto);
     }
@@ -33,7 +33,7 @@ public class StreakController : ControllerBase
         [FromBody] UpdateStreakSettingsRequest request,
         CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var dto = await _streakService.UpdateSettingsAsync(userId, request.StreakEnabled, ct);
         return Ok(dto);
     }
@@ -42,11 +42,9 @@ public class StreakController : ControllerBase
     [HttpPost("reset")]
     public async Task<IActionResult> Reset(CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var dto = await _streakService.ResetAsync(userId, ct);
         return Ok(dto);
     }
 
-    private long GetUserId() =>
-        long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 }

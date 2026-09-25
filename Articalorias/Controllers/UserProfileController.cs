@@ -1,8 +1,8 @@
-using System.Security.Claims;
 using Articalorias.Data;
 using Articalorias.DTOs.UserProfiles;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
+using Articalorias.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -26,7 +26,7 @@ public class UserProfileController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get()
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var profile = await _profileService.GetByUserIdAsync(userId);
 
         if (profile is null)
@@ -38,7 +38,7 @@ public class UserProfileController : ControllerBase
     [HttpPut]
     public async Task<IActionResult> CreateOrUpdate([FromBody] UserProfileRequest request)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
 
         var profile = new UserProfile
         {
@@ -74,18 +74,11 @@ public class UserProfileController : ControllerBase
     [HttpPost("tutorial-seen")]
     public async Task<IActionResult> TutorialSeen()
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         await _db.UserProfiles
             .Where(p => p.UserId == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(p => p.HasSeenTutorial, true));
         return NoContent();
-    }
-
-    private long GetUserId()
-    {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier)
-            ?? throw new UnauthorizedAccessException();
-        return long.Parse(claim.Value);
     }
 
     private static UserProfileResponse MapToResponse(UserProfile p) => new()

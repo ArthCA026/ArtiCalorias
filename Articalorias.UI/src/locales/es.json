@@ -421,7 +421,20 @@
     "macros_none": "Ninguno",
     "protein_auto_value": "{{g}} g auto",
     "body_stale_subtitle": "Sin actualizar desde hace más de un mes",
-    "macros_tracked_of": "{{n}} de {{max}} en seguimiento"
+    "macros_tracked_of": "{{n}} de {{max}} en seguimiento",
+    "row_change_password": "Cambiar contraseña",
+    "change_password_title": "Cambiar contraseña",
+    "change_password_body": "Al cambiar la contraseña se cierra la sesión en tus otros dispositivos. Este se mantiene conectado.",
+    "change_password_current": "Contraseña actual",
+    "change_password_new": "Contraseña nueva",
+    "change_password_repeat": "Repite la contraseña nueva",
+    "change_password_save": "Actualizar contraseña",
+    "password_changed": "Contraseña actualizada",
+    "password_confirm_label": "Tu contraseña",
+    "password_required": "Escribe tu contraseña para continuar.",
+    "password_wrong": "Esa contraseña no es correcta.",
+    "password_same": "Elige una contraseña que no hayas usado aquí antes.",
+    "password_mismatch": "Las contraseñas no coinciden."
   },
   "billing": {
     "banner_body": "Actualiza tu pago antes del {{date}} para conservar tu acceso.",

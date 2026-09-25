@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Articalorias.DTOs.Activities;
 using Articalorias.DTOs.ActivityParsing;
 using Articalorias.DTOs.DailyLogs;
@@ -9,6 +8,7 @@ using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
 using Articalorias.Services;
 using Articalorias.Services.Macros;
+using Articalorias.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -60,7 +60,7 @@ public class DailyLogController : ControllerBase
     [HttpGet("{date}")]
     public async Task<IActionResult> GetByDate(DateOnly date, [FromQuery] DateOnly? today)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var log = await _dailyLogService.GetOrCreateAsync(userId, date, today);
         return Ok(MapToResponse(log));
     }
@@ -68,7 +68,7 @@ public class DailyLogController : ControllerBase
     [HttpGet("{date}/dashboard")]
     public async Task<IActionResult> GetDashboard(DateOnly date, [FromQuery] DateOnly? today)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var log = await _dailyLogService.GetOrCreateAsync(userId, date, today);
 
         var foods = await _foodEntryService.GetByDailyLogAsync(log.DailyLogId);
@@ -94,7 +94,7 @@ public class DailyLogController : ControllerBase
     [HttpPost("{date}/recalculate")]
     public async Task<IActionResult> Recalculate(DateOnly date)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var log = await _dailyLogService.GetSummaryByDateAsync(userId, date);
         if (log is null)
             return NotFound();
@@ -112,7 +112,7 @@ public class DailyLogController : ControllerBase
     [HttpPut("{date}/fasting")]
     public async Task<IActionResult> SetFasting(DateOnly date, [FromBody] SetFastingRequest request, [FromQuery] DateOnly? today)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
 
         // Same local-date resolution as the routines quick-add: trust the
         // client's calendar date within a ±2 day sanity window around UTC now,
@@ -143,7 +143,7 @@ public class DailyLogController : ControllerBase
     [HttpPost("{date}/refresh-snapshot")]
     public async Task<IActionResult> RefreshSnapshot(DateOnly date)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         await _recalculation.RefreshSnapshotAndRecalculateAsync(userId, date);
         var log = await _dailyLogService.GetSummaryByDateAsync(userId, date);
         if (log is null)
@@ -159,7 +159,7 @@ public class DailyLogController : ControllerBase
     [HttpPost("refresh-stale-snapshots")]
     public async Task<IActionResult> RefreshStaleSnapshots(CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var count = await _recalculation.RefreshStaleSnapshotsAsync(userId, ct);
         return Ok(new { count });
     }
@@ -170,7 +170,7 @@ public class DailyLogController : ControllerBase
     [AiRateLimit]
     public async Task<IActionResult> ParseFood(DateOnly date, [FromBody] ParseFoodRequest request)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var profile = await _profileService.GetByUserIdAsync(userId);
         var options = await GetParsingOptionsAsync(userId);
         var parsed = await _foodParsing.ParseFreeTextAsync(request.FreeText, profile?.Country, options);
@@ -181,9 +181,12 @@ public class DailyLogController : ControllerBase
 
     [HttpPost("{date}/parse-food-image")]
     [AiRateLimit]
+    // 6 MB image as base64 plus JSON framing; anything bigger is rejected
+    // before it is buffered, instead of at Kestrel's 30 MB default.
+    [RequestSizeLimit(9_000_000)]
     public async Task<IActionResult> ParseFoodImage(DateOnly date, [FromBody] ParseFoodWithImageRequest request)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var profile = await _profileService.GetByUserIdAsync(userId);
         var options = await GetParsingOptionsAsync(userId);
         var parsed = await _foodParsing.ParseImageAsync(
@@ -210,7 +213,7 @@ public class DailyLogController : ControllerBase
         if (request.Items.Count == 0)
             return BadRequest("No items to confirm.");
 
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var log = await _dailyLogService.GetOrCreateAsync(userId, date);
 
         var entries = request.Items.Select(i => new FoodEntry
@@ -246,7 +249,7 @@ public class DailyLogController : ControllerBase
         if (request.Items.Count == 0)
             return BadRequest("No items to confirm.");
 
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var log = await _dailyLogService.GetOrCreateAsync(userId, date);
 
         var results = new List<ActivityEntryResponse>();
@@ -262,7 +265,7 @@ public class DailyLogController : ControllerBase
                 METValue = item.METValue
             };
 
-            var created = await _activityService.CreateEntryAsync(entry, item.CaloriesKcal);
+            var created = await _activityService.CreateEntryAsync(userId, entry, item.CaloriesKcal);
             results.Add(MapActivityToResponse(created));
         }
 
@@ -274,7 +277,7 @@ public class DailyLogController : ControllerBase
     [HttpGet("{date}/foods")]
     public async Task<IActionResult> GetFoods(DateOnly date)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var log = await _dailyLogService.GetSummaryByDateAsync(userId, date);
         if (log is null)
             return Ok(Array.Empty<FoodEntryResponse>());
@@ -286,7 +289,7 @@ public class DailyLogController : ControllerBase
     [HttpPost("{date}/foods")]
     public async Task<IActionResult> AddFood(DateOnly date, [FromBody] CreateFoodEntryRequest request)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var log = await _dailyLogService.GetOrCreateAsync(userId, date);
 
         // Validate FoodTemplateId ownership if provided
@@ -316,6 +319,7 @@ public class DailyLogController : ControllerBase
     [HttpPut("{date}/foods/{foodEntryId}")]
     public async Task<IActionResult> UpdateFood(DateOnly date, long foodEntryId, [FromBody] UpdateFoodEntryRequest request)
     {
+        var userId = User.GetUserId();
         var entry = new FoodEntry
         {
             FoodEntryId = foodEntryId,
@@ -327,14 +331,18 @@ public class DailyLogController : ControllerBase
             Notes = request.Notes
         };
 
-        var updated = await _foodEntryService.UpdateAsync(entry, request.ScaleByQuantity);
+        var updated = await _foodEntryService.UpdateAsync(userId, entry, request.ScaleByQuantity);
+        if (updated is null)
+            return NotFound();
         return Ok(MapFoodToResponse(updated));
     }
 
     [HttpDelete("{date}/foods/{foodEntryId}")]
     public async Task<IActionResult> DeleteFood(DateOnly date, long foodEntryId)
     {
-        await _foodEntryService.DeleteAsync(foodEntryId);
+        var deleted = await _foodEntryService.DeleteAsync(User.GetUserId(), foodEntryId);
+        if (!deleted)
+            return NotFound();
         return NoContent();
     }
 
@@ -345,7 +353,7 @@ public class DailyLogController : ControllerBase
     [HttpPost("{date}/foods/delete-batch")]
     public async Task<IActionResult> DeleteFoodBatch(DateOnly date, [FromBody] DeleteFoodEntriesRequest request)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var log = await _dailyLogService.GetSummaryByDateAsync(userId, date);
         if (log is null)
             return NotFound();
@@ -358,7 +366,7 @@ public class DailyLogController : ControllerBase
     [HttpPost("{date}/activities/delete-batch")]
     public async Task<IActionResult> DeleteActivityBatch(DateOnly date, [FromBody] DeleteActivityEntriesRequest request)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var log = await _dailyLogService.GetSummaryByDateAsync(userId, date);
         if (log is null)
             return NotFound();
@@ -370,19 +378,12 @@ public class DailyLogController : ControllerBase
     [HttpDelete("{date}")]
     public async Task<IActionResult> DeleteDay(DateOnly date)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         await _dailyLogService.DeleteByDateAsync(userId, date);
         return NoContent();
     }
 
     // ── Helpers ──
-
-    private long GetUserId()
-    {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier)
-            ?? throw new UnauthorizedAccessException();
-        return long.Parse(claim.Value);
-    }
 
     /// <summary>Shared with HistoryController: keeps every daily payload identical.</summary>
     internal static List<DayMacroTargetResponse> MapMacroTargets(string? json) =>

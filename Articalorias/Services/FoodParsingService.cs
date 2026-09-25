@@ -55,14 +55,12 @@ public class FoodParsingService : IFoodParsingService
 
         if (PromptInjectionScanner.ContainsInjection(freeText))
         {
-            _logger.LogWarning("Prompt injection detected in food free-text input: {Input}",
-                PromptInjectionScanner.SanitizeForLog(freeText));
+            _logger.LogWarning("Prompt injection detected in food free-text input (input length {Length})", freeText?.Length ?? 0);
             throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
         }
         if (PromptInjectionScanner.ContainsInjection(country))
         {
-            _logger.LogWarning("Prompt injection detected in food country field: {Input}",
-                PromptInjectionScanner.SanitizeForLog(country!));
+            _logger.LogWarning("Prompt injection detected in food country field (input length {Length})", country?.Length ?? 0);
             throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
         }
 
@@ -129,7 +127,7 @@ public class FoodParsingService : IFoodParsingService
             _logger.LogError(ex, "OpenAI API quota exceeded for food parse (input length {Length})", freeText.Length);
             throw new InvalidOperationException("AI food parsing is temporarily unavailable (API quota exceeded).");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not ApiException)
         {
             _logger.LogError(ex, "OpenAI API call failed for food parse (input length {Length})", freeText.Length);
             throw new InvalidOperationException("Failed to parse food description. Try again or enter manually.");
@@ -308,14 +306,12 @@ public class FoodParsingService : IFoodParsingService
 
         if (PromptInjectionScanner.ContainsInjection(freeText))
         {
-            _logger.LogWarning("Prompt injection detected in image food text hint: {Input}",
-                PromptInjectionScanner.SanitizeForLog(freeText!));
+            _logger.LogWarning("Prompt injection detected in image food text hint (input length {Length})", freeText?.Length ?? 0);
             throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
         }
         if (PromptInjectionScanner.ContainsInjection(country))
         {
-            _logger.LogWarning("Prompt injection detected in food country field: {Input}",
-                PromptInjectionScanner.SanitizeForLog(country!));
+            _logger.LogWarning("Prompt injection detected in food country field (input length {Length})", country?.Length ?? 0);
             throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
         }
 
@@ -365,7 +361,7 @@ public class FoodParsingService : IFoodParsingService
                 messages,
                 ParsingSchemas.FoodFormat(opts));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not ApiException)
         {
             _logger.LogError(ex, "OpenAI Vision API call failed");
             throw new InvalidOperationException("Failed to analyze the image. Try again or enter food manually.");

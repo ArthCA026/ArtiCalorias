@@ -49,8 +49,7 @@ public class CombinedParsingService : ICombinedParsingService
 
         if (PromptInjectionScanner.ContainsInjection(freeText))
         {
-            _logger.LogWarning("Prompt injection detected in combined parse input: {Input}",
-                PromptInjectionScanner.SanitizeForLog(freeText));
+            _logger.LogWarning("Prompt injection detected in combined parse input (input length {Length})", freeText?.Length ?? 0);
             throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
         }
 
@@ -88,7 +87,7 @@ public class CombinedParsingService : ICombinedParsingService
             content = await _executor.ExecuteAsync(
                 "combined-parse", _settings.FoodModel, messages, ParsingSchemas.CombinedFormat(opts));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not ApiException)
         {
             _logger.LogError(ex, "OpenAI API call failed for combined parse (input length {Length})", freeText.Length);
             throw new InvalidOperationException("Failed to parse the description. Try again or enter manually.");

@@ -1,12 +1,16 @@
+using Articalorias.Configuration;
 using Articalorias.DTOs.Auth;
 using Articalorias.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Articalorias.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[AllowAnonymous]
+[EnableRateLimiting(RateLimitingExtensions.AuthPolicy)]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
@@ -17,6 +21,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("register")]
+    [EnableRateLimiting(RateLimitingExtensions.AuthStrictPolicy)]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request, CancellationToken ct)
     {
         var result = await _authService.RegisterAsync(request, ct);
@@ -26,11 +31,13 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken ct)
     {
-        var result = await _authService.LoginAsync(request, ct);
+        var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var result = await _authService.LoginAsync(request, clientIp, ct);
         return Ok(result);
     }
 
     [HttpPost("forgot-password")]
+    [EnableRateLimiting(RateLimitingExtensions.AuthStrictPolicy)]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request, CancellationToken ct)
     {
         await _authService.ForgotPasswordAsync(request, ct);
@@ -38,6 +45,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("reset-password")]
+    [EnableRateLimiting(RateLimitingExtensions.AuthStrictPolicy)]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request, CancellationToken ct)
     {
         await _authService.ResetPasswordAsync(request, ct);

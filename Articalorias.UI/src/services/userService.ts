@@ -1,4 +1,5 @@
 import api from './api';
+import type { AuthResponse, ChangePasswordRequest } from '@/types';
 
 export const userService = {
   /**
@@ -9,12 +10,21 @@ export const userService = {
     return api.post('/user/heartbeat');
   },
 
-  clearHistory(): Promise<void> {
-    return api.delete('/user/history');
+  /**
+   * Destructive actions re-check the password server-side: a bearer token
+   * alone is not enough to erase anything.
+   */
+  clearHistory(password: string): Promise<void> {
+    return api.delete('/user/history', { data: { password } });
   },
 
-  deleteAccount(): Promise<void> {
-    return api.delete('/user/account');
+  deleteAccount(password: string): Promise<void> {
+    return api.delete('/user/account', { data: { password } });
+  },
+
+  /** Other sessions are signed out; the returned tokens keep this one alive. */
+  changePassword(data: ChangePasswordRequest) {
+    return api.post<AuthResponse>('/user/change-password', data);
   },
 
   /** Art. 7 access right: everything the account holds, as one JSON object. */

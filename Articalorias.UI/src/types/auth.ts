@@ -34,3 +34,9 @@ export interface ResetPasswordRequest {
   token: string;
   newPassword: string;
 }
+
+/** Signed-in password change. The server answers with fresh tokens. */
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}

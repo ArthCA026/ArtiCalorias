@@ -1,5 +1,6 @@
 using Articalorias.Data;
 using Articalorias.DTOs.Favorites;
+using Articalorias.Exceptions;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -46,8 +47,53 @@ public class FavoriteRoutineService : IFavoriteRoutineService
             .FirstOrDefaultAsync(ct);
     }
 
+    /// <summary>
+    /// Every item must point at a template the routine's owner actually has.
+    /// The FK alone accepts any existing id, which would let a routine read
+    /// (and copy into the day) another user's templates.
+    /// </summary>
+    private async Task EnsureItemsBelongToUserAsync(long userId, List<FavoriteRoutineItem> items, CancellationToken ct)
+    {
+        if (items.Count == 0)
+            return;
+
+        var foodIds = items.Where(i => i.FoodTemplateId.HasValue).Select(i => i.FoodTemplateId!.Value).Distinct().ToList();
+        var activityIds = items.Where(i => i.ActivityTemplateId.HasValue).Select(i => i.ActivityTemplateId!.Value).Distinct().ToList();
+
+        var ownedFood = foodIds.Count == 0
+            ? []
+            : await _db.FoodTemplates
+                .Where(t => foodIds.Contains(t.FoodTemplateId) && t.UserId == userId && t.IsActive)
+                .Select(t => t.FoodTemplateId)
+                .ToListAsync(ct);
+
+        var ownedActivity = activityIds.Count == 0
+            ? []
+            : await _db.ActivityTemplates
+                .Where(t => activityIds.Contains(t.ActivityTemplateId) && t.UserId == userId && t.IsActive)
+                .Select(t => t.ActivityTemplateId)
+                .ToListAsync(ct);
+
+        foreach (var item in items)
+        {
+            var valid = item.ItemType switch
+            {
+                "food" => item.FoodTemplateId.HasValue && !item.ActivityTemplateId.HasValue
+                          && ownedFood.Contains(item.FoodTemplateId.Value),
+                "activity" => item.ActivityTemplateId.HasValue && !item.FoodTemplateId.HasValue
+                              && ownedActivity.Contains(item.ActivityTemplateId.Value),
+                _ => false
+            };
+
+            if (!valid)
+                throw new ApiException(ErrorCodes.InvalidInput, "One or more routine items are invalid.");
+        }
+    }
+
     public async Task<FavoriteRoutine> CreateAsync(FavoriteRoutine routine, List<FavoriteRoutineItem> items, CancellationToken ct = default)
     {
+        await EnsureItemsBelongToUserAsync(routine.UserId, items, ct);
+
         routine.IsActive = true;
         routine.CreatedAtUtc = DateTime.UtcNow;
         routine.UpdatedAtUtc = DateTime.UtcNow;
@@ -71,6 +117,8 @@ public class FavoriteRoutineService : IFavoriteRoutineService
 
         if (existing is null)
             return null;
+
+        await EnsureItemsBelongToUserAsync(routine.UserId, items, ct);
 
         existing.RoutineName = routine.RoutineName;
         existing.UpdatedAtUtc = DateTime.UtcNow;

@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { InlineError } from '@/components/ui/States';
-import { ConfirmSheet } from '@/components/ui/ActionSheet';
+import { PasswordConfirmSheet } from '@/components/profile/PasswordConfirmSheet';
 import { ConsentCheckboxes, type ConsentValues } from '@/components/legal/ConsentCheckboxes';
 import { PolicySheet } from '@/components/legal/PolicySheet';
 import { CancelSubscriptionSheet } from '@/components/billing/CancelSubscriptionSheet';
@@ -19,7 +19,7 @@ import { consentService } from '@/services/consentService';
 import { userService } from '@/services/userService';
 import { queryKeys } from '@/lib/queryKeys';
 import { POLICY_VERSIONS, CONSENT_TYPES } from '@/legal/policyVersions';
-import { extractApiError } from '@/utils/apiError';
+import { extractApiError, extractApiErrorCode } from '@/utils/apiError';
 
 /**
  * Blocking consent gate (Ley 8968). Existing accounts created before consent
@@ -70,11 +70,20 @@ export default function ConsentPage() {
     },
   });
 
+  const [deletePasswordError, setDeletePasswordError] = useState<string | null>(null);
   const deleteAccount = useMutation({
-    mutationFn: () => userService.deleteAccount(),
+    mutationFn: (password: string) => userService.deleteAccount(password),
     onSuccess: () => {
       queryClient.clear();
       logout();
+    },
+    onError: (err) => {
+      const code = extractApiErrorCode(err);
+      setDeletePasswordError(
+        code === 'INVALID_PASSWORD'
+          ? t('profile.password_wrong', 'That password is incorrect.')
+          : extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.')),
+      );
     },
   });
 
@@ -186,15 +195,18 @@ export default function ConsentPage() {
       <PolicySheet doc={openDoc} onClose={() => setOpenDoc(null)} />
       <CancelSubscriptionSheet open={confirmCancel} onClose={() => setConfirmCancel(false)} />
 
-      <ConfirmSheet
+      <PasswordConfirmSheet
         open={confirmDelete}
-        onClose={() => setConfirmDelete(false)}
+        onClose={() => {
+          setConfirmDelete(false);
+          setDeletePasswordError(null);
+        }}
         title={t('profile.delete_account_title', 'Delete your account?')}
         body={deleteAccountBody(t, billing.data)}
         confirmLabel={t('profile.delete_account_confirm', 'Delete my account forever')}
-        cancelLabel={t('common.cancel', 'Cancel')}
         loading={deleteAccount.isPending}
-        onConfirm={() => deleteAccount.mutate()}
+        error={deletePasswordError}
+        onConfirm={(password) => deleteAccount.mutate(password)}
       />
     </main>
   );

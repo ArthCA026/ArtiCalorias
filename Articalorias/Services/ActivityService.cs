@@ -28,10 +28,23 @@ public class ActivityService : IActivityService
             .ToListAsync();
     }
 
-    public async Task<ActivityEntry> CreateEntryAsync(ActivityEntry entry, decimal? providedCaloriesKcal = null)
+    public async Task<ActivityEntry> CreateEntryAsync(long userId, ActivityEntry entry, decimal? providedCaloriesKcal = null)
     {
-        var dailyLog = await _db.DailyLogs.FindAsync(entry.DailyLogId)
-            ?? throw new InvalidOperationException("DailyLog not found.");
+        var dailyLog = await _db.DailyLogs
+            .FirstOrDefaultAsync(d => d.DailyLogId == entry.DailyLogId && d.UserId == userId)
+            ?? throw new ApiException(ErrorCodes.InvalidInput, "Invalid day.");
+
+        // A template reference must be the caller's own: linking a foreign
+        // template would let its owner's edits flow into this user's history.
+        if (entry.ActivityTemplateId.HasValue)
+        {
+            var ownsTemplate = await _db.ActivityTemplates.AnyAsync(t =>
+                t.ActivityTemplateId == entry.ActivityTemplateId.Value
+                && t.UserId == userId
+                && t.IsActive);
+            if (!ownsTemplate)
+                throw new ApiException(ErrorCodes.InvalidInput, "Invalid ActivityTemplateId.");
+        }
 
         ValidateEntryInput(entry, providedCaloriesKcal);
         ActivityCalorieMath.Apply(entry, dailyLog.SnapshotWeightKg ?? 0m, providedCaloriesKcal);
@@ -61,12 +74,15 @@ public class ActivityService : IActivityService
         return entry;
     }
 
-    public async Task<ActivityEntry> UpdateEntryAsync(ActivityEntry entry, decimal? providedCaloriesKcal = null)
+    public async Task<ActivityEntry?> UpdateEntryAsync(long userId, ActivityEntry entry, decimal? providedCaloriesKcal = null)
     {
+        // Ownership lives in the query itself: a foreign id looks exactly like
+        // a missing one, so nothing can be edited or even confirmed to exist.
         var existing = await _db.ActivityEntries
             .Include(a => a.ActivityTemplate)
-            .FirstOrDefaultAsync(a => a.ActivityEntryId == entry.ActivityEntryId)
-            ?? throw new InvalidOperationException("ActivityEntry not found.");
+            .FirstOrDefaultAsync(a => a.ActivityEntryId == entry.ActivityEntryId && a.DailyLog.UserId == userId);
+        if (existing is null)
+            return null;
 
         var dailyLog = await _db.DailyLogs.FindAsync(existing.DailyLogId)
             ?? throw new InvalidOperationException("DailyLog not found.");
@@ -99,16 +115,19 @@ public class ActivityService : IActivityService
         return existing;
     }
 
-    public async Task DeleteEntryAsync(long activityEntryId)
+    public async Task<bool> DeleteEntryAsync(long userId, long activityEntryId)
     {
-        var entry = await _db.ActivityEntries.FindAsync(activityEntryId)
-            ?? throw new InvalidOperationException("ActivityEntry not found.");
+        var entry = await _db.ActivityEntries
+            .FirstOrDefaultAsync(a => a.ActivityEntryId == activityEntryId && a.DailyLog.UserId == userId);
+        if (entry is null)
+            return false;
 
         var dailyLogId = entry.DailyLogId;
         _db.ActivityEntries.Remove(entry);
         await _db.SaveChangesAsync();
 
         await _recalculation.RecalculateFullPipelineAsync(dailyLogId);
+        return true;
     }
 
     public async Task<int> DeleteEntriesBatchAsync(long userId, long dailyLogId, IReadOnlyList<long> activityEntryIds)

@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using Articalorias.DTOs.Billing;
 using Articalorias.Interfaces;
+using Articalorias.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -28,7 +28,7 @@ public class BillingController : ControllerBase
     [HttpGet("status")]
     public async Task<ActionResult<BillingStatusResponse>> GetStatus(CancellationToken ct)
     {
-        return Ok(await _billing.GetStatusAsync(GetUserId(), ct));
+        return Ok(await _billing.GetStatusAsync(User.GetUserId(), ct));
     }
 
     /// <summary>
@@ -38,34 +38,28 @@ public class BillingController : ControllerBase
     [HttpPost("checkout")]
     public async Task<ActionResult<StartCheckoutResponse>> StartCheckout([FromBody] StartCheckoutRequest request, CancellationToken ct)
     {
-        return Ok(await _billing.StartCheckoutAsync(GetUserId(), request, ct));
+        return Ok(await _billing.StartCheckoutAsync(User.GetUserId(), request, ct));
     }
 
     /// <summary>Re-reads the subscription from ONVO: after paying, or from "refresh status".</summary>
     [HttpPost("sync")]
     public async Task<ActionResult<BillingStatusResponse>> Sync(CancellationToken ct)
     {
-        return Ok(await _billing.SyncAsync(GetUserId(), ct));
+        return Ok(await _billing.SyncAsync(User.GetUserId(), ct));
     }
 
     /// <summary>Stops the renewal. Access continues to the end of the period already paid.</summary>
     [HttpPost("cancel")]
     public async Task<ActionResult<BillingStatusResponse>> Cancel(CancellationToken ct)
     {
-        return Ok(await _billing.CancelAsync(GetUserId(), ct));
+        return Ok(await _billing.CancelAsync(User.GetUserId(), ct));
     }
 
     /// <summary>Undoes a cancellation that has not taken effect yet.</summary>
     [HttpPost("resume")]
     public async Task<ActionResult<BillingStatusResponse>> Resume(CancellationToken ct)
     {
-        return Ok(await _billing.ResumeAsync(GetUserId(), ct));
+        return Ok(await _billing.ResumeAsync(User.GetUserId(), ct));
     }
 
-    private long GetUserId()
-    {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier)
-            ?? throw new UnauthorizedAccessException();
-        return long.Parse(claim.Value);
-    }
 }

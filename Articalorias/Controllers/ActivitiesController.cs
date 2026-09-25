@@ -1,9 +1,9 @@
-using System.Security.Claims;
 using Articalorias.DTOs.Activities;
 using Articalorias.DTOs.ActivityParsing;
 using Articalorias.Filters;
 using Articalorias.Interfaces;
 using Articalorias.Models.Entities;
+using Articalorias.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -32,7 +32,7 @@ public class ActivitiesController : ControllerBase
     [HttpGet("daily/{date}")]
     public async Task<IActionResult> GetDailyEntries(DateOnly date)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var log = await _dailyLogService.GetByDateAsync(userId, date);
         if (log is null)
             return Ok(Array.Empty<ActivityEntryResponse>());
@@ -44,7 +44,7 @@ public class ActivitiesController : ControllerBase
     [HttpPost("daily/{date}")]
     public async Task<IActionResult> AddEntry(DateOnly date, [FromBody] CreateActivityEntryRequest request)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var log = await _dailyLogService.GetOrCreateAsync(userId, date);
 
         var entry = new ActivityEntry
@@ -56,13 +56,14 @@ public class ActivitiesController : ControllerBase
             METValue = request.METValue
         };
 
-        var created = await _activityService.CreateEntryAsync(entry, request.CaloriesKcal);
+        var created = await _activityService.CreateEntryAsync(userId, entry, request.CaloriesKcal);
         return Created($"/api/activities/daily/{date}/{created.ActivityEntryId}", MapEntryToResponse(created));
     }
 
     [HttpPut("daily/{date}/{activityEntryId}")]
     public async Task<IActionResult> UpdateEntry(DateOnly date, long activityEntryId, [FromBody] UpdateActivityEntryRequest request)
     {
+        var userId = User.GetUserId();
         var entry = new ActivityEntry
         {
             ActivityEntryId = activityEntryId,
@@ -71,14 +72,18 @@ public class ActivitiesController : ControllerBase
             METValue = request.METValue
         };
 
-        var updated = await _activityService.UpdateEntryAsync(entry, request.CaloriesKcal);
+        var updated = await _activityService.UpdateEntryAsync(userId, entry, request.CaloriesKcal);
+        if (updated is null)
+            return NotFound();
         return Ok(MapEntryToResponse(updated));
     }
 
     [HttpDelete("daily/{date}/{activityEntryId}")]
     public async Task<IActionResult> DeleteEntry(DateOnly date, long activityEntryId)
     {
-        await _activityService.DeleteEntryAsync(activityEntryId);
+        var deleted = await _activityService.DeleteEntryAsync(User.GetUserId(), activityEntryId);
+        if (!deleted)
+            return NotFound();
         return NoContent();
     }
 
@@ -87,7 +92,7 @@ public class ActivitiesController : ControllerBase
     [HttpGet("templates")]
     public async Task<IActionResult> GetTemplates()
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var templates = await _activityService.GetTemplatesAsync(userId);
         return Ok(templates.Select(MapTemplateToResponse));
     }
@@ -95,7 +100,7 @@ public class ActivitiesController : ControllerBase
     [HttpPost("templates")]
     public async Task<IActionResult> CreateTemplate([FromBody] ActivityTemplateRequest request)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
 
         if (!request.DefaultDurationMinutes.HasValue || !request.DefaultMET.HasValue)
             return BadRequest(new { message = "Duration and MET value are required for activity templates." });
@@ -116,7 +121,7 @@ public class ActivitiesController : ControllerBase
     [HttpPut("templates/{templateId}")]
     public async Task<IActionResult> UpdateTemplate(long templateId, [FromBody] ActivityTemplateRequest request)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var template = new ActivityTemplate
         {
             ActivityTemplateId = templateId,
@@ -135,7 +140,7 @@ public class ActivitiesController : ControllerBase
     [HttpDelete("templates/{templateId}")]
     public async Task<IActionResult> DeleteTemplate(long templateId, CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         await _routineService.RemoveItemsByActivityTemplateAsync(templateId, userId, ct);
         var deleted = await _activityService.DeleteTemplateAsync(templateId, userId);
         if (!deleted) return NotFound();
@@ -145,7 +150,7 @@ public class ActivitiesController : ControllerBase
     [HttpGet("templates/{templateId}/routines")]
     public async Task<IActionResult> GetTemplateRoutines(long templateId, CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var names = await _routineService.GetRoutineNamesByActivityTemplateAsync(templateId, userId, ct);
         return Ok(names);
     }
@@ -171,13 +176,6 @@ public class ActivitiesController : ControllerBase
     }
 
     // ── Helpers ──
-
-    private long GetUserId()
-    {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier)
-            ?? throw new UnauthorizedAccessException();
-        return long.Parse(claim.Value);
-    }
 
     private static ActivityEntryResponse MapEntryToResponse(ActivityEntry a) => new()
     {

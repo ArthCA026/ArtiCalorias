@@ -52,11 +52,24 @@ public class DailyLogService : IDailyLogService
             .ToListAsync();
     }
 
+    /// <summary>
+    /// A day is only materialised inside a sane window around now. Reading
+    /// creates the row, so without this any date in the calendar could be
+    /// turned into a stored day (millions of rows per account on demand).
+    /// Existing rows outside the window are still returned.
+    /// </summary>
+    public const int CreateWindowPastYears = 2;
+    public const int CreateWindowFutureDays = 366;
+
     public async Task<DailyLog> GetOrCreateAsync(long userId, DateOnly date, DateOnly? clientToday = null)
     {
         var existing = await GetSummaryByDateAsync(userId, date);
         if (existing is not null)
             return existing;
+
+        var utcToday = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (date < utcToday.AddYears(-CreateWindowPastYears) || date > utcToday.AddDays(CreateWindowFutureDays))
+            throw new ApiException(ErrorCodes.InvalidInput, "That date is outside the range the app can log.");
 
         var profile = await _db.UserProfiles.FirstOrDefaultAsync(p => p.UserId == userId)
             ?? throw new InvalidOperationException("User profile not found. Complete onboarding first.");

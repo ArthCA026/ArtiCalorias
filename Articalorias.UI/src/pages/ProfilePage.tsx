@@ -16,6 +16,8 @@ import { calorieModeShortLabel } from '@/components/ui/calorieModeLabels';
 import { BodySheet, RemindersSheet, SleepNeatSheet } from '@/components/profile/ProfileSheets';
 import { MacroTargetSheet } from '@/components/profile/MacroTargetSheet';
 import { ConsentStatusSheet, WithdrawConsentSheet } from '@/components/profile/LegalSheets';
+import { PasswordConfirmSheet } from '@/components/profile/PasswordConfirmSheet';
+import { ChangePasswordSheet } from '@/components/profile/ChangePasswordSheet';
 import { Spinner } from '@/components/ui/Button';
 import { consentService } from '@/services/consentService';
 import { POLICY_VERSIONS } from '@/legal/policyVersions';
@@ -37,15 +39,15 @@ import { userService } from '@/services/userService';
 import { queryKeys, invalidateDayData } from '@/lib/queryKeys';
 import { toDateString, qtyStr } from '@/utils/format';
 import { profileToRequest } from '@/utils/profile';
-import { extractApiError } from '@/utils/apiError';
+import { extractApiError, extractApiErrorCode } from '@/utils/apiError';
 import { formatWeight } from '@/utils/units';
 import { formatMacroAmount } from '@/utils/macros';
 import { useBodyStaleDays, BODY_VERY_STALE_DAYS } from '@/hooks/useBodyStaleDays';
 import { deleteAccountBody } from '@/components/billing/billingCopy';
 import { formatBillingDate } from '@/utils/billing';
-import type { MacroPreference, UserProfileRequest } from '@/types';
+import type { ChangePasswordRequest, MacroPreference, UserProfileRequest } from '@/types';
 
-type OpenSheet = 'body' | 'protein' | 'mode' | 'reminders' | 'sleep-neat' | 'consent-status' | 'withdraw-consent' | null;
+type OpenSheet = 'body' | 'protein' | 'mode' | 'reminders' | 'sleep-neat' | 'consent-status' | 'withdraw-consent' | 'change-password' | null;
 type ConfirmKind = 'streak-reset' | 'clear-history' | 'delete-account' | 'bmr-review' | null;
 
 export default function ProfilePage() {
@@ -53,7 +55,7 @@ export default function ProfilePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user, logout } = useAuth();
+  const { user, login, logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const { language, setLanguage } = useLanguage();
   const { system, setSystem, weightUnit } = useUnits();
@@ -67,6 +69,12 @@ export default function ProfilePage() {
 
   const [sheet, setSheet] = useState<OpenSheet>(null);
   const [confirm, setConfirm] = useState<ConfirmKind>(null);
+  // Inline verdict for the password fields of the destructive sheets and the
+  // change-password sheet (wrong password, lockout).
+  const [passwordFieldError, setPasswordFieldError] = useState<string | null>(null);
+  // Set when the delete-account sheet was reached from "withdraw consent and
+  // delete": the revocation is recorded before the deletion.
+  const [withdrawBeforeDelete, setWithdrawBeforeDelete] = useState(false);
   // The review nudge reopens the body sheet with the advanced section shown.
   const [bodyAdvanced, setBodyAdvanced] = useState(false);
   const { get, maxTracked: maxTrackedMacros } = useMacros();
@@ -121,23 +129,49 @@ export default function ProfilePage() {
       toast('error', extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
   });
 
+  // The destructive endpoints answer INVALID_PASSWORD (or TOO_MANY_ATTEMPTS)
+  // for a wrong password: that belongs under the field, not in a toast.
+  const passwordError = (err: unknown): string | null => {
+    const code = extractApiErrorCode(err);
+    if (code === 'INVALID_PASSWORD') return t('profile.password_wrong', 'That password is incorrect.');
+    if (code === 'TOO_MANY_ATTEMPTS') return extractApiError(err);
+    return null;
+  };
+  const reportPasswordError = (err: unknown) => {
+    const inline = passwordError(err);
+    setPasswordFieldError(inline);
+    if (!inline) toast('error', extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.')));
+  };
+
   const clearHistory = useMutation({
-    mutationFn: () => userService.clearHistory(),
+    mutationFn: (password: string) => userService.clearHistory(password),
     onSuccess: () => {
       queryClient.clear();
       setConfirm(null);
       toast('success', t('profile.history_cleared', 'History cleared'));
     },
-    onError: (err) => toast('error', extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
+    onError: reportPasswordError,
   });
 
   const deleteAccount = useMutation({
-    mutationFn: () => userService.deleteAccount(),
+    mutationFn: (password: string) => userService.deleteAccount(password),
     onSuccess: () => {
       queryClient.clear();
       logout();
     },
-    onError: (err) => toast('error', extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
+    onError: reportPasswordError,
+  });
+
+  const changePassword = useMutation({
+    mutationFn: (data: ChangePasswordRequest) => userService.changePassword(data).then((r) => r.data),
+    onSuccess: (auth) => {
+      // Fresh tokens for this device; every other session was signed out.
+      login(auth);
+      setSheet(null);
+      setPasswordFieldError(null);
+      toast('success', t('profile.password_changed', 'Password updated'));
+    },
+    onError: reportPasswordError,
   });
 
   const revokeHealthConsent = () =>
@@ -162,15 +196,15 @@ export default function ProfilePage() {
   // shows the withdrawal even though the account (and the trail) is erased
   // right after. Order matters for the brief window between the two calls.
   const withdrawAndDelete = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (password: string) => {
       await revokeHealthConsent();
-      await userService.deleteAccount();
+      await userService.deleteAccount(password);
     },
     onSuccess: () => {
       queryClient.clear();
       logout();
     },
-    onError: (err) => toast('error', extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.'))),
+    onError: reportPasswordError,
   });
 
   const exportData = useMutation({
@@ -514,6 +548,15 @@ export default function ProfilePage() {
             <Card padded={false} className="overflow-hidden divide-y divide-hairline/50">
               {subscriptionRow}
               <ListRow
+                icon="lock"
+                title={t('profile.row_change_password', 'Change password')}
+                chevron
+                onClick={() => {
+                  setPasswordFieldError(null);
+                  setSheet('change-password');
+                }}
+              />
+              <ListRow
                 icon="logout"
                 title={t('profile.row_logout', 'Sign out')}
                 onClick={() => logout()}
@@ -522,12 +565,19 @@ export default function ProfilePage() {
                 icon="trash"
                 title={t('profile.row_clear_history', 'Clear all history')}
                 subtitle={t('profile.clear_history_hint', 'Removes every logged day, keeps your account')}
-                onClick={() => setConfirm('clear-history')}
+                onClick={() => {
+                  setPasswordFieldError(null);
+                  setConfirm('clear-history');
+                }}
               />
               <ListRow
                 icon="alertTriangle"
                 title={<span className="text-danger">{t('profile.row_delete_account', 'Delete account')}</span>}
-                onClick={() => setConfirm('delete-account')}
+                onClick={() => {
+                  setPasswordFieldError(null);
+                  setWithdrawBeforeDelete(false);
+                  setConfirm('delete-account');
+                }}
               />
             </Card>
           </section>
@@ -594,7 +644,14 @@ export default function ProfilePage() {
             withdrawing={withdrawOnly.isPending}
             deleting={withdrawAndDelete.isPending}
             onWithdrawOnly={() => withdrawOnly.mutate()}
-            onWithdrawAndDelete={() => withdrawAndDelete.mutate()}
+            onWithdrawAndDelete={() => {
+              // Deletion needs the password: hand over to the password sheet,
+              // which records the revocation first when this flag is set.
+              setSheet(null);
+              setPasswordFieldError(null);
+              setWithdrawBeforeDelete(true);
+              setConfirm('delete-account');
+            }}
           />
 
           <ConfirmSheet
@@ -627,25 +684,34 @@ export default function ProfilePage() {
               })
             }
           />
-          <ConfirmSheet
+          <PasswordConfirmSheet
             open={confirm === 'clear-history'}
             onClose={() => setConfirm(null)}
             title={t('profile.clear_history_title', 'Clear all history?')}
             body={t('profile.clear_history_body', 'Every logged day, meal and activity is permanently removed. Your account, templates and settings stay. This cannot be undone.')}
             confirmLabel={t('profile.clear_history_confirm', 'Clear everything')}
-            cancelLabel={t('common.cancel', 'Cancel')}
             loading={clearHistory.isPending}
-            onConfirm={() => clearHistory.mutate()}
+            error={passwordFieldError}
+            onConfirm={(password) => clearHistory.mutate(password)}
           />
-          <ConfirmSheet
+          <PasswordConfirmSheet
             open={confirm === 'delete-account'}
             onClose={() => setConfirm(null)}
             title={t('profile.delete_account_title', 'Delete your account?')}
             body={deleteAccountBody(t, billing.data)}
             confirmLabel={t('profile.delete_account_confirm', 'Delete my account forever')}
-            cancelLabel={t('common.cancel', 'Cancel')}
-            loading={deleteAccount.isPending}
-            onConfirm={() => deleteAccount.mutate()}
+            loading={deleteAccount.isPending || withdrawAndDelete.isPending}
+            error={passwordFieldError}
+            onConfirm={(password) =>
+              withdrawBeforeDelete ? withdrawAndDelete.mutate(password) : deleteAccount.mutate(password)
+            }
+          />
+          <ChangePasswordSheet
+            open={sheet === 'change-password'}
+            onClose={() => setSheet(null)}
+            saving={changePassword.isPending}
+            currentPasswordError={passwordFieldError}
+            onSave={(data) => changePassword.mutate(data)}
           />
         </>
       )}

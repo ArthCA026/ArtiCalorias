@@ -52,8 +52,7 @@ public class ActivityParsingService : IActivityParsingService
 
         if (PromptInjectionScanner.ContainsInjection(freeText))
         {
-            _logger.LogWarning("Prompt injection detected in activity free-text input: {Input}",
-                PromptInjectionScanner.SanitizeForLog(freeText));
+            _logger.LogWarning("Prompt injection detected in activity free-text input (input length {Length})", freeText?.Length ?? 0);
             throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
         }
 
@@ -87,7 +86,7 @@ public class ActivityParsingService : IActivityParsingService
             content = await _executor.ExecuteAsync(
                 "activity-parse", _settings.ActivityModel, messages, ParsingSchemas.ActivityFormat());
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not ApiException)
         {
             _logger.LogError(ex, "OpenAI API call failed for activity parse (input length {Length})", freeText.Length);
             throw new InvalidOperationException("Failed to parse activity description. Try again or enter manually.");
@@ -110,8 +109,7 @@ public class ActivityParsingService : IActivityParsingService
 
         if (PromptInjectionScanner.ContainsInjection(activityName))
         {
-            _logger.LogWarning("Prompt injection detected in MET estimate input: {Input}",
-                PromptInjectionScanner.SanitizeForLog(activityName));
+            _logger.LogWarning("Prompt injection detected in MET estimate input (input length {Length})", activityName?.Length ?? 0);
             throw new ApiException(ErrorCodes.InvalidInput, "Invalid input.");
         }
 
@@ -162,7 +160,7 @@ public class ActivityParsingService : IActivityParsingService
             content = await _executor.ExecuteAsync(
                 "met-estimate", _settings.MetModel, messages, ParsingSchemas.MetFormat());
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not ApiException)
         {
             _logger.LogError(ex, "OpenAI API call failed for MET estimate (name length {Length})", activityName.Length);
             throw new InvalidOperationException("Failed to estimate MET value. Try again or enter manually.");

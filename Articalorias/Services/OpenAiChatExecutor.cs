@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json.Nodes;
 using Articalorias.Configuration;
+using Articalorias.Exceptions;
 using Articalorias.Interfaces;
 using Microsoft.Extensions.Options;
 using OpenAI;
@@ -35,6 +36,12 @@ public class OpenAiChatExecutor : IOpenAiChatExecutor
     /// </summary>
     private volatile bool _flexUnsupported;
 
+    // Global daily call ceiling (all users). Single instance, in memory: a
+    // restart resets the day, which only ever errs towards allowing calls.
+    private readonly object _ceilingLock = new();
+    private DateOnly _ceilingDayUtc;
+    private int _callsToday;
+
     public OpenAiChatExecutor(IOptions<OpenAiSettings> settings, ILogger<OpenAiChatExecutor> logger)
     {
         _settings = settings.Value;
@@ -51,6 +58,8 @@ public class OpenAiChatExecutor : IOpenAiChatExecutor
         IList<ChatMessage> messages,
         ChatResponseFormat responseFormat)
     {
+        EnforceSpendGuards(feature);
+
         var model = _settings.ResolveModel(modelOverride);
         var useFlex = !string.IsNullOrWhiteSpace(_settings.ServiceTier) && !_flexUnsupported;
 
@@ -127,6 +136,45 @@ public class OpenAiChatExecutor : IOpenAiChatExecutor
             stopwatch.ElapsedMilliseconds);
 
         return completion.Content.Count > 0 ? completion.Content[0].Text ?? string.Empty : string.Empty;
+    }
+
+    /// <summary>
+    /// Kill switch and the day-wide call ceiling. Thrown as ApiException so the
+    /// parsing services' catch-alls let it through as a 503 the app understands.
+    /// </summary>
+    private void EnforceSpendGuards(string feature)
+    {
+        if (!_settings.Enabled)
+        {
+            _logger.LogWarning("OpenAI call for {Feature} refused: OpenAI:Enabled is false", feature);
+            throw new ApiException(ErrorCodes.AiUnavailable,
+                "AI parsing is temporarily unavailable. Please enter the item manually.",
+                StatusCodes.Status503ServiceUnavailable);
+        }
+
+        if (_settings.DailyCallCeiling <= 0)
+            return;
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        int callsToday;
+        lock (_ceilingLock)
+        {
+            if (_ceilingDayUtc != today)
+            {
+                _ceilingDayUtc = today;
+                _callsToday = 0;
+            }
+            callsToday = ++_callsToday;
+        }
+
+        if (callsToday > _settings.DailyCallCeiling)
+        {
+            _logger.LogWarning("OpenAI daily call ceiling ({Ceiling}) reached; refusing {Feature}",
+                _settings.DailyCallCeiling, feature);
+            throw new ApiException(ErrorCodes.AiUnavailable,
+                "AI parsing is temporarily unavailable. Please enter the item manually.",
+                StatusCodes.Status503ServiceUnavailable);
+        }
     }
 
     private ChatClient GetStandardClient(string model)

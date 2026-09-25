@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Button, IconButton, Spinner } from '@/components/ui/Button';
 import { Icon, type IconName } from '@/components/ui/Icon';
 import { ErrorState } from '@/components/ui/States';
-import { ConfirmSheet } from '@/components/ui/ActionSheet';
+import { PasswordConfirmSheet } from '@/components/profile/PasswordConfirmSheet';
 import { useToast } from '@/components/ui/Toast';
 import { PlanPicker } from '@/components/billing/PlanPicker';
 import { CheckoutSheet } from '@/components/billing/CheckoutSheet';
@@ -19,7 +19,7 @@ import { isCustomGoal, useGoalLabel } from '@/hooks/useGoalLabel';
 import { profileService } from '@/services/profileService';
 import { userService } from '@/services/userService';
 import { queryKeys } from '@/lib/queryKeys';
-import { extractApiError } from '@/utils/apiError';
+import { extractApiError, extractApiErrorCode } from '@/utils/apiError';
 import { findPlan, formatBillingDate, formatPrice } from '@/utils/billing';
 import { toDateString } from '@/utils/format';
 import type { BillingPlanCode, BillingStatus } from '@/types';
@@ -84,13 +84,18 @@ export default function SubscribePage() {
       toast('error', extractApiError(err, t('legal.export_error', 'Could not prepare your data. Check your connection and try again.'))),
   });
 
+  const [deletePasswordError, setDeletePasswordError] = useState<string | null>(null);
   const deleteAccount = useMutation({
-    mutationFn: () => userService.deleteAccount(),
+    mutationFn: (password: string) => userService.deleteAccount(password),
     onSuccess: () => {
       queryClient.clear();
       logout();
     },
     onError: (err) => {
+      if (extractApiErrorCode(err) === 'INVALID_PASSWORD') {
+        setDeletePasswordError(t('profile.password_wrong', 'That password is incorrect.'));
+        return;
+      }
       setConfirmDelete(false);
       toast('error', extractApiError(err, t('log.save_error', 'Could not save. Check your connection and try again.')));
     },
@@ -321,15 +326,18 @@ export default function SubscribePage() {
 
       <CheckoutSheet plan={checkout} onClose={() => setCheckoutPlan(null)} onActivated={enter} />
 
-      <ConfirmSheet
+      <PasswordConfirmSheet
         open={confirmDelete}
-        onClose={() => setConfirmDelete(false)}
+        onClose={() => {
+          setConfirmDelete(false);
+          setDeletePasswordError(null);
+        }}
         title={t('profile.delete_account_title', 'Delete your account?')}
         body={deleteAccountBody(t, status)}
         confirmLabel={t('profile.delete_account_confirm', 'Delete my account forever')}
-        cancelLabel={t('common.cancel', 'Cancel')}
         loading={deleteAccount.isPending}
-        onConfirm={() => deleteAccount.mutate()}
+        error={deletePasswordError}
+        onConfirm={(password) => deleteAccount.mutate(password)}
       />
     </main>
   );

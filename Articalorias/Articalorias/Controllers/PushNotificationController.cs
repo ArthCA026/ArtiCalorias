@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using Articalorias.DTOs.Push;
 using Articalorias.Interfaces;
+using Articalorias.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -17,7 +17,9 @@ public class PushNotificationController : ControllerBase
         _push = push;
     }
 
+    /// <summary>Public by nature (it is the VAPID *public* key) and read before sign-in.</summary>
     [HttpGet("vapid-public-key")]
+    [AllowAnonymous]
     public IActionResult GetVapidPublicKey()
     {
         return Ok(new { publicKey = _push.GetVapidPublicKey() });
@@ -27,7 +29,7 @@ public class PushNotificationController : ControllerBase
     [Authorize]
     public async Task<IActionResult> Subscribe([FromBody] SavePushSubscriptionRequest request)
     {
-        var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var userId = User.GetUserId();
         await _push.SubscribeAsync(userId, request.Endpoint, request.P256DH, request.Auth);
         return Ok();
     }
@@ -36,7 +38,7 @@ public class PushNotificationController : ControllerBase
     [Authorize]
     public async Task<IActionResult> Unsubscribe([FromBody] SavePushSubscriptionRequest request)
     {
-        var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var userId = User.GetUserId();
         await _push.UnsubscribeAsync(userId, request.Endpoint);
         return Ok();
     }
@@ -45,7 +47,7 @@ public class PushNotificationController : ControllerBase
     [Authorize]
     public async Task<IActionResult> GetSchedules()
     {
-        var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var userId = User.GetUserId();
         var schedules = await _push.GetSchedulesAsync(userId);
         return Ok(schedules);
     }
@@ -54,7 +56,7 @@ public class PushNotificationController : ControllerBase
     [Authorize]
     public async Task<IActionResult> UpdateSchedules([FromBody] UpdateSchedulesRequest request)
     {
-        var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var userId = User.GetUserId();
         await _push.UpsertSchedulesAsync(userId, request.Schedules);
         return NoContent();
     }
@@ -64,7 +66,7 @@ public class PushNotificationController : ControllerBase
     [Authorize]
     public async Task<IActionResult> Test()
     {
-        var userId = long.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var userId = User.GetUserId();
         await _push.SendToUserAsync(userId, "🧪 Test notification", "Push notifications are working!");
         return Ok(new { message = "Notification sent." });
     }

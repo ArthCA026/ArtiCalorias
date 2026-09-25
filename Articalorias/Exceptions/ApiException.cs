@@ -38,6 +38,10 @@ public static class ErrorCodes
     public const string ConsentVersionStale = "CONSENT_VERSION_STALE";
     public const string AiRateLimited = "AI_RATE_LIMITED";
     public const string MacroTrackLimit = "MACRO_TRACK_LIMIT";
+    public const string RateLimited = "RATE_LIMITED";
+    public const string AiUnavailable = "AI_UNAVAILABLE";
+    public const string RegistrationRejected = "REGISTRATION_REJECTED";
+    public const string InvalidPassword = "INVALID_PASSWORD";
 
     // Billing
     public const string SubscriptionRequired = "SUBSCRIPTION_REQUIRED";

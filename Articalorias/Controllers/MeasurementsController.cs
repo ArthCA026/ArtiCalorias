@@ -1,7 +1,7 @@
-using System.Security.Claims;
 using Articalorias.DTOs.Measurements;
 using Articalorias.Interfaces;
 using Articalorias.Services;
+using Articalorias.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -24,7 +24,7 @@ public class MeasurementsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var items = await _measurements.GetAllAsync(userId, ct);
         return Ok(items);
     }
@@ -37,7 +37,7 @@ public class MeasurementsController : ControllerBase
     [HttpPut("{date}")]
     public async Task<IActionResult> Upsert(DateOnly date, [FromBody] UpsertBodyMeasurementRequest request, [FromQuery] DateOnly? today, CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var localToday = await ResolveLocalTodayAsync(userId, today);
         var saved = await _measurements.UpsertAsync(userId, date, request, localToday, ct);
         return Ok(saved);
@@ -46,7 +46,7 @@ public class MeasurementsController : ControllerBase
     [HttpDelete("{date}")]
     public async Task<IActionResult> Delete(DateOnly date, [FromQuery] DateOnly? today, CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var localToday = await ResolveLocalTodayAsync(userId, today);
         var deleted = await _measurements.DeleteAsync(userId, date, localToday, ct);
         return deleted ? NoContent() : NotFound();
@@ -59,7 +59,7 @@ public class MeasurementsController : ControllerBase
     [HttpPost("delete-batch")]
     public async Task<IActionResult> DeleteBatch([FromBody] DeleteMeasurementsRequest request, [FromQuery] DateOnly? today, CancellationToken ct)
     {
-        var userId = GetUserId();
+        var userId = User.GetUserId();
         var localToday = await ResolveLocalTodayAsync(userId, today);
         var deleted = await _measurements.DeleteBatchAsync(userId, request.Dates, localToday, ct);
         return Ok(new { deleted });
@@ -71,10 +71,4 @@ public class MeasurementsController : ControllerBase
         return LocalDates.Resolve(clientToday, profile?.TimeZoneId);
     }
 
-    private long GetUserId()
-    {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier)
-            ?? throw new UnauthorizedAccessException();
-        return long.Parse(claim.Value);
-    }
 }
